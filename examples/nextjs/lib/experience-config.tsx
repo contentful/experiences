@@ -5,18 +5,18 @@
  * auto-filled design props; `resolveToken` is what turns design-token ids into
  * the values those props carry.
  *
- * `card` is registered via `defineComponent({ resolveData, component })` to
+ * `card` uses a typed `ComponentConfig<CardProps>` to
  * demonstrate async enrichment (a stand-in for a catalog fetch) plus
  * metadata-aware URL rewriting. `resolveData` hooks run in parallel across
  * nodes, so slow resolvers don't block their peers.
  */
 
-import {
-  defineComponent,
-  type Components,
-  type Config,
-  type ResolveToken,
-  type ExperienceTemplates,
+import type {
+  ComponentConfig,
+  Components,
+  Config,
+  ResolveToken,
+  ExperienceTemplates,
 } from '@contentful/experiences-nextjs/server';
 
 import { Button } from '@/components/Button';
@@ -37,6 +37,25 @@ async function fetchCardEnrichment(title: string): Promise<{ badge: string }> {
   return { badge: `Featured: ${title}` };
 }
 
+const card: ComponentConfig<CardProps> = {
+  resolveData: async ({ content, experience }) => {
+    const rawTitle = (content.title as string) ?? 'Untitled';
+    const { badge } = await fetchCardEnrichment(rawTitle);
+    const locale = (experience.metadata.locale as string) ?? 'en-US';
+    const slug = (experience.metadata.slug as string) ?? '';
+    // Rewrite relative CTAs to a locale-aware localized route (fake — for demo).
+    const originalUrl = (content.ctaUrl as string) ?? '';
+    const ctaUrl = originalUrl.startsWith('http')
+      ? originalUrl
+      : `/${locale}/${slug}${originalUrl}`;
+    return {
+      title: badge,
+      ctaUrl,
+    };
+  },
+  component: Card,
+};
+
 const components: Components = {
   Section,
   Heading,
@@ -46,25 +65,7 @@ const components: Components = {
   Image,
   'hero-plain': HeroPlain,
 
-  // defineComponent narrows the resolveData ctx + return type to CardProps.
-  card: defineComponent<CardProps>({
-    resolveData: async ({ content, experience }) => {
-      const rawTitle = (content.title as string) ?? 'Untitled';
-      const { badge } = await fetchCardEnrichment(rawTitle);
-      const locale = (experience.metadata.locale as string) ?? 'en-US';
-      const slug = (experience.metadata.slug as string) ?? '';
-      // Rewrite relative CTAs to a locale-aware localized route (fake — for demo).
-      const originalUrl = (content.ctaUrl as string) ?? '';
-      const ctaUrl = originalUrl.startsWith('http')
-        ? originalUrl
-        : `/${locale}/${slug}${originalUrl}`;
-      return {
-        title: badge,
-        ctaUrl,
-      };
-    },
-    component: Card,
-  }),
+  card,
 };
 
 const experienceTemplates: ExperienceTemplates = {

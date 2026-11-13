@@ -58,6 +58,18 @@ function sysWithExperienceTemplate(typeId: string): ExperiencePayload['sys'] {
 const emptyConfig: ResolverConfig = { components: {} };
 
 describe('resolveExperience — IR construction', () => {
+  it('retains the actual nonempty payload Experience ID without inventing missing identity', async () => {
+    const plan = await resolveExperience(
+      { sys: { id: 'actual-experience' }, nodes: [] },
+      emptyConfig
+    );
+    expect(plan.experienceId).toBe('actual-experience');
+    for (const sys of [undefined, {}, { id: '' }, { id: '   ' }]) {
+      const withoutIdentity = await resolveExperience({ sys, nodes: [] }, emptyConfig);
+      expect(withoutIdentity).not.toHaveProperty('experienceId');
+    }
+  });
+
   it('emits a node per top-level instance with nested slot trees', async () => {
     const payload: ExperiencePayload = {
       nodes: [

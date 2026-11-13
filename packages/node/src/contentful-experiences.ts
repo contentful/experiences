@@ -38,6 +38,7 @@ import {
   type FetchByDestinationNodeOptions,
   type FetchByDestinationPathOptions,
   type FetchExperienceOptions,
+  type FetchByIdExperienceOptions,
   type FetchResolveOptions,
   type ResolveDefaults,
   type ResolveOptions,
@@ -49,9 +50,11 @@ import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experien
 
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 
-type BuiltFetchOptions<T> = Omit<T, 'personalization'> & {
-  personalization?: BuiltPersonalizationOptions;
-};
+type BuiltFetchOptions<T> = T extends unknown
+  ? Omit<T, 'personalization'> & {
+      personalization?: BuiltPersonalizationOptions;
+    }
+  : never;
 type PendingFetchOptions<T> = Omit<T, 'personalization'> & {
   personalization?: ReturnType<typeof buildFetchPersonalization>;
 };
@@ -143,9 +146,13 @@ export interface RequestRuntime extends PersonalizationMethods, AnalyticsMethods
     resolveOptions: ResolveOptions
   ): Promise<PortableRenderPlan>;
   fetchExperience(
-    options: FetchExperienceOptions,
+    options: FetchByIdExperienceOptions,
     resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan>;
+  fetchExperience(
+    options: FetchExperienceOptions,
+    resolveOptions: FetchResolveOptions
+  ): Promise<PortableRenderPlan | DestinationRedirectResult>;
   /** Evaluates with preflight: true for later browser commitment; rejects explicit false. */
   fetchExperienceForHandoff(
     options: FetchExperienceOptions,
@@ -227,7 +234,7 @@ class RequestBoundExperiences implements RequestRuntime {
     private readonly fetchPayload: (
       options: BuiltFetchExperienceOptions,
       resolveOptions: FetchResolveOptions
-    ) => Promise<ExperiencePayload>,
+    ) => Promise<ExperiencePayload | DestinationRedirectResult>,
     private readonly fetchSessionPayload: (
       session: PreviewSessionOptions
     ) => Promise<ExperiencePayload>
@@ -355,12 +362,44 @@ class RequestBoundExperiences implements RequestRuntime {
     return plan;
   }
 
+  fetchExperience(
+    options: FetchByIdExperienceOptions,
+    resolveOptions: FetchResolveOptions
+  ): Promise<PortableRenderPlan>;
+  fetchExperience(
+    options: FetchExperienceOptions,
+    resolveOptions: FetchResolveOptions
+  ): Promise<PortableRenderPlan | DestinationRedirectResult>;
   async fetchExperience(
     options: FetchExperienceOptions,
     resolveOptions: FetchResolveOptions
-  ): Promise<PortableRenderPlan> {
+  ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     this.assertActive();
     const resolve = mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions);
+    if (this.#previewOptions !== undefined && options.experienceId === undefined) {
+      const request = this.finalizePersonalizationEvents<FetchExperienceOptions>(
+        this.gatePersonalizationEvents(options)
+      );
+      const acquired = await this.fetchPayload(request, resolve);
+      this.assertActive();
+      if ('redirect' in acquired) return acquired;
+      if (
+        this.runtime.environmentId === 'master' &&
+        typeof acquired.sys?.id === 'string' &&
+        acquired.sys.id.length > 0
+      ) {
+        const snapshot = await this.readPreviewSnapshot();
+        const load = this.preparePreview(
+          snapshot,
+          { experienceId: acquired.sys.id, locale: options.locale, extensions: options.extensions },
+          resolve
+        );
+        if (load !== undefined) return load();
+      }
+      const plan = await this.runtime.resolveExperience(acquired, resolve);
+      this.assertActive();
+      return plan;
+    }
     if (this.#previewOptions !== undefined) {
       const payload = await this.readPreviewSnapshot();
       const load = this.preparePreview(payload, options, resolve);
@@ -393,6 +432,17 @@ class RequestBoundExperiences implements RequestRuntime {
       cache: { scope: 'private-request' },
     };
     const resolve = mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions);
+    if (this.isPreview && options.experienceId === undefined) {
+      try {
+        const result = await this.fetchExperience(options, resolve);
+        return 'redirect' in result
+          ? { handoff, redirect: result.redirect }
+          : { handoff, plan: result };
+      } catch (error) {
+        this.assertActive();
+        return { handoff, error };
+      }
+    }
     if (this.isPreview) {
       let payload: ExperiencePayload;
       try {
@@ -410,7 +460,7 @@ class RequestBoundExperiences implements RequestRuntime {
               this.runtime.fetchExperience(request, resolve)
             ));
         this.assertActive();
-        return { handoff, plan };
+        return 'redirect' in plan ? { handoff, redirect: plan.redirect } : { handoff, plan };
       } catch (error) {
         this.assertActive();
         return { handoff, error };
@@ -463,6 +513,7 @@ class RequestBoundExperiences implements RequestRuntime {
       assertCurrent();
       const payload = await this.fetchPayload(request, resolve);
       assertCurrent();
+      if ('redirect' in payload) return { handoff, redirect: payload.redirect };
       const returnedProfile = payload.extensions?.personalization?.profile;
       if (!this.isPreview && returnedProfile !== undefined) {
         const profile = EventProfileSchema.parse(returnedProfile);
@@ -518,24 +569,14 @@ class RequestBoundExperiences implements RequestRuntime {
     options: FetchByDestinationNodeOptions,
     resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
-    return this.fetchPersonalized(options, (request) =>
-      this.runtime.fetchByDestinationNode(
-        request,
-        mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
-      )
-    );
+    return this.fetchExperience(options, resolveOptions);
   }
 
   fetchByDestinationPath(
     options: FetchByDestinationPathOptions,
     resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
-    return this.fetchPersonalized(options, (request) =>
-      this.runtime.fetchByDestinationPath(
-        request,
-        mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions)
-      )
-    );
+    return this.fetchExperience(options, resolveOptions);
   }
 
   private async fetchPersonalized<
@@ -587,7 +628,9 @@ class RequestBoundExperiences implements RequestRuntime {
     const profileId = options.personalization?.profileId ?? this.#profile?.id;
     options = {
       ...options,
-      ...('experienceId' in options ? { locale: options.locale ?? this.locale } : {}),
+      ...((options.locale ?? this.locale) === undefined
+        ? {}
+        : { locale: options.locale ?? this.locale }),
       ...(profileId === undefined
         ? {}
         : { personalization: { ...options.personalization, profileId } }),
@@ -637,7 +680,8 @@ class RequestBoundExperiences implements RequestRuntime {
     options: PendingFetchOptions<T>,
     personalization: unknown = options.personalization
   ): BuiltFetchOptions<T> {
-    if (personalization === undefined) return { ...options, personalization: undefined };
+    if (personalization === undefined)
+      return { ...options, personalization: undefined } as BuiltFetchOptions<T>;
     const valid = serializePersonalization(personalization);
     return {
       ...options,
@@ -645,7 +689,7 @@ class RequestBoundExperiences implements RequestRuntime {
         ...valid,
         events: valid.events?.filter((event) => this.admitEvent(event, true)),
       },
-    };
+    } as BuiltFetchOptions<T>;
   }
 
   /** Validate the final transport type before applying this request's consent policy. */

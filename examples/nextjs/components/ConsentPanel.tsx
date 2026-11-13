@@ -1,16 +1,23 @@
 'use client';
 
-import { type BlockedEvent } from '@contentful/experiences-web';
-import { useExperiences } from '@contentful/experiences-nextjs/client';
-import { useEffect, useRef, useState } from 'react';
-
-type Consent = { events?: boolean; persistence?: boolean };
+import {
+  useBlockedEventStreamState,
+  useConsentState,
+  useExperiencesActions,
+  usePersistenceConsentState,
+  useProfileState,
+} from '@contentful/experiences-nextjs/client';
+import { useState } from 'react';
 
 const panelStyle = {
   position: 'fixed',
   right: 16,
   bottom: 16,
   width: 340,
+  maxWidth: 'calc(100vw - 32px)',
+  boxSizing: 'border-box',
+  maxHeight: 'calc(100dvh - 32px)',
+  overflowY: 'auto',
   padding: 16,
   background: '#fff',
   border: '1px solid #e5e7eb',
@@ -29,15 +36,6 @@ const buttonStyle = {
   fontSize: 13,
 } as const;
 
-// A stand-in entity for the interaction buttons. Real tracked entities come from
-// the plan's attribution once it is rendered; see the note in the README.
-const demoEntity = {
-  entityId: 'demo-entity',
-  entityKind: 'Experience',
-  optimizationId: 'demo-optimization',
-  variantId: 'demo-variant',
-} as const;
-
 function describe(value: boolean | undefined): string {
   if (value === undefined) return 'undecided';
   if (value) return 'granted';
@@ -50,43 +48,12 @@ function describe(value: boolean | undefined): string {
  * LocalStorage. Both choices are stored in LocalStorage, so they survive a reload.
  */
 export function ConsentPanel() {
-  const instance = useExperiences();
-  const runtime = useRef<typeof instance | undefined>(undefined);
-  const [consent, setConsent] = useState<Consent>({});
-  const [profileId, setProfileId] = useState<string | undefined>();
-  const [stored, setStored] = useState<string>('(none)');
-  const [blocked, setBlocked] = useState<BlockedEvent[]>([]);
-  const [lastResult, setLastResult] = useState<string>('');
-
-  useEffect(() => {
-    runtime.current = instance;
-    const refreshStored = () =>
-      setStored(window.localStorage.getItem('__ctfl_opt_profile__') ?? '(none)');
-    const subscriptions = [
-      instance.states.consent.subscribe((events) => {
-        setConsent((previous) => ({ ...previous, events }));
-        refreshStored();
-      }),
-      instance.states.persistenceConsent.subscribe((persistence) => {
-        setConsent((previous) => ({ ...previous, persistence }));
-        refreshStored();
-      }),
-      instance.states.profile.subscribe((profile) => {
-        setProfileId(profile?.id);
-        refreshStored();
-      }),
-      instance.states.blockedEventStream.subscribe((event) => {
-        if (event !== undefined) setBlocked((previous) => [event, ...previous].slice(0, 5));
-      }),
-    ];
-
-    // Views, hovers, and clicks on rendered nodes go through the same consent gate.
-    // The constructor discovers rendered attribution; preview intent gates every detector.
-    return () => {
-      subscriptions.forEach((subscription) => subscription.unsubscribe());
-      runtime.current = undefined;
-    };
-  }, [instance]);
+  const { setConsent, trackPageView, trackEvent } = useExperiencesActions();
+  const eventConsent = useConsentState();
+  const persistenceConsent = usePersistenceConsentState();
+  const profile = useProfileState();
+  const blocked = useBlockedEventStreamState();
+  const [lastResult, setLastResult] = useState('');
 
   async function fire(name: string, send: () => Promise<unknown>) {
     try {
@@ -96,111 +63,71 @@ export function ConsentPanel() {
     }
   }
 
-  function setChoice(next: boolean | Consent) {
-    runtime.current?.consent(next);
-  }
-
   return (
     <aside style={panelStyle} aria-label="Consent demo">
       <strong>Consent demo</strong>
       <p style={{ margin: '8px 0' }}>
-        Events: <b>{describe(consent.events)}</b> · Persistence:{' '}
-        <b>{describe(consent.persistence)}</b>
+        Events: <b>{describe(eventConsent)}</b> · Persistence: <b>{describe(persistenceConsent)}</b>
       </p>
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <button style={buttonStyle} onClick={() => setChoice(true)}>
+        <button style={buttonStyle} onClick={() => setConsent(true)}>
           Accept all
         </button>
-        <button style={buttonStyle} onClick={() => setChoice(false)}>
+        <button style={buttonStyle} onClick={() => setConsent(false)}>
           Reject all
         </button>
-        <button style={buttonStyle} onClick={() => setChoice({ events: true, persistence: false })}>
+        <button
+          style={buttonStyle}
+          onClick={() => setConsent({ events: true, persistence: false })}
+        >
           Events only
         </button>
       </div>
 
-      <p style={{ margin: '12px 0 4px' }}>Personalization events:</p>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <button style={buttonStyle} onClick={() => fire('page', () => runtime.current!.page())}>
-          page (allowed)
-        </button>
-        <button
-          style={buttonStyle}
-          onClick={() => fire('track', () => runtime.current!.track({ event: 'demo_clicked' }))}
-        >
-          track (gated)
-        </button>
-      </div>
-
-      <p style={{ margin: '12px 0 4px' }}>Analytics events (need a profile: send page first):</p>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <button
-          style={buttonStyle}
-          onClick={() =>
-            fire('trackView', () =>
-              runtime.current!.trackView({
-                ...demoEntity,
-                viewId: 'demo-view',
-                viewDurationMs: 1000,
-              })
-            )
-          }
-        >
-          view
-        </button>
-        <button
-          style={buttonStyle}
-          onClick={() => fire('trackClick', () => runtime.current!.trackClick(demoEntity))}
-        >
-          click
-        </button>
-        <button
-          style={buttonStyle}
-          onClick={() =>
-            fire('trackHover', () =>
-              runtime.current!.trackHover({
-                ...demoEntity,
-                hoverId: 'demo-hover',
-                hoverDurationMs: 1000,
-              })
-            )
-          }
-        >
-          hover
-        </button>
-        <button
-          style={buttonStyle}
-          onClick={() =>
-            fire('trackFlagView', () =>
-              runtime.current!.trackFlagView({ componentId: 'demo-flag' })
-            )
-          }
-        >
-          flag view
-        </button>
-      </div>
-
       <p style={{ margin: '12px 0 4px' }}>
-        Profile in memory: <code>{profileId ?? '(none)'}</code>
+        The managed root handles the initial page. Try an additional event:
+      </p>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <button style={buttonStyle} onClick={() => fire('page', () => trackPageView())}>
+          Send another page
+        </button>
+        <button
+          style={buttonStyle}
+          onClick={() => fire('track', () => trackEvent({ event: 'demo_clicked' }))}
+        >
+          Send demo track
+        </button>
+      </div>
+      <p style={{ margin: '8px 0' }}>
+        Page events are allowed by default. Track events require event consent. Preview Sessions
+        suppress events. Blocked events are dropped.
+      </p>
+
+      <p style={{ margin: '12px 0 4px', overflowWrap: 'anywhere' }}>
+        Current profile: <code>{profile?.id ?? '(none)'}</code>
       </p>
       <p style={{ margin: '4px 0' }}>
-        Profile in LocalStorage: <code>{stored}</code>
+        Persistence consent lets the SDK store the profile and identity cookie. Withdrawing it
+        removes stored identity while retaining the current profile in memory. Consent choices
+        survive a reload.
       </p>
       {lastResult !== '' && (
-        <p style={{ margin: '4px 0', wordBreak: 'break-all' }}>
-          Last call: <code>{lastResult}</code>
+        <p style={{ margin: '4px 0', overflowWrap: 'anywhere' }} aria-live="polite">
+          Last call: <code>{lastResult}</code> (acceptance does not confirm delivery)
         </p>
       )}
 
-      <p style={{ margin: '12px 0 4px' }}>Blocked events ({blocked.length}):</p>
-      <ul style={{ margin: 0, paddingLeft: 18 }}>
-        {blocked.map((event, index) => (
-          <li key={index}>
-            <code>{event.method}</code> ({event.reason})
-          </li>
-        ))}
-      </ul>
+      <p style={{ margin: '12px 0 4px' }} aria-live="polite">
+        Last blocked event:{' '}
+        {blocked ? (
+          <>
+            <code>{blocked.method}</code> ({blocked.reason})
+          </>
+        ) : (
+          '(none)'
+        )}
+      </p>
     </aside>
   );
 }

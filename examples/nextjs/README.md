@@ -1,22 +1,22 @@
 # Next.js example: Contentful Experiences
 
-A Next.js 15 App Router app demonstrating `@contentful/experiences-nextjs` rendering an Experience payload fetched from XDA. Pages are served from a **Destination**: the URL path is the Destination path, and the SDK resolves it to an Experience. Fetching by Experience id is available as a secondary route.
+A Next.js 15.5 App Router app demonstrating the managed `@contentful/experiences-nextjs` server and client bindings. Pages are served from a **Destination**: the URL path is the Destination path, and the SDK resolves it to an Experience. Fetching by Experience id is available as a secondary route.
 
 ## What it shows
 
-- **Destinations as the primary route**: `app/[...path]/page.tsx` (and the hub at `/`, which renders the home node) calls `fetchExperience` with `{ spaceId, destinationId, path }`, follows a `DestinationRedirectResult` with `redirect()`, and maps `NotFoundError` to `notFound()`. `generateStaticParams` enumerates every routable path with `fetchDestinationSitemap`, so those pages are prerendered at build time.
+- **Destinations as the primary route**: the server binding selects `{ destinationId, path, locale }` from the incoming request URL. `/` renders the home node; `app/[...path]/page.tsx` handles other paths. Bound components follow Destination redirects with native Next navigation, and the page maps `NotFoundError` to `notFound()`. Personalized requests render dynamically with private fetches.
 - **A demo hub at `/`**: `app/page.tsx` explains the example, has the personalization and debug checkboxes, lists every route with its options, and renders the Destination's home Experience below.
-- **By Experience id as the secondary route**: `app/experiences/[id]/page.tsx` fetches one Experience by id. It is the route for Preview Sessions and runtime parameters, none of which Destinations support.
-- **Server-side fetch and resolve** via `fetchExperience` (re-exported from `@contentful/experiences-nextjs/server`). One async call fetches the payload from the Experience Delivery API, walks the tree, classifies props, and runs any component-declared `resolveData` hooks in parallel.
-- **SSR rendering** with `ServerExperienceRenderer` from `@contentful/experiences-nextjs/server`.
-- **Live preview via `preview_session_id`**: the route keeps the server-fetched plan for the first render, then a managed `Experience` receives Preview Session updates in the browser.
+- **By Experience id as the secondary route**: `app/experiences/[id]/page.tsx` selects one Experience by id. It demonstrates Preview Sessions and by-ID runtime parameters.
+- **Managed server fetch and resolve**: `bindAppRouterServerExperiences` owns one primary load, request lifetime and hybrid handoff. A shared registry retains the existing component resolvers and design tokens.
+- **Server evaluation with browser-managed presentation**: the server binder injects the client binding's request root and `Experience`. The complete serialized result supplies the initial SSR content and browser adoption without a duplicate startup content fetch.
+- **Managed Live Preview**: `preview_session_id` activates the configured Preview capability. The client binding installs the optional synchronous `createLivePreviewClient` factory and owns updates and session transitions.
 - **Runtime parameters via `?parameter_demo=true`**: a JSON form forwards scalar/Record values to `fetchExperience`; submitting changed values refetches and renders a new plan.
 - **Debug mode via `?debug=true`**: the top-level `debug` flag turns on verbose SDK logging, flips `MissingComponent` to a visible box, and auto-mounts `<DebugExperience>` (a collapsible JSON dump of the resolved plan) above the tree.
 - **Async `resolveData` with external fetch**: the `card` component demonstrates enrichment (fake catalog lookup) plus metadata-aware URL rewriting; resolvers run in parallel across nodes.
 - **Design values as props** (spacing, color, typography, layout): every component declares the design keys it consumes as **named props** and destructures them. That is the recommended styling contract, and it's what all nine components here do. Don't collect leftovers with `...rest` and forward them to a DOM element — design keys are camelCase prop names, not HTML attributes, so React warns and they land in the markup as junk.
 - **One escape-hatch demo**: `components/Card.tsx` styles itself from props like the rest, but its nested `CardCta` child — not a registered component, so it has no props of its own — reads the card's design off context with **`useDesignValues()`**. That's the case props can't cover.
 - **Design tokens**: `lib/experience-config.tsx` wires a `resolveToken` that maps token ids (`size.xl`, `color.text`, and so on) to CSS values from `lib/design-tokens.ts`.
-- **Component registration**: bare components for the common case, `defineComponent({...})` when a component needs `defaults` or `resolveData`.
+- **Component registration**: bare components for the common case, a typed `ComponentConfig<Props>` when a component needs `defaults` or `resolveData`. Type-only adapter imports keep the shared registry usable on both server and browser; the authoring helper is an alternative illustrated below.
 
 ## Run it
 
@@ -43,20 +43,20 @@ npm run bootstrap                      # seeds the content, a Destination, and i
 
 ```sh
 cd ../nextjs
-cp .env.example .env.local             # fill in SPACE_ID, ENVIRONMENT_ID, CDA_TOKEN
+cp .env.example .env.local             # fill in private and NEXT_PUBLIC_* configuration
 npm run dev
 ```
 
 `DESTINATION_ID` is server-generated. The bootstrap prints it at the end; paste it into `.env.local`.
 
-Visit `http://localhost:3000/` (the Destination's home node, the `home` Experience) and `http://localhost:3000/demo/landing` (the `landing` Experience). `/welcome` is a redirect node that sends you back to `/`. The route calls `fetchExperience` → `<ServerExperienceRenderer>`, reading from the Content Delivery API using `CDA_TOKEN`.
+Visit `http://localhost:3000/` (the Destination's home node, the `home` Experience) and `http://localhost:3000/demo/landing` (the `landing` Experience). `/welcome` is a redirect node that sends you back to `/`. The server binding reads Delivery using `CDA_TOKEN`; the managed client presentation adopts its full result. Set `NEXT_PUBLIC_SPACE_ID`, `NEXT_PUBLIC_ENVIRONMENT_ID` and `NEXT_PUBLIC_CDA_TOKEN` explicitly for the browser owner. These have no fallback to private credentials.
 
 ### Optional: runtime parameters
 
 Open `/experiences/<experience-id>?parameter_demo=true` to show the parameter form. Enter a
 JSON object using IDs declared in that Experience's `parameters`, then click
 **Refetch Experience**. The GET form reloads the same route with new values;
-the server calls `fetchExperience` again and renders its newly resolved plan.
+the managed server binding evaluates a fresh result and the client root adopts its newly resolved plan.
 Existing locale, debug and personalization query options are preserved.
 
 For an Experience declaring a String parameter `categorySlug`, try
@@ -75,7 +75,7 @@ path. Delivery validates declared names, requiredness, fallbacks and values.
 The bootstrap's `landing` Experience has no such declarations; use an Experience
 with the matching parameter and collection binding already configured.
 
-The route passes the parsed map as the first argument's `parameters` option.
+The request selector passes the parsed map as its `parameters` option.
 GET delivery requests encode Record leaves as `parameter.featuredPosts.limit`
 and `parameter.featuredPosts.order`; personalization or an empty Record selects
 POST automatically. The form's JSON lives in the page URL, so use public content
@@ -91,113 +91,137 @@ Variant, an EU audience (`demo-audience-developers`), and an Optimization
 (`demo-optimization-developers`) that serves the variant to that audience.
 Nothing has to be configured in Contentful by hand.
 
-Tick **Personalization** on the hub at `/` and click Apply, or open `http://localhost:3000/demo/landing?personalization=true` (or
-`/experiences/landing?personalization=true`) to see the developer hero. Without
-the flag you get the base hero. Both the Destination and by-id fetches accept the
-same `personalization` option.
+Tick **Simulate an EU visitor** on the hub at `/` and click Apply, or open
+`http://localhost:3000/demo/landing?personalization=true` (or
+`/experiences/landing?personalization=true`). The existing query name is retained.
+The server binding's `request.pagePayload` adds Berlin/DE/EU location to the
+SDK-built automatic page; it does not construct events or reconstruct request
+URLs. Without the flag, the automatic page still runs with ordinary request
+metadata. The switch changes audience input, not whether the page is tracked.
 
-With `?personalization=true` the server builds a server-channel page event with
-`EventBuilder`, stamps an EU location on it, and sends it in `fetchExperience`'s
-first-class `personalization` option. That switches the XDA request to POST, so
-Contentful evaluates the visitor against the audience and hydrates the selected
-hero before server rendering. Without the flag no event is sent and the request
-is unchanged.
+This is a location simulation. The seeded EU audience can select the developer
+hero; an existing visitor profile may also affect selection. The SDK's public `createPageContext` helper preserves URL, referrer and query
+properties from the sanitized request context while the payload adds title and
+optional simulated location. `?locale=de-DE` selects content/resolver locale,
+the automatic page payload locale and the managed browser owner's locale. Hybrid mode (the default)
+evaluates the page on Node with `preflight: true`, then the browser admits the
+prepared replay and commits it through the Personalization API. Preview Sessions
+suppress events. Consent remains SDK-gated; admission is not a service commitment
+receipt.
 
-This is a simulation, not geo-targeting: XDA takes the visitor's location from
-the event (not the request IP) and defaults to San Francisco (US) when none is
-sent. The example sends Berlin whenever the box is ticked, so every tester sees
-the same result regardless of where they are. A real app would send the
-visitor's actual location.
-
-The example intentionally does not implement durable profile storage or consent
-policy; production applications must own those concerns.
+The example has no server consent-management platform: `consent.server: false`
+permits only the default allowlist, including page. It does not infer server
+consent from a cookie or browser state. Browser consent choices below belong to
+the managed Web owner. Production apps should supply their actual server consent
+policy. Known upstream Destination source-map and profile-finalization gaps are
+tracked in the [Runtime destination limits](../../packages/runtime/README.md#destination-selection);
+the example does not invent attribution or emulate service commitment.
 
 ### Optional: consent
 
-Every page shows a **Consent demo** panel (bottom right), rendered by `app/layout.tsx`. It shares the browser runtime owned by `PreviewExperiencesRoot` with managed rendering and lets you watch consent gating work:
+Each managed page renders a **Consent demo** panel under its request root:
 
-- **Accept all / Reject all / Events only** call `consent(true | false | { events, persistence })`.
-- **page** and **track** are Personalization events. With consent undecided, `page` is
-  sent (it is in the default `allowedEventTypes`) and `track` resolves
-  `{ accepted: false }` and appears under _Blocked events_.
-- **view**, **click**, **hover** and **flag view** are Analytics events. They need a
-  profile, so send `page` first, and they are gated the same way.
-- The panel shows the profile in memory next to the profile in LocalStorage. With
-  _Events only_, events are sent but the profile is never written to storage.
-- Reload the page: both consent choices are restored, because they are stored in
-  LocalStorage the same way the profile is.
+- **Accept all / Reject all / Events only** use the adapter's public consent action hook.
+- The panel reads live consent, persistence consent, profile and latest blocked
+  event through public state hooks. It keeps only the last manual action result
+  in local UI state.
+- **Send another page** is an explicit additional page action; initial page
+  sequencing belongs to the binding. **Send demo track** demonstrates a consent
+  refusal when track is not permitted by consent or the allowlist.
+- With _Events only_, the profile may remain in memory while persistence is
+  disabled. Browser consent decisions use the SDK's shared LocalStorage keys.
+- Session preview suppresses manual and automatic events independently of socket
+  connection status.
 
-The panel reuses `SPACE_ID`, `ENVIRONMENT_ID` and `CDA_TOKEN`. The server layout passes them to the shared browser root. The delivery token
-reaches the browser, so use a read-only delivery token. The panel only sends events
-and never fetches an Experience.
-
-The interaction buttons send a fixed demo entity. The Web SDK starts interaction
-discovery during construction. Automatic views, hovers and clicks require elements
-with `data-ctfl-scopes` inside a `data-ctfl-attribution` plan container; use
-`getTrackingAttributes` when wiring rendered attribution. Session preview suppresses
-both automatic tracking and these manual calls.
+The panel shares the managed browser SDK; it creates no separate runtime and has
+no fake Analytics attribution buttons. Real interaction attribution comes from
+rendered plan containers and node attributes through the SDK's tracking path.
 
 ### Optional: live preview
 
-Set `CPA_TOKEN`, then open `/experiences/landing?preview_session_id=<session-id>`. The route trims the session ID from the URL and passes it to the Node SDK request. The shared browser root configures `preview: { accessToken: CPA_TOKEN, createClient: createLivePreviewClient }`; its managed `Experience` receives session updates. The server-fetched plan is rendered first; later complete Experience updates replace it in the client renderer. This example passes the Preview API token to the browser for that subscription; use a token approved for browser exposure or a trusted proxy.
+Set both server `CPA_TOKEN` and browser-designated `NEXT_PUBLIC_CPA_TOKEN`, then
+open `/experiences/landing?preview_session_id=<session-id>`. Contentful supplies
+the session ID. The server and client bindings select Preview policy from the
+incoming URL and own snapshot acquisition, subscriptions, event suppression and
+session changes. Blank IDs are ignored. The server plan renders immediately;
+managed presentation receives matching updates without a hydration gate.
 
-The Contentful app supplies `preview_session_id`. When it and `CPA_TOKEN` are both available, the route uses ordinary Node `request.fetchExperience` for the initial plan and the shared browser runtime owns the subscription. Blank session IDs are ignored; without a configured preview token the route uses ordinary delivery.
+The by-ID route demonstrates preview; Destination acquisition remains available
+through the SDK when a session is active. Active sessions own locale and
+parameters, so the selector omits those overrides and the by-ID form is hidden.
+The browser token is intentionally public; use an approved token and CORS policy
+or configure an authenticated trusted proxy in the client binding. Private
+credentials are never silently promoted into browser configuration.
 
 ### Tokens summary
 
-| Token       | API                | Used by                                 | Required?                 |
-| ----------- | ------------------ | --------------------------------------- | ------------------------- |
-| `CMA_TOKEN` | Content Management | The bootstrap script (one-time seed)    | Yes, to run bootstrap     |
-| `CDA_TOKEN` | Content Delivery   | The example app                         | Yes, to run the app       |
-| `CPA_TOKEN` | Content Preview    | The example app during Preview Sessions | Only for Preview Sessions |
+| Token                   | API                | Used by                              | Required?                             |
+| ----------------------- | ------------------ | ------------------------------------ | ------------------------------------- |
+| `CMA_TOKEN`             | Content Management | The bootstrap script (one-time seed) | Yes, to run bootstrap                 |
+| `CDA_TOKEN`             | Content Delivery   | The example app                      | Yes, to run the app                   |
+| `CPA_TOKEN`             | Content Preview    | Server Preview snapshots             | Only for Preview Sessions             |
+| `NEXT_PUBLIC_CDA_TOKEN` | Content Delivery   | Managed browser owner                | Yes                                   |
+| `NEXT_PUBLIC_CPA_TOKEN` | Content Preview    | Managed browser Preview connection   | Only for interactive Preview Sessions |
 
 ## The routes
 
-The hub at `/` links to all of these. `fetchExperience` reads the payload from XDA, `<ServerExperienceRenderer>` renders it.
+The hub at `/` links to all of these. The managed server binding evaluates one primary result and its client request presentation renders it.
 
-| Try it locally                                                              | Source                                                             | Notes                                                                            |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| `http://localhost:3000/`                                                    | [`app/page.tsx`](./app/page.tsx)                                   | Demo hub plus the Destination home node (shared `lib/destination-page.tsx`)      |
-| `http://localhost:3000/demo/landing`                                        | [`app/[...path]/page.tsx`](./app/[...path]/page.tsx)               | Destination path                                                                 |
-| `http://localhost:3000/welcome`                                             | same route                                                         | Redirect node: `redirect()` back to `/`                                          |
-| `http://localhost:3000/demo/landing?personalization=true&debug=true`        | same route                                                         | personalized page event plus SDK debug output                                    |
-| `http://localhost:3000/experiences/landing`                                 | [`app/experiences/[id]/page.tsx`](./app/experiences/[id]/page.tsx) | By Experience id                                                                 |
-| `http://localhost:3000/experiences/landing?preview_session_id=<session-id>` | same route                                                         | [`components/LivePreviewExperience.tsx`](./components/LivePreviewExperience.tsx) |
+| Try it locally                                                              | Source                                                             | Notes                                                                       |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `http://localhost:3000/`                                                    | [`app/page.tsx`](./app/page.tsx)                                   | Demo hub plus the Destination home node (shared `lib/destination-page.tsx`) |
+| `http://localhost:3000/demo/landing`                                        | [`app/[...path]/page.tsx`](./app/[...path]/page.tsx)               | Destination path                                                            |
+| `http://localhost:3000/welcome`                                             | same route                                                         | Redirect node: `redirect()` back to `/`                                     |
+| `http://localhost:3000/demo/landing?personalization=true&debug=true`        | same route                                                         | personalized page event plus SDK debug output                               |
+| `http://localhost:3000/experiences/landing`                                 | [`app/experiences/[id]/page.tsx`](./app/experiences/[id]/page.tsx) | By Experience id                                                            |
+| `http://localhost:3000/experiences/landing?preview_session_id=<session-id>` | same route                                                         | [`lib/experience-client.tsx`](./lib/experience-client.tsx)                  |
 
-The destination route in one glance:
-
-```tsx
-const result = await fetchExperience(
-  { spaceId, destinationId, path }, // path: "/demo/landing"
-  { accessToken: CDA_TOKEN },
-  { config: experienceConfig, metadata: { slug, locale }, debug }
-);
-if ('redirect' in result) redirect(result.redirect.path);
-return <ServerExperienceRenderer experience={result} config={experienceConfig} debug={debug} />;
-```
-
-Destination delivery is space-scoped (no `environmentId`), and a `NotFoundError` means no node claims the path. At build time, `generateStaticParams` pages through `fetchDestinationSitemap` and returns one `path` array per routable path. The listed paths are prerendered at build time; requests carrying query flags such as `?personalization=true` or `?debug=true` are rendered on demand, because the page reads `searchParams`. Rebuild or use revalidation to refresh the prerendered copies after republishing content.
-
-The by-id route uses one ordinary Node request fetch for both sources:
+The request selector is bound once in `lib/experience-server.tsx`; the same
+binding handles Destination and by-ID routes. `middleware.ts` uses the SDK's Node
+context-only handler to sanitize and forward the actual request URL. It never
+loads content or submits events. Next.js 15.5 is the middleware runtime floor.
 
 ```tsx
-const sdk = new ContentfulExperiences({
-  spaceId,
-  environmentId,
-  delivery: { accessToken: CDA_TOKEN },
-  preview: CPA_TOKEN ? { accessToken: CPA_TOKEN } : undefined,
+// lib/experience-server.tsx (configuration abbreviated)
+export const binding = bindAppRouterServerExperiences(serverOptions, {
+  request: { ExperiencesRoot: ClientRoot, Experience: ClientExperience },
 });
-const request = sdk.forRequest({ preview: sessionId ? { sessionId } : undefined });
-try {
-  const experience = await request.fetchExperience(
-    { experienceId, ...(!request.isPreview ? { locale, parameters, personalization } : {}) },
-    { config: experienceConfig, metadata: { slug: experienceId, locale }, debug }
-  );
-  // Render the plan; Preview Sessions own their locale and parameters.
-} finally {
-  request.destroy();
-}
+export const { ExperiencesRoot, Experience } = binding.request;
+
+// lib/destination-page.tsx — shared page composition
+const result = await binding.request.loadExperience();
+if (result.error instanceof NotFoundError) notFound();
+return (
+  <ExperiencesRoot locale={result.experience.locale}>
+    <Experience />
+    <ConsentPanel />
+  </ExperiencesRoot>
+);
 ```
+
+The loader and both bound components share the same request-memoized result.
+The convenience components serialize and forward that complete result, including
+its `requestId`, handoff, source descriptor and usable plan/error; the client
+`Experience` inherits the same root result. Native redirects are handled before
+browser adoption. There is no application SDK constructor, request facade,
+manual event builder, route synchronization or separate preview wrapper.
+
+This example deliberately uses a **page-scoped owner**. Each page renders its
+request root with its fresh server result; `app/layout.tsx` contains only the
+HTML shell. Navigation retains the existing request root when React reuses the
+page composition and otherwise destroys it and creates the next owner. Only one
+live browser owner is mounted. A remount resets in-memory queues, subscriptions
+and flag exposure history; consent and permitted identity persistence follow the
+SDK's storage policy. An application requiring continuous owner lifetime can
+use the adapter's documented stable root composition while updating its complete
+result on navigation.
+
+All content routes are `force-dynamic`; they are not public SSG or ISR. The free
+`fetchDestinationSitemap` helper remains the right API to enumerate routes for a
+separate sitemap or explicit public/static integration. It neither owns this
+personalized request nor turns private request results into public cache entries.
+See the [managed adapter guide](../../packages/adapter-nextjs/README.md#automatic-single-experience-setup)
+for server-only rendering, static rendering and other compositions.
 
 An empty-nodes payload (draft, unpublished, or empty locale) resolves to a plan with `nodes: []` and renders as an empty page — not a 404.
 
@@ -208,7 +232,7 @@ examples/nextjs/
 ├── app/
 │   ├── layout.tsx                       # root layout
 │   ├── page.tsx                         # demo hub at `/` + the Destination home node
-│   ├── [...path]/page.tsx               # primary: Destination path, redirects, 404, sitemap SSG
+│   ├── [...path]/page.tsx               # primary: managed Destination path, redirects, 404
 │   └── experiences/[id]/page.tsx        # secondary: by Experience id; Preview Sessions, parameters
 ├── components/                          # design-system components; design arrives as props
 │   ├── Section.tsx                      # flex/grid layout primitive; design as named props
@@ -219,11 +243,14 @@ examples/nextjs/
 │   ├── Button.tsx
 │   ├── HeroPlain.tsx                    # composed component, content from a DataAssembly
 │   ├── Card.tsx                         # ditto; nested CardCta demos the useDesignValues() escape hatch
-│   ├── LivePreviewExperience.tsx        # client-side Preview Session subscription
 │   └── Page.tsx                         # registered as a coded Experience Template
 └── lib/
     ├── design-tokens.ts                 # token id to CSS value table (used by resolveToken)
-    └── experience-config.tsx            # the integration layer: component registry + async resolveData + tokens
+    ├── experience-config.tsx            # shared typed registry + async resolveData + tokens
+    ├── experience-server.tsx            # server binding, request selector, page payload
+    ├── experience-client.tsx            # client binding, public credentials, Preview factory
+    ├── destination-page.tsx             # managed page root/presentation and native 404
+    └── page-options.ts                  # URL flags and parameter JSON envelope
 ```
 
 ## Integration pattern
@@ -231,7 +258,7 @@ examples/nextjs/
 The example separates **two layers**:
 
 1. **Design-system components** (`components/Section.tsx`, `components/Heading.tsx`, …) receive their **content** props (`text`, `label`, `src`) plus their **resolved design** props (`backgroundColor`, `gap`, `align`, …) together, and style themselves from those props. Each one names the design keys it consumes in its own props interface. Since they import nothing SDK-shaped and are just functions of their props, they're easy to unit-test and render in isolation.
-2. **The experience config** (`lib/experience-config.tsx`) is the integration layer: it maps each `componentId` to a component (bare, or `defineComponent({...})` for `defaults` / `resolveData`), maps `experienceTemplateId`s under `experienceTemplates`, and wires `resolveToken`. It composes into the single `experienceConfig` object the renderer takes.
+2. **The experience config** (`lib/experience-config.tsx`) is the integration layer: it maps each `componentId` to a component (bare, or a typed config for `defaults` / `resolveData`), maps `experienceTemplateId`s under `experienceTemplates`, and wires `resolveToken`. It composes into the single `experienceConfig` object the renderer takes.
 
 Why split this way: SDK-shaped concerns (registration, defaults, async resolvers, token resolution) all live in one file you can scan to understand the whole integration surface.
 
@@ -259,6 +286,10 @@ export function Section({ direction = 'column', gap, backgroundColor, children }
   );
 }
 ```
+
+The following authoring-helper form is an equivalent alternative for a server-only
+registry; the runnable shared registry uses type-only imports and a typed config
+so browser code does not import the server entry.
 
 ```tsx
 // lib/experience-config.tsx: adapter layer
@@ -324,7 +355,7 @@ PriceTag: defineComponent<PriceTagProps>({
 }),
 ```
 
-The route calls `fetchExperience` once (a Destination path may return a redirect instead of an Experience; see above), and it handles the API call and resolution in one step:
+The managed binding performs fetching and resolution. The equivalent free-function API remains available for explicit integrations:
 
 ```ts
 const result = await fetchExperience(
@@ -399,9 +430,8 @@ If the payload references an experience-template id that isn't registered, the r
 warns once and renders the nodes unwrapped, the same graceful-degradation
 behavior as missing components.
 
-The shared browser root configures `preview: { accessToken: CPA_TOKEN, createClient: createLivePreviewClient }` when the preview token
-is available. The Web event runtime derives Preview Session mode from the browser URL;
-the root manages session changes. Preview skips manual/automatic events even
-with consent granted, while the existing Session fetch/render/subscription path
-continues. Mode is independent of socket status. The layout also sends `CPA_TOKEN`
-to the browser for this capability, so it must be approved for browser exposure.
+The client binding configures `preview` with `NEXT_PUBLIC_CPA_TOKEN` and
+`createLivePreviewClient`; the server binding uses private `CPA_TOKEN` separately.
+Managed roots own Preview mode and session transitions from the URL. Preview
+suppresses events even when event consent is granted, independently of socket
+status. Debug mode remains a separate renderer option.

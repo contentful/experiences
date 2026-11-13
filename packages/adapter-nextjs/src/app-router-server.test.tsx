@@ -15,6 +15,11 @@ const doubles = vi.hoisted(() => ({
   transfer: vi.fn(),
   destroy: vi.fn(),
 }));
+vi.mock('next/navigation.js', () => ({
+  redirect: (path: string) => {
+    throw new Error(`NEXT_REDIRECT:${path}`);
+  },
+}));
 vi.mock('next/headers.js', () => ({ headers: doubles.headers, cookies: doubles.cookies }));
 // React's server dispatcher normally supplies this render-local memoization.
 vi.mock('react', async (importOriginal) => ({
@@ -39,6 +44,7 @@ vi.mock('./server-request.js', () => ({
     spaceId: 'space',
     environmentId: 'master',
     config,
+    forRequest: () => ({ fetchExperience: doubles.fetch, destroy: doubles.destroy }),
   }),
   bindExperiencesRequest: doubles.bind,
 }));
@@ -78,6 +84,52 @@ beforeEach(() => {
 });
 
 describe('App Router request family', () => {
+  it('renders an explicit destination plan and follows its native redirect', async () => {
+    const binding = bindAppRouterServerExperiences(config);
+    const element = await binding.Experience({
+      destinationId: 'site',
+      path: '/lookup',
+      as: 'section',
+    });
+    expect(element.props.experience).toBe(plan);
+    expect(element.props.as).toBe('section');
+    expect(element.props).not.toHaveProperty('destinationId');
+    expect(element.props).not.toHaveProperty('path');
+    expect(doubles.fetch).toHaveBeenCalledExactlyOnceWith(
+      {
+        destinationId: 'site',
+        path: '/lookup',
+        locale: undefined,
+        personalization: undefined,
+      },
+      { config: config.config }
+    );
+    doubles.fetch.mockResolvedValueOnce({ redirect: { path: '/target' } });
+    await expect(binding.Experience({ destinationId: 'site', nodeId: 'node' })).rejects.toThrow(
+      'NEXT_REDIRECT:/target'
+    );
+    expect(doubles.destroy).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps raw destination redirects while convenience components redirect before adoption', async () => {
+    const redirect = { path: '/target' };
+    doubles.transfer.mockResolvedValueOnce({ redirect, handoff });
+    const composeRequest = vi.fn();
+    const binding = bindAppRouterServerExperiences({
+      ...config,
+      request: { experience: { destinationId: 'site', path: '/' }, composeRequest },
+    });
+    expect(await binding.request.loadExperience()).toMatchObject({ redirect, handoff });
+    await expect(binding.request.Experience({})).rejects.toThrow('NEXT_REDIRECT:/target');
+    await expect(binding.request.ExperiencesRoot({})).rejects.toThrow('NEXT_REDIRECT:/target');
+    await expect(binding.request.ExperiencesAnalyticsRoot({})).rejects.toThrow(
+      'NEXT_REDIRECT:/target'
+    );
+    expect(doubles.transfer).toHaveBeenCalledOnce();
+    expect(composeRequest).toHaveBeenCalledOnce();
+    expect(doubles.destroy).toHaveBeenCalledOnce();
+  });
+
   it('wires active managed preview from the primary and projects only browser options', async () => {
     doubles.headers.mockResolvedValue(
       new globalThis.Headers({

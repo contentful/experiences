@@ -45,7 +45,7 @@ export async function resolveRequestPolicy(
   const explicitEvents = descriptor.personalization?.events;
   const result: ServerRequestResult = {
     requestId: globalThis.crypto.randomUUID(),
-    experienceId: descriptor.experienceId,
+    ...(descriptor.experienceId === undefined ? {} : { experienceId: descriptor.experienceId }),
     routeKey: context.routeKey,
     experience: {
       ...experience,
@@ -104,19 +104,21 @@ export async function loadPrimaryExperience(
       },
     };
   }
-  let output: Pick<ServerRequestResult, 'plan' | 'error' | 'handoff'>;
+  let output: Pick<ServerRequestResult, 'plan' | 'error' | 'handoff' | 'redirect'>;
   try {
     output =
       !request.isPreview && mode === 'hybrid'
         ? await request.fetchExperienceForHandoff(fetchOptions, resolveOptions, {
             routeKey: context.routeKey,
           })
-        : { plan: await request.fetchExperience(fetchOptions, resolveOptions) };
+        : await request
+            .fetchExperience(fetchOptions, resolveOptions)
+            .then((value) => ('redirect' in value ? value : { plan: value }));
   } catch (error) {
     if (!isContentError(error)) throw error;
     output = { error };
   }
-  if (!request.isPreview && mode === 'ssr') {
+  if (!output.redirect && !request.isPreview && mode === 'ssr') {
     const personalization = output.plan?.personalization;
     const profileId = personalization?.profile.id ?? request.profile?.id;
     const handoff = parseExperiencesHandoffEnvelope(
@@ -134,6 +136,7 @@ export async function loadPrimaryExperience(
   const primary = {
     ...result,
     ...output,
+    ...(output.plan?.experienceId ? { experienceId: output.plan.experienceId } : {}),
     ...(!request.isPreview && mode === 'ssr' ? { initialPageOwner: 'server' as const } : {}),
     ...(initialPagePayload ? { initialPagePayload } : {}),
     ...(output.error !== undefined ? { contentError: 'Experience content unavailable.' } : {}),

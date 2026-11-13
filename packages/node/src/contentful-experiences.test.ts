@@ -527,12 +527,6 @@ describe('Node ContentfulExperiences', () => {
     const fetchExperience = vi
       .spyOn(runtime, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
-    const byNode = vi
-      .spyOn(runtime, 'fetchByDestinationNode')
-      .mockResolvedValue({ nodes: [] } as never);
-    const byPath = vi
-      .spyOn(runtime, 'fetchByDestinationPath')
-      .mockResolvedValue({ redirect: { path: '/next' } });
     const request = runtime.forRequest({
       locale: 'es-ES',
       resolveOptions: { metadata: { request: true } },
@@ -559,12 +553,12 @@ describe('Node ContentfulExperiences', () => {
       { experienceId: 'experience', locale: 'es-ES', personalization },
       { config: resolverConfig, metadata: { request: true }, debug: undefined }
     );
-    expect(byNode).toHaveBeenCalledWith(
-      { destinationId: 'destination', nodeId: 'node' },
+    expect(fetchExperience).toHaveBeenCalledWith(
+      { destinationId: 'destination', nodeId: 'node', locale: 'es-ES', personalization: undefined },
       { config: resolverConfig, metadata: { request: true }, debug: undefined }
     );
-    expect(byPath).toHaveBeenCalledWith(
-      { destinationId: 'destination', path: '/path' },
+    expect(fetchExperience).toHaveBeenCalledWith(
+      { destinationId: 'destination', path: '/path', locale: 'es-ES', personalization: undefined },
       { config: resolverConfig, metadata: { request: true }, debug: undefined }
     );
   });

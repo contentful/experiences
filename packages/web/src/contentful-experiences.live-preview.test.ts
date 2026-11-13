@@ -112,12 +112,18 @@ it('isolates content fetches from failed live client creation', async () => {
     throw new Error('client unavailable');
   });
   const sdk = runtime({ preview: { ...f.config.preview, createClient } });
-  await expect(sdk.fetchExperience({ experienceId: 'hero' }, resolve)).resolves.toEqual(plan);
+  await expect(sdk.fetchExperience({ experienceId: 'hero' }, resolve)).resolves.toEqual({
+    ...plan,
+    experienceId: 'hero',
+  });
   await vi.waitFor(() =>
     expect(sdk.states.preview.current?.error?.message).toBe('client unavailable')
   );
   await expect(sdk.fetchExperience({ experienceId: 'other' }, resolve)).resolves.toEqual(plan);
-  await expect(sdk.fetchExperience({ experienceId: 'hero' }, resolve)).resolves.toEqual(plan);
+  await expect(sdk.fetchExperience({ experienceId: 'hero' }, resolve)).resolves.toEqual({
+    ...plan,
+    experienceId: 'hero',
+  });
   expect(createClient).toHaveBeenCalledOnce();
   expect(ordinary).toHaveBeenCalledTimes(1);
 });
@@ -409,3 +415,35 @@ it('honors explicit startup persistence denial while preview never adopts visito
   expect(window.localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
   expect(document.cookie).not.toContain(`${ANONYMOUS_ID_COOKIE}=`);
 });
+
+it.each([
+  ['master', 'hero', true],
+  ['master', 'other', false],
+  ['branch', 'hero', false],
+])(
+  'selects destination preview only for actual identity and scope (%s, %s)',
+  async (environmentId, experienceId, edited) => {
+    const f = preview();
+    const payloadRuntime = Runtime.prototype as unknown as {
+      fetchExperiencePayload(): Promise<ExperiencePayload>;
+    };
+    const acquisition = vi.spyOn(payloadRuntime, 'fetchExperiencePayload').mockResolvedValue({
+      sys: { id: experienceId, type: 'Experience' },
+      nodes: [],
+      errors: [{ message: 'ordinary' }],
+    });
+    const sdk = runtime({
+      environmentId,
+      preview: { ...f.config.preview, createClient: undefined },
+    });
+    const resolvePayload = vi.spyOn(Runtime.prototype, 'resolveExperience');
+    const result = await sdk.fetchExperience({ destinationId: 'dest', path: '/' }, resolve);
+    expect(result).toMatchObject({ experienceId });
+    expect(acquisition).toHaveBeenCalledOnce();
+    expect(resolvePayload).toHaveBeenCalledOnce();
+    expect(resolvePayload.mock.calls[0]?.[0].errors).toEqual(
+      edited ? undefined : [{ message: 'ordinary' }]
+    );
+    if (environmentId !== 'master') expect(f.fetch).not.toHaveBeenCalled();
+  }
+);

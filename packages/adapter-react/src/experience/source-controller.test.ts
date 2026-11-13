@@ -19,6 +19,76 @@ const settle = async () => {
 };
 
 describe('SourceController', () => {
+  it('acquires destinations directly, binds actual identity and clears retained content on redirect', async () => {
+    const source = sourceSdk();
+    Object.defineProperty(source.sdk, 'environmentId', { value: 'master' });
+    const acquired = { ...plan(), experienceId: 'actual-id' };
+    source.fetchExperience
+      .mockResolvedValueOnce(acquired)
+      .mockResolvedValueOnce({ redirect: { path: '/target' } });
+    const controller = new SourceController();
+    const abandonPresentation = vi.fn();
+    const input = options(source, {
+      request: {
+        destinationId: 'site',
+        path: '/landing',
+        locale: 'de-DE',
+        personalization: { events: [] },
+      },
+      requestContext: {
+        revision: {},
+        fetchExperience: (_sdk, request, resolve) => source.fetchExperience(request, resolve),
+        abandonPresentation,
+      },
+    });
+    controller.updateOptions(input);
+    expect(source.subscribeToPreview).not.toHaveBeenCalled();
+    await settle();
+    expect(controller.getSnapshot().data).toBe(acquired);
+    expect(source.subscribeToPreview).toHaveBeenCalledWith(
+      'actual-id',
+      input.resolve,
+      expect.any(Function)
+    );
+    await controller.refresh();
+    expect(controller.getSnapshot()).toEqual({
+      status: 'redirect',
+      data: undefined,
+      error: undefined,
+      redirect: { path: '/target' },
+    });
+    expect(abandonPresentation).toHaveBeenCalledOnce();
+    expect(source.bindings[0]!.unsubscribe).toHaveBeenCalledOnce();
+    expect(source.fetchExperience.mock.calls[1]?.[0].personalization).toEqual({});
+    await controller.retry();
+    expect(source.fetchExperience).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not bind master-only destination content to a nonmaster preview environment', async () => {
+    const source = sourceSdk();
+    Object.defineProperty(source.sdk, 'environmentId', { value: 'staging' });
+    source.fetchExperience.mockResolvedValue({ ...plan(), experienceId: 'actual-id' });
+    const controller = new SourceController();
+    controller.updateOptions(
+      options(source, { request: { destinationId: 'site', path: '/landing' } })
+    );
+    await settle();
+    expect(controller.getSnapshot().data?.experienceId).toBe('actual-id');
+    expect(source.subscribeToPreview).not.toHaveBeenCalled();
+  });
+
+  it('keeps a seeded destination plan without startup fetching and does not guess preview identity', () => {
+    const source = sourceSdk();
+    const initialPlan = plan();
+    const controller = new SourceController(initialPlan);
+    controller.updateOptions(
+      options(source, { request: { destinationId: 'site', nodeId: 'node' }, initialPlan })
+    );
+    expect(controller.getSnapshot().data).toBe(initialPlan);
+    expect(source.fetchExperience).not.toHaveBeenCalled();
+    expect(source.subscribeToPreview).not.toHaveBeenCalled();
+  });
+
   it('adopts error seeds by identity and does not reapply them after retry or a genuine descriptor change', async () => {
     const source = sourceSdk();
     const initialError = new Error('initial failure');

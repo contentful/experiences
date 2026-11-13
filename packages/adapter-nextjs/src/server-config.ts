@@ -29,15 +29,15 @@ export interface ServerRequestContext {
 
 export type ServerValue<T> = T | ((context: ServerRequestContext) => T | Promise<T>);
 
-export interface ServerRequestResult extends RequestResult {
-  readonly experienceId: string;
-  readonly error?: unknown;
-}
+export type ServerRequestResult<E extends FetchExperienceOptions = FetchExperienceOptions> =
+  RequestResult<E> & { readonly error?: unknown } & ([E] extends [{ experienceId: string }]
+      ? { readonly experienceId: string }
+      : { readonly experienceId?: string });
 
-export interface ServerRequestPolicy {
+export interface ServerRequestPolicy<E extends FetchExperienceOptions = FetchExperienceOptions> {
   /** SSR commits on the server; hybrid previews there and commits browser replay. */
   readonly mode?: ServerValue<'ssr' | 'hybrid'>;
-  readonly experience: ServerValue<FetchExperienceOptions>;
+  readonly experience: ServerValue<E>;
   readonly resolveOptions?: ServerValue<Omit<FetchResolveOptions, 'config'>>;
   readonly metadataKeys?: readonly string[];
   readonly initialEvents?: ServerValue<
@@ -52,7 +52,9 @@ export interface ServerRequestPolicy {
   ) => void | Promise<void>;
 }
 
-export interface ServerConfig extends Omit<NodeConfig, 'preview'> {
+export interface ServerConfig<
+  E extends FetchExperienceOptions = FetchExperienceOptions,
+> extends Omit<NodeConfig, 'preview'> {
   readonly config: Config;
   readonly browser?: BrowserConfig;
   readonly consent?: {
@@ -64,13 +66,28 @@ export interface ServerConfig extends Omit<NodeConfig, 'preview'> {
   };
   readonly cookie?: CookieConfig;
   readonly preview?: PreviewConfig;
-  readonly request?: ServerRequestPolicy;
+  readonly request?: ServerRequestPolicy<E>;
 }
 
 export type ServerRequestOverrides = Partial<ServerRequestPolicy> & {
   readonly consent?: ConsentInput;
   readonly locale?: string;
 };
+
+/** Select the call's source, including the bound default when an override is optional. */
+export type SelectedExperience<
+  E extends FetchExperienceOptions,
+  O extends ServerRequestOverrides | undefined,
+> = O extends unknown
+  ? 'experience' extends keyof O
+    ? O extends { experience: ServerValue<infer S extends FetchExperienceOptions> }
+      ? S
+      : | E
+        | (O extends { experience?: ServerValue<infer S extends FetchExperienceOptions> }
+            ? S
+            : never)
+    : E
+  : never;
 
 export async function resolveServerValue<T>(
   value: ServerValue<T>,
@@ -94,15 +111,16 @@ export function browserRootConfig(options: ServerConfig): BrowserConfig {
 }
 
 /** Project the whole result for browser adoption, excluding raw errors and private metadata. */
-export function serializeRequestResult(
-  result: ServerRequestResult,
+export function serializeRequestResult<E extends FetchExperienceOptions>(
+  result: ServerRequestResult<E> & { readonly experience: E },
   options: { readonly metadataKeys?: readonly string[] } = {}
-): RequestResult {
+): RequestResult<E> {
   return JSON.parse(
     serializeJsonForHtml({
       requestId: result.requestId,
       routeKey: result.routeKey,
       experience: result.experience,
+      ...(result.redirect ? { redirect: { path: result.redirect.path } } : {}),
       ...(result.plan ? { plan: serializePlan(result.plan, options) } : {}),
       ...(result.contentError ? { contentError: result.contentError } : {}),
       ...(result.handoff ? { handoff: result.handoff } : {}),
@@ -110,5 +128,5 @@ export function serializeRequestResult(
       ...(result.initialPagePayload ? { initialPagePayload: result.initialPagePayload } : {}),
       ...(result.preview === undefined ? {} : { preview: result.preview }),
     })
-  ) as RequestResult;
+  ) as RequestResult<E>;
 }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { PreviewConfig } from './server-config.js';
+import type { PreviewConfig, ServerConfig } from './server-config.js';
 import { bindAppRouterServerExperiences } from './app-router-server.js';
 import { bindPagesRouterServerExperiences } from './pages-router-server.js';
 
@@ -16,8 +16,8 @@ const config = {
 afterEach(() => vi.restoreAllMocks());
 
 describe.each([
-  ['App Router', bindAppRouterServerExperiences],
-  ['Pages Router', bindPagesRouterServerExperiences],
+  ['App Router', (options: ServerConfig) => bindAppRouterServerExperiences(options)],
+  ['Pages Router', (options: ServerConfig) => bindPagesRouterServerExperiences(options)],
 ] as const)('%s server preview configuration', (_name, bind) => {
   it('rejects missing transport credentials at binding time', () => {
     const fetch = vi.spyOn(globalThis, 'fetch');

@@ -13,6 +13,7 @@ import {
   BrowserRoot,
   useServerPreviewRefresh,
   useRequestOptions,
+  useRequestRedirect,
 } from './router-lifetime.js';
 import { mergePreview, resolvePreviewSession } from './preview.js';
 import type { ClientConfig } from './app-router-client.js';
@@ -44,6 +45,23 @@ const PagesRequestRouteContext = createContext<{ routeKey: string; ready: boolea
 export function bindPagesRouterExperiences(config: PagesRouterConfig) {
   const { config: registry, consent, ...runtimeConfig } = config;
   const react = createExperiences({ config: registry });
+  function useDestinationRedirect() {
+    const router = useRouter();
+    return useCallback(
+      (target: { path: string }) => {
+        void router.replace(target.path);
+      },
+      [router]
+    );
+  }
+  function Experience(props: Parameters<typeof react.Experience>[0]) {
+    const onRedirect = useDestinationRedirect();
+    return <react.Experience {...props} onRedirect={props.onRedirect ?? onRedirect} />;
+  }
+  function useManagedExperience(props: Parameters<typeof react.useManagedExperience>[0]) {
+    const onRedirect = useDestinationRedirect();
+    return react.useManagedExperience({ ...props, onRedirect: props.onRedirect ?? onRedirect });
+  }
 
   function RouteOwner(props: BoundRequestRootProps) {
     return (
@@ -89,11 +107,14 @@ export function bindPagesRouterExperiences(config: PagesRouterConfig) {
     const router = useRouter();
     const routeKey = owner?.routeKey ?? createRouteKey(router.asPath);
     const ready = owner?.ready ?? router.isReady;
-    const { result, ...initial } = useRequestOptions(supplied);
+    const { result, initialRedirect, ...initial } = useRequestOptions(supplied);
+    const onRedirect = useDestinationRedirect();
+    useRequestRedirect(result, initialRedirect, ready && result?.routeKey === routeKey, onRedirect);
+    if (initialRedirect) return null;
     return ready && result?.routeKey === routeKey ? (
-      <react.Experience {...props} {...result.experience} {...initial} />
+      <Experience {...props} {...result.experience} {...initial} />
     ) : (
-      <react.Experience {...props} experience={undefined} />
+      <Experience {...props} experience={undefined} />
     );
   }
 
@@ -118,9 +139,9 @@ export function bindPagesRouterExperiences(config: PagesRouterConfig) {
   return {
     ExperiencesRoot,
     ExperiencesAnalyticsRoot,
-    Experience: react.Experience,
+    Experience,
     ExperienceRenderer: react.ExperienceRenderer,
-    useManagedExperience: react.useManagedExperience,
+    useManagedExperience,
     request: {
       ExperiencesRoot: RouteOwner,
       ExperiencesAnalyticsRoot: RequestExperiencesAnalyticsRoot,

@@ -40,6 +40,7 @@ export type {
   Config,
   ExperienceRuntime,
   FetchExperienceOptions,
+  FetchByIdExperienceOptions,
   PersonalizationOptions,
   BuiltFetchExperienceOptions,
   FetchByDestinationNodeOptions,

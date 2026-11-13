@@ -61,6 +61,7 @@ export type {
   FetchByDestinationNodeOptions,
   FetchByDestinationPathOptions,
   FetchExperienceOptions,
+  FetchByIdExperienceOptions,
   PersonalizationOptions,
   FetchResolveOptions,
   ResolveDefaults,

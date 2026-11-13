@@ -35,6 +35,59 @@ const request = {
 
 describe('Next primary request policy', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it.each(['ssr', 'hybrid'] as const)(
+    'preserves a destination redirect and composes once (%s)',
+    async (mode) => {
+      const redirect = { path: '/target?from=source' };
+      const composeRequest = vi.fn();
+      const descriptor = { destinationId: 'site', path: '/page', locale: 'de-DE' };
+      const resolved = await resolvePolicy(
+        config,
+        { mode, experience: descriptor, composeRequest },
+        context
+      );
+      if (mode === 'ssr') fetchExperience.mockResolvedValueOnce({ redirect });
+      else fetchExperienceForHandoff.mockResolvedValueOnce({ redirect } as never);
+      const result = await loadPrimary(request, resolved, context, config);
+      expect(result.redirect).toEqual(redirect);
+      expect(result.plan).toBeUndefined();
+      expect(result.experience).toEqual(descriptor);
+      expect(result.experienceId).toBeUndefined();
+      expect(result.handoff).toBeUndefined();
+      expect(composeRequest).toHaveBeenCalledExactlyOnceWith(request, result, context);
+      const called = mode === 'ssr' ? fetchExperience : fetchExperienceForHandoff;
+      expect(called.mock.calls[0]?.[0]).toMatchObject({
+        destinationId: 'site',
+        path: '/page',
+        locale: 'de-DE',
+        personalization: {
+          events: [
+            {
+              type: 'page',
+              properties: expect.objectContaining({
+                path: '/page',
+                search: '?q=a+b&tag=first&tag=last',
+              }),
+            },
+          ],
+        },
+      });
+    }
+  );
+
+  it('reports the fetched Experience identity for destination content', async () => {
+    fetchExperience.mockResolvedValueOnce({ ...plan, experienceId: 'selected' });
+    const resolved = await resolvePolicy(
+      config,
+      { mode: 'ssr', experience: { destinationId: 'site', nodeId: 'node' } },
+      context
+    );
+    const result = await loadPrimary(request, resolved, context, config);
+    expect(result.experienceId).toBe('selected');
+    expect(result.experience).toEqual({ destinationId: 'site', nodeId: 'node' });
+  });
+
   it('defaults to hybrid and resolves a mode callback once with override precedence', async () => {
     expect((await resolvePolicy(config, {}, context)).mode).toBe('hybrid');
     const bound = vi.fn(() => 'hybrid' as const);

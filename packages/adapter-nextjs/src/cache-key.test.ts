@@ -57,6 +57,18 @@ describe('approved public cache metadata', () => {
       } as unknown as CacheKeyInput)
     ).toThrow(new RegExp(`${path} must be`));
   });
+  it('separates destination path, node, destination identity and Experience selectors', () => {
+    const { experienceId: _id, parameters: _parameters, ...common } = input;
+    const path = { ...common, destinationId: 'site', path: '/page' };
+    const key = createCacheKey(path);
+    expect(createCacheKey({ ...path, destinationId: 'other' })).not.toBe(key);
+    expect(createCacheKey({ ...common, destinationId: 'site', nodeId: '/page' })).not.toBe(key);
+    expect(createCacheKey({ ...common, experienceId: '/page' })).not.toBe(key);
+    expect(createCacheKey({ ...path, path: '/page?query=value' })).not.toBe(key);
+    // @ts-expect-error Select exactly one source selector.
+    const invalid: CacheKeyInput = { ...path, experienceId: 'catalog-experience' };
+    void invalid;
+  });
   it('carries detached tags with the application permutation key and version', () => {
     const tags = ['content:home'];
     const metadata = createPublicPermutationCacheMetadata({

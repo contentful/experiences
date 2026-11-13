@@ -2,6 +2,7 @@
 import { act, Suspense } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { useExperiences } from '@contentful/experiences-react/client';
+import type { Config, ExperiencePayload } from '@contentful/experiences-react';
 import { ContentfulExperiences, type PortableRenderPlan } from '@contentful/experiences-web';
 import type { PreviewClientFactory } from '@contentful/experiences-runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -163,6 +164,100 @@ describe('managed Next Live Preview', () => {
   );
 
   it.each(['app', 'pages'] as const)(
+    '%s retains server resolve context for client preview updates without refetching its seed',
+    async (family) => {
+      const metadata = { slug: '/home', locale: 'de-DE' };
+      const resolveData = vi.fn(
+        (context: { experience: { metadata: Record<string, unknown> } }) => ({
+          href: `${context.experience.metadata.slug}?locale=${context.experience.metadata.locale}`,
+        })
+      );
+      const config: Config = { components: { hero: { component: () => null, resolveData } } };
+      let data: ExperiencePayload | undefined;
+      let update = () => {};
+      const createClient: PreviewClientFactory = () => ({
+        getResult: () => ({ data, error: undefined }),
+        subscribe: (listener) => {
+          update = listener;
+          return () => {};
+        },
+        subscribeStatus: () => () => {},
+      });
+      const options = {
+        config,
+        spaceId: 'space',
+        environmentId: 'master',
+        delivery: { accessToken: 'delivery' },
+        preview: { accessToken: 'preview', createClient },
+      };
+      route.search = '?preview_session_id=session';
+      window.history.replaceState(null, '', route.path + route.search);
+      const bound = (
+        family === 'app'
+          ? bindAppRouterClientExperiences(options)
+          : bindPagesRouterExperiences(options)
+      ).request;
+      const fetch = vi.spyOn(ContentfulExperiences.prototype, 'fetchExperience');
+      const subscribe = vi.spyOn(ContentfulExperiences.prototype, 'subscribeToPreview');
+      const resolved = vi.fn();
+      const result: RequestResult = {
+        requestId: 'primary',
+        routeKey: route.path + route.search,
+        experience: { experienceId: 'hero' },
+        plan: { ...plan('server'), metadata, debug: true },
+      };
+      await act(async () =>
+        root.render(
+          <bound.ExperiencesRoot result={result}>
+            <bound.Experience onExperienceResolved={resolved} />
+          </bound.ExperiencesRoot>
+        )
+      );
+      expect(fetch).not.toHaveBeenCalled();
+      expect(subscribe).toHaveBeenCalledWith(
+        'hero',
+        expect.objectContaining({ metadata, debug: true }),
+        expect.any(Function)
+      );
+      await act(async () => {
+        data = {
+          sys: { type: 'Experience', id: 'hero' },
+          nodes: [
+            {
+              component: {
+                sys: {
+                  type: 'ResourceLink',
+                  linkType: 'Contentful:Component',
+                  urn: 'crn:contentful:::experience:components/hero',
+                },
+              },
+              contentProperties: {},
+              designProperties: {},
+              slots: {},
+            },
+          ],
+        };
+        update();
+      });
+      expect(resolveData).toHaveBeenCalledOnce();
+      expect(resolved).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            metadata,
+            debug: true,
+            nodes: [
+              expect.objectContaining({
+                props: expect.objectContaining({ resolved: { href: '/home?locale=de-DE' } }),
+              }),
+            ],
+          }),
+        })
+      );
+      expect(network).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['app', 'pages'] as const)(
     '%s preserves initial content and history guards while reconnecting session selections',
     async (family) => {
       const createClient = clientFactory();
@@ -236,7 +331,7 @@ describe('managed Next Live Preview', () => {
       expect(container.textContent).toBe('preview');
       expect(fetch).toHaveBeenCalledWith(
         expect.objectContaining({ experienceId: 'primary' }),
-        expect.anything(),
+        expect.objectContaining({ metadata: { label: 'original' }, debug: false }),
         expect.objectContaining({ isCurrent: expect.any(Function) })
       );
       expect(network).not.toHaveBeenCalled();

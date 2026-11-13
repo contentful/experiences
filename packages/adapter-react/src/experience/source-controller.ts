@@ -1,15 +1,17 @@
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import type {
   ContentfulExperiences,
+  DestinationRedirectResult,
   FetchExperienceOptions,
   FetchResolveOptions,
   Subscription,
 } from '@contentful/experiences-web';
 
 export interface ManagedExperienceSnapshot {
-  readonly status: 'idle' | 'loading' | 'success' | 'error';
+  readonly status: 'idle' | 'loading' | 'success' | 'error' | 'redirect';
   readonly data: PortableRenderPlan | undefined;
   readonly error: Error | undefined;
+  readonly redirect?: DestinationRedirectResult['redirect'];
 }
 
 export interface ManagedExperienceRequestContext {
@@ -19,7 +21,8 @@ export interface ManagedExperienceRequestContext {
     request: FetchExperienceOptions,
     resolve: FetchResolveOptions,
     isRefresh: boolean
-  ): Promise<PortableRenderPlan>;
+  ): Promise<PortableRenderPlan | DestinationRedirectResult>;
+  abandonPresentation?(): void;
 }
 
 export interface ExperienceSourceOptions {
@@ -70,6 +73,7 @@ export class SourceController {
   private requestStatus: ManagedExperienceSnapshot['status'] = 'idle';
   private listener: ((snapshot: ManagedExperienceSnapshot) => void) | undefined;
   private binding: Subscription | undefined;
+  private previewRevision: object = {};
   private snapshot: ManagedExperienceSnapshot;
 
   constructor(initialPlan?: PortableRenderPlan, initialError?: Error) {
@@ -134,48 +138,61 @@ export class SourceController {
       this.publish({ status: this.requestStatus, data, error });
     }
     if (changed || reconnect) {
+      this.previewRevision = {};
       this.binding?.unsubscribe();
       this.binding = undefined;
-      if (options.sdk) {
-        this.binding = options.sdk.subscribeToPreview(
-          options.request.experienceId,
-          options.resolve,
-          (update) => {
-            if (update.data) {
-              this.version++;
-              this.requestStatus = 'success';
-            }
-            const data = update.data ?? this.snapshot.data;
-            this.publish({
-              data,
-              error: update.error,
-              status: update.error ? 'error' : data ? 'success' : this.requestStatus,
-            });
-          }
-        );
-      }
+      this.bindPreview();
     }
+
     if (options.sdk && this.requestStatus === 'idle') void this.fetch(false);
   }
 
   readonly refresh = async (): Promise<void> => {
-    if (this.active && this.options?.sdk) await this.fetch(true);
+    if (this.active && this.options?.sdk && this.requestStatus !== 'redirect')
+      await this.fetch(true);
   };
 
   readonly retry = (): Promise<void> => this.refresh();
 
   disconnect(): void {
     this.active = false;
+    this.previewRevision = {};
     this.version++;
     if (this.requestStatus === 'loading') this.requestStatus = 'idle';
     this.binding?.unsubscribe();
     this.binding = undefined;
   }
 
+  private bindPreview(): void {
+    const options = this.options;
+    if (options?.request.destinationId !== undefined && options.sdk?.environmentId !== 'master')
+      return;
+    const experienceId = options?.request.experienceId ?? this.snapshot.data?.experienceId;
+    if (!options?.sdk || !experienceId || this.snapshot.redirect) return;
+    this.binding?.unsubscribe();
+    const revision = (this.previewRevision = {});
+    this.binding = options.sdk.subscribeToPreview(experienceId, options.resolve, (update) => {
+      if (!this.active || this.previewRevision !== revision || this.snapshot.redirect) return;
+      if (update.data) {
+        this.version++;
+        this.requestStatus = 'success';
+      }
+      const data = update.data ?? this.snapshot.data;
+      this.publish({
+        data,
+        error: update.error,
+        status: update.error ? 'error' : data ? 'success' : this.requestStatus,
+      });
+    });
+  }
+
   private currentPreviewError(): Error | undefined {
     const options = this.options;
+    if (options?.request.destinationId !== undefined && options.sdk?.environmentId !== 'master')
+      return undefined;
     const preview = options?.sdk?.states.preview.current;
-    return preview?.data?.sys?.id === options?.request.experienceId ? preview?.error : undefined;
+    const experienceId = options?.request.experienceId ?? this.snapshot.data?.experienceId;
+    return experienceId && preview?.data?.sys?.id === experienceId ? preview.error : undefined;
   }
 
   private async fetch(isRefresh: boolean): Promise<void> {
@@ -194,9 +211,23 @@ export class SourceController {
         ? options.requestContext.fetchExperience(sdk, request, options.resolve, isRefresh)
         : sdk.fetchExperience(request, options.resolve));
       if (this.version !== version) return;
+      if ('redirect' in data) {
+        this.requestStatus = 'redirect';
+        this.binding?.unsubscribe();
+        this.binding = undefined;
+        options.requestContext?.abandonPresentation?.();
+        this.publish({
+          status: 'redirect',
+          data: undefined,
+          error: undefined,
+          redirect: data.redirect,
+        });
+        return;
+      }
       this.requestStatus = 'success';
       const error = this.currentPreviewError();
       this.publish({ status: error ? 'error' : 'success', data, error });
+      if (options.request.experienceId === undefined) this.bindPreview();
     } catch (error) {
       if (this.version !== version) return;
       this.requestStatus = 'error';
@@ -208,7 +239,8 @@ export class SourceController {
     if (
       snapshot.status === this.snapshot.status &&
       snapshot.data === this.snapshot.data &&
-      snapshot.error === this.snapshot.error
+      snapshot.error === this.snapshot.error &&
+      snapshot.redirect === this.snapshot.redirect
     )
       return;
     this.snapshot = snapshot;

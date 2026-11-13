@@ -4,7 +4,10 @@ import {
 } from '@contentful/optimization-api-client/api-schemas';
 import * as z from 'zod/mini';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
-import type { PersonalizationOptions } from '@contentful/experiences-client';
+import type {
+  DestinationRedirectResult,
+  PersonalizationOptions,
+} from '@contentful/experiences-client';
 import { EventProfileSchema, type EventProfile } from './event-methods.js';
 import { validatePreparedEvents, type PreparedPersonalizationEvent } from './prepared-events.js';
 
@@ -43,6 +46,7 @@ export interface ExperiencesHandoff {
 export interface FetchExperienceForHandoffResult {
   readonly handoff: ExperiencesHandoff;
   readonly plan?: PortableRenderPlan;
+  readonly redirect?: DestinationRedirectResult['redirect'];
   readonly error?: unknown;
 }
 
