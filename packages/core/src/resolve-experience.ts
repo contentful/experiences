@@ -476,6 +476,9 @@ export async function resolveExperience(
     isPlainPayload ? payload.errors : undefined
   );
   if (deliveryDiagnostics) plan.deliveryDiagnostics = deliveryDiagnostics;
+  const experienceId = isPlainPayload ? payload.sys?.id : undefined;
+  if (typeof experienceId === 'string' && experienceId.trim() !== '')
+    plan.experienceId = experienceId;
   const sourceMap =
     options.sourceMap ?? (isPlainPayload ? payload.extensions?.sourceMap : undefined);
   if (sourceMap) {

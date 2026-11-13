@@ -339,6 +339,13 @@ export interface ExperienceDeliveryDiagnostic {
 export interface PortableRenderPlan {
   nodes: PortableRenderNode[];
   /**
+   * The rendered Experience's id, copied from a nonempty string `payload.sys.id`.
+   * Destination resolution returns a hydrated Experience whose id is otherwise
+   * unknown to the caller; integrations use it to bind Preview Session updates
+   * and request identity. Absent for payloads without an id.
+   */
+  experienceId?: string;
+  /**
    * The `metadata` the resolve step ran with, so the renderer does not need it
    * passed again. The renderer's `metadata` prop merges over this. `{}` when
    * the caller passed none.

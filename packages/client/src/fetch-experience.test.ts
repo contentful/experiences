@@ -4,7 +4,12 @@ import {
   ContentfulViewDelivery,
 } from '@contentful/experience-delivery';
 import { ExperienceFetchError } from './errors.js';
-import { fetchExperience, type PersonalizationOptions } from './fetch-experience.js';
+import {
+  fetchDestinationPayload,
+  fetchExperience,
+  isDestinationRedirect,
+  type PersonalizationOptions,
+} from './fetch-experience.js';
 
 const {
   mockGet,
@@ -765,5 +770,73 @@ describe('fetchExperience — destination personalization', () => {
     );
 
     expect(result).toEqual({ redirect: { path: '/new-path' } });
+  });
+});
+
+describe('fetchDestinationPayload', () => {
+  const client = new ContentfulViewDeliveryClient({
+    token: 'token-123',
+    spaceId: 'space-1',
+    environmentId: '',
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockResolveByPath.mockResolvedValue({
+      experiences: [{ path: '/products', experience: mockDestinationExperience }],
+    });
+    mockResolveByNodeId.mockResolvedValue({
+      experiences: [{ path: '/products', experience: mockDestinationExperience }],
+    });
+  });
+
+  it('returns the hydrated payload, retaining the resolved Experience id, without resolving', async () => {
+    const { resolveExperience } = await import('@contentful/experiences-sdk-core');
+    const payload = await fetchDestinationPayload(
+      { spaceId: 'space-1', destinationId: 'dest-1', path: '/products' },
+      client
+    );
+    expect(payload).toBe(mockDestinationExperience);
+    expect(isDestinationRedirect(payload)).toBe(false);
+    expect((payload as { sys?: { id?: string } }).sys?.id).toBe('exp-2');
+    expect(resolveExperience).not.toHaveBeenCalled();
+  });
+
+  it('distinguishes node and path selectors on the wire', async () => {
+    await fetchDestinationPayload(
+      { spaceId: 'space-1', destinationId: 'dest-1', nodeId: 'node-1' },
+      client
+    );
+    expect(mockResolveByNodeId).toHaveBeenCalledWith('dest-1', 'node-1');
+    expect(mockResolveByPath).not.toHaveBeenCalled();
+  });
+
+  it('returns redirects as values and propagates NotFoundError', async () => {
+    mockResolveByPath.mockResolvedValueOnce({ redirect: { path: '/next' } });
+    const redirect = await fetchDestinationPayload(
+      { spaceId: 'space-1', destinationId: 'dest-1', path: '/old' },
+      client
+    );
+    expect(isDestinationRedirect(redirect)).toBe(true);
+    expect(redirect).toEqual({ redirect: { path: '/next' } });
+
+    const notFound = new ContentfulViewDelivery.NotFoundError('missing');
+    mockResolveByNodeId.mockRejectedValueOnce(notFound);
+    await expect(
+      fetchDestinationPayload(
+        { spaceId: 'space-1', destinationId: 'dest-1', nodeId: 'missing' },
+        client
+      )
+    ).rejects.toBe(notFound);
+  });
+});
+
+describe('isDestinationRedirect', () => {
+  it('accepts only a redirect record with a string path', () => {
+    expect(isDestinationRedirect({ redirect: { path: '/a' } })).toBe(true);
+    expect(isDestinationRedirect({ redirect: {} })).toBe(false);
+    expect(isDestinationRedirect({ redirect: null })).toBe(false);
+    expect(isDestinationRedirect({ nodes: [] })).toBe(false);
+    expect(isDestinationRedirect(null)).toBe(false);
   });
 });
