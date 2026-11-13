@@ -35,6 +35,20 @@
       "executor": "nx:run-commands",
       "options": { "cwd": "lib/mocks", "command": "npm run generate:ctfl:types" }
     },
+    "seed:ctfl:destination": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": { "cwd": "lib/mocks", "command": "npm run seed:ctfl:destination", "tty": true }
+    },
+    "seed:ctfl:destination:confirmed": {
+      "cache": false,
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "lib/mocks",
+        "command": "npm run seed:ctfl:destination:confirmed",
+        "tty": true
+      }
+    },
     "upload:ctfl:space": {
       "cache": false,
       "executor": "nx:run-commands",
