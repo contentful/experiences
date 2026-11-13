@@ -112,12 +112,18 @@ it('isolates content fetches from failed live client creation', async () => {
     throw new Error('client unavailable');
   });
   const sdk = runtime({ preview: { ...f.config.preview, createClient } });
-  await expect(sdk.fetchExperience({ experienceId: 'hero' }, resolve)).resolves.toEqual(plan);
+  await expect(sdk.fetchExperience({ experienceId: 'hero' }, resolve)).resolves.toEqual({
+    ...plan,
+    experienceId: 'hero',
+  });
   await vi.waitFor(() =>
     expect(sdk.states.preview.current?.error?.message).toBe('client unavailable')
   );
   await expect(sdk.fetchExperience({ experienceId: 'other' }, resolve)).resolves.toEqual(plan);
-  await expect(sdk.fetchExperience({ experienceId: 'hero' }, resolve)).resolves.toEqual(plan);
+  await expect(sdk.fetchExperience({ experienceId: 'hero' }, resolve)).resolves.toEqual({
+    ...plan,
+    experienceId: 'hero',
+  });
   expect(createClient).toHaveBeenCalledOnce();
   expect(ordinary).toHaveBeenCalledTimes(1);
 });

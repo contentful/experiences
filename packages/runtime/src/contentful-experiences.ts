@@ -1,11 +1,15 @@
 import {
   ContentfulViewDeliveryClient,
   createUserAgentHeaders,
-  fetchExperience,
+  fetchDestinationPayload,
+  fetchDestinationSitemap,
   fetchExperiencePayload,
+  isDestinationRedirect,
   serializePersonalization,
   PREVIEW_HOST,
   type DestinationRedirectResult,
+  type DestinationSitemapResult,
+  type FetchDestinationSitemapPaginationOptions,
   type ExperienceRequestExtensions,
   type ExperienceParameters,
   type PersonalizationOptions as BuiltPersonalizationOptions,
@@ -128,17 +132,35 @@ export function buildFetchPersonalization(
   };
 }
 
+/**
+ * Destination requests are space-scoped and accept only personalization: the
+ * Destinations API has no environment, locale, parameters or general extensions.
+ */
 export type FetchByDestinationNodeOptions = {
   destinationId: string;
   nodeId: string;
-  personalization?: BuiltPersonalizationOptions;
+  personalization?: PersonalizationOptions;
 };
 
 export type FetchByDestinationPathOptions = {
   destinationId: string;
+  /** Absolute path, starting with `/`. */
   path: string;
-  personalization?: BuiltPersonalizationOptions;
+  personalization?: PersonalizationOptions;
 };
+
+export type FetchDestinationOptions = FetchByDestinationNodeOptions | FetchByDestinationPathOptions;
+
+/** @internal Leaf owners build admitted intent before interception and XDA validation. */
+export type BuiltFetchDestinationOptions =
+  | (Omit<FetchByDestinationNodeOptions, 'personalization'> & {
+      personalization?: BuiltPersonalizationOptions;
+    })
+  | (Omit<FetchByDestinationPathOptions, 'personalization'> & {
+      personalization?: BuiltPersonalizationOptions;
+    });
+
+export type FetchDestinationSitemapOptions = { destinationId: string };
 
 /** Structural contract implemented by the shared runtime. */
 export interface ExperienceRuntime {
@@ -163,6 +185,10 @@ export interface ExperienceRuntime {
     options: FetchByDestinationPathOptions,
     resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult>;
+  fetchDestinationSitemap(
+    options: FetchDestinationSitemapOptions,
+    pagination?: FetchDestinationSitemapPaginationOptions
+  ): Promise<DestinationSitemapResult>;
 }
 
 export type Config = {
@@ -329,33 +355,67 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
     options: FetchByDestinationNodeOptions,
     resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
-    const resolverConfig = requireResolverConfig(resolveOptions);
-    return fetchExperience(
-      {
-        spaceId: this.spaceId,
-        destinationId: options.destinationId,
-        nodeId: options.nodeId,
-        personalization: options.personalization,
-      },
-      { client: this.#deliveryClient },
-      { config: resolverConfig, ...this.#mergeFetchResolveOptions(resolveOptions) }
-    );
+    return this.#fetchDestination(options, resolveOptions);
   }
 
   fetchByDestinationPath(
     options: FetchByDestinationPathOptions,
     resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
-    const resolverConfig = requireResolverConfig(resolveOptions);
-    return fetchExperience(
-      {
-        spaceId: this.spaceId,
-        destinationId: options.destinationId,
-        path: options.path,
-        personalization: options.personalization,
-      },
+    return this.#fetchDestination(options, resolveOptions);
+  }
+
+  /**
+   * One page of a published Destination's routable paths through the runtime-owned
+   * Delivery client. Pass `pages.next` or `pages.prev` from a previous page to continue.
+   */
+  fetchDestinationSitemap(
+    options: FetchDestinationSitemapOptions,
+    pagination: FetchDestinationSitemapPaginationOptions = {}
+  ): Promise<DestinationSitemapResult> {
+    return fetchDestinationSitemap(
+      { spaceId: this.spaceId, destinationId: options.destinationId },
       { client: this.#deliveryClient },
-      { config: resolverConfig, ...this.#mergeFetchResolveOptions(resolveOptions) }
+      pagination
+    );
+  }
+
+  /** Fetch a Destination payload or redirect for a leaf operation that retains identity. */
+  protected fetchDestinationPayload(
+    options: FetchDestinationOptions,
+    resolveOptions: FetchResolveOptions
+  ): Promise<ExperiencePayload | DestinationRedirectResult> {
+    requireResolverConfig(resolveOptions);
+    const built = buildFetchPersonalization(options.personalization, this.eventBuilder);
+    const personalization = built === undefined ? undefined : serializePersonalization(built);
+    return fetchDestinationPayload(
+      'nodeId' in options
+        ? {
+            spaceId: this.spaceId,
+            destinationId: options.destinationId,
+            nodeId: options.nodeId,
+            personalization,
+          }
+        : {
+            spaceId: this.spaceId,
+            destinationId: options.destinationId,
+            path: options.path,
+            personalization,
+          },
+      this.#deliveryClient,
+      resolveOptions.debug ?? this.#resolveDefaults.debug
+    );
+  }
+
+  #fetchDestination(
+    options: FetchDestinationOptions,
+    resolveOptions: FetchResolveOptions
+  ): Promise<PortableRenderPlan | DestinationRedirectResult> {
+    const payload = this.fetchDestinationPayload(options, resolveOptions);
+    const { config } = resolveOptions;
+    const merged = this.#mergeFetchResolveOptions(resolveOptions);
+    return payload.then<PortableRenderPlan | DestinationRedirectResult>((result) =>
+      isDestinationRedirect(result) ? result : resolveCoreExperience(result, config, merged)
     );
   }
 

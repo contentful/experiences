@@ -34,6 +34,19 @@ export type {
 } from './consent.js';
 export { ContentfulExperiences, buildFetchPersonalization } from './contentful-experiences.js';
 export { resolveFlagChange } from './resolve-flag-change.js';
+export {
+  getExperienceRequestIdentity,
+  getExperienceSelectorKind,
+  isDestinationRequest,
+} from './experience-selector.js';
+export type { ExperienceRequest, ExperienceSelectorKind } from './experience-selector.js';
+export { isDestinationRedirect } from '@contentful/experiences-client';
+export type {
+  DestinationRedirectResult,
+  DestinationSitemapResult,
+  FetchDestinationSitemapPaginationOptions,
+  SitemapPathItem,
+} from '@contentful/experiences-client';
 export { ChangeArray, VariableChange } from '@contentful/optimization-api-client/api-schemas';
 export type { Json } from '@contentful/optimization-api-client/api-schemas';
 export type {
@@ -44,6 +57,9 @@ export type {
   BuiltFetchExperienceOptions,
   FetchByDestinationNodeOptions,
   FetchByDestinationPathOptions,
+  FetchDestinationOptions,
+  BuiltFetchDestinationOptions,
+  FetchDestinationSitemapOptions,
   EventBuilderOptions,
   FetchResolveOptions,
   ResolveDefaults,
@@ -108,6 +124,7 @@ export {
 } from './experiences-handoff.js';
 export type {
   FetchExperienceForHandoffResult,
+  FetchDestinationForHandoffResult,
   ExperiencesCacheMetadata,
   ExperiencesCacheSafetyWarning,
   ExperiencesCacheSafetyWarningCode,

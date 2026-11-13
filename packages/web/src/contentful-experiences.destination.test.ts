@@ -175,3 +175,95 @@ describe.each([byNode, byPath])('Web Destination fetch %s', (_label, method, fet
     expect(fetch).not.toHaveBeenCalled();
   });
 });
+
+describe('Web Destination request sharing and attribution', () => {
+  const pathSelector = { destinationId: 'dest', path: '/same' };
+  const nodeSelector = { destinationId: 'dest', nodeId: '/same' };
+
+  it('shares concurrent equal event-free Destination requests and clones each result', async () => {
+    const runtime = createRuntime();
+    const pending = deferred<{ nodes: never[]; experienceId: string }>();
+    const base = vi
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchByDestinationPath')
+      .mockReturnValue(pending.promise as never);
+    const first = runtime.fetchByDestinationPath(pathSelector, resolveOptions);
+    const second = runtime.fetchByDestinationPath({ ...pathSelector }, resolveOptions);
+    await vi.waitFor(() => expect(base).toHaveBeenCalledTimes(1));
+    pending.resolve({ nodes: [], experienceId: 'resolved' });
+    const [a, b] = await Promise.all([first, second]);
+    expect(a).toEqual({ nodes: [], experienceId: 'resolved' });
+    expect(b).toEqual(a);
+    expect(b).not.toBe(a);
+    expect(base).toHaveBeenCalledTimes(1);
+  });
+
+  it('shares redirects as values without combining Experience, path and node selectors', async () => {
+    const runtime = createRuntime();
+    const byPathFetch = vi
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchByDestinationPath')
+      .mockResolvedValue({ redirect: { path: '/next' } });
+    const byNodeFetch = vi
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchByDestinationNode')
+      .mockResolvedValue({ nodes: [] } as never);
+    const byIdFetch = vi
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
+      .mockResolvedValue({ nodes: [] } as never);
+    const results = await Promise.all([
+      runtime.fetchByDestinationPath(pathSelector, resolveOptions),
+      runtime.fetchByDestinationPath(pathSelector, resolveOptions),
+      runtime.fetchByDestinationNode(nodeSelector, resolveOptions),
+      runtime.fetchExperience({ experienceId: '/same' }, resolveOptions),
+    ]);
+    expect(results[0]).toEqual({ redirect: { path: '/next' } });
+    expect(results[1]).toEqual({ redirect: { path: '/next' } });
+    expect(byPathFetch).toHaveBeenCalledTimes(1);
+    expect(byNodeFetch).toHaveBeenCalledTimes(1);
+    expect(byIdFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('never combines event-bearing Destination requests', async () => {
+    seedConsent({ events: true, persistence: false });
+    const runtime = createRuntime({
+      defaults: { profile: profileFixture('visitor'), consent: true },
+    });
+    const base = vi
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchByDestinationPath')
+      .mockResolvedValue({ nodes: [] } as never);
+    await Promise.all([
+      runtime.fetchByDestinationPath(
+        { ...pathSelector, personalization: { events: [{ type: 'page' }] } },
+        resolveOptions
+      ),
+      runtime.fetchByDestinationPath(
+        { ...pathSelector, personalization: { events: [{ type: 'page' }] } },
+        resolveOptions
+      ),
+    ]);
+    expect(base).toHaveBeenCalledTimes(2);
+    for (const [request] of base.mock.calls)
+      expect(request.personalization?.events).toEqual([expect.objectContaining({ type: 'page' })]);
+  });
+
+  it('does not request the source-map extension, which Destinations do not accept', async () => {
+    const runtime = createRuntime();
+    runtime.tracking.enable('views');
+    const base = vi
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchByDestinationNode')
+      .mockResolvedValue({ nodes: [] } as never);
+    await runtime.fetchByDestinationNode(nodeSelector, resolveOptions);
+    expect(base.mock.lastCall![0]).not.toHaveProperty('extensions');
+  });
+
+  it('discards a superseded Destination result after reset', async () => {
+    const runtime = createRuntime();
+    const pending = deferred<{ nodes: never[] }>();
+    vi.spyOn(RuntimeContentfulExperiences.prototype, 'fetchByDestinationPath').mockReturnValue(
+      pending.promise as never
+    );
+    const load = runtime.fetchByDestinationPath(pathSelector, resolveOptions);
+    await Promise.resolve();
+    runtime.reset();
+    pending.resolve({ nodes: [] });
+    await expect(load).rejects.toThrow(/superseded/);
+  });
+});

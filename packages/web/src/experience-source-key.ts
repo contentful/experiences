@@ -1,7 +1,12 @@
-import type { FetchExperienceOptions, FetchResolveOptions } from '@contentful/experiences-runtime';
+import {
+  getExperienceSelectorKind,
+  type ExperienceRequest,
+  type FetchResolveOptions,
+} from '@contentful/experiences-runtime';
 
 export interface ExperienceSourceContext {
-  request: FetchExperienceOptions;
+  /** An Experience id, Destination path or Destination node request. */
+  request: ExperienceRequest;
   revision: readonly unknown[];
 }
 
@@ -17,8 +22,11 @@ export function getExperienceSourceKey(
     const query = Object.fromEntries(
       Object.entries(request).filter(([, value]) => value !== undefined)
     );
+    // The selector kind keeps an Experience id, Destination path and Destination
+    // node with equal locator strings from ever sharing a request.
     return JSON.stringify(
       canonical([
+        getExperienceSelectorKind(request),
         query,
         resolve.metadata ?? {},
         resolve.debug ?? false,

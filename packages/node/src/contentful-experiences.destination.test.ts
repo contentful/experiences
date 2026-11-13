@@ -143,7 +143,8 @@ describe.each(cases)('Node Destination fetch $label', ({ method, locator, fetchI
       events: [sdk.eventBuilder.buildPageView()],
     });
 
-    const sent = fetch.mock.calls[0]?.[0].personalization?.events?.[0];
+    const sent = fetch.mock.calls[0]?.[0].personalization?.events?.[0] as
+      { context: { userAgent?: string } } | undefined;
     expect(sent?.context.userAgent).toBe('redacted');
   });
 
