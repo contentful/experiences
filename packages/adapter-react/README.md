@@ -216,8 +216,9 @@ const { ExperiencesRoot, Experience } = createExperiences({ config });
 
 The session selects one current Experience. Its raw payload's `sys.id` is the
 authority: matching views receive resolved updates through `subscribeToPreview`,
-while other IDs retain their ordinary by-ID source. Missing payload identity is
-never broadcast or inferred from child order. Repeated views of the current ID
+while other IDs retain their ordinary by-ID source after a successful snapshot lookup.
+Snapshot acquisition failure remains a fetch/managed error before identity is known.
+Missing payload identity is never broadcast or inferred from child order. Repeated views of the current ID
 keep independent resolution options and presentation state.
 
 `usePreviewState()` observes the context's raw status, payload, revision and error;
@@ -587,10 +588,13 @@ const subscription = sdk.subscribeToPreview(
 // Teardown: subscription.unsubscribe(); sdk.destroy();
 ```
 
-The SDK uses a session snapshot only when its raw `sys.id` matches the requested ID.
+The SDK uses a session snapshot only when its successfully acquired raw `sys.id`
+matches the requested ID; see Runtime's [acquisition limits](../runtime/README.md#optional-runtime-live-preview).
 The shared connection publishes only to matching views; missing identity never
 broadcasts. Supplied initial plans need no startup snapshot fetch. Updates can carry
-both usable content and an error. `states.preview` exposes the single raw context;
+both usable content and an error. Snapshot HTTP errors appear in fetch/managed
+results; connection/update errors appear in `states.preview`. Managed views retain
+usable content while pending or failed. `states.preview` exposes the single raw context;
 Preview mode suppresses visitor events. Changing sessions creates a new SDK context.
 See [Web](../web/README.md#shared-source-and-optional-live-preview) and
 [Runtime](../runtime/README.md#optional-runtime-live-preview) for endpoint mapping

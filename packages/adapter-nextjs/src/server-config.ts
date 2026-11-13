@@ -2,6 +2,7 @@ import {
   ExperienceFetchError,
   NotFoundError,
   type ConsentInput,
+  type PreviewConfig,
   type Config as NodeConfig,
   type RequestRuntime,
   type FetchExperienceOptions,
@@ -13,10 +14,10 @@ import type { BrowserConfig } from './browser-config.js';
 import type { CookieConfig } from './cookies.js';
 import type { CookieReader, RequestLike } from './request-context.js';
 import type { RequestResult } from './request-result.js';
-import type { PreviewConfig } from './preview.js';
 import { serializeJsonForHtml, serializePlan } from './serialization.js';
 
-export type { PreviewConfig, PreviewContext } from './preview.js';
+export type { PreviewConfig } from '@contentful/experiences-node';
+export type { PreviewContext } from './preview.js';
 
 export interface ServerRequestContext {
   readonly request: RequestLike;

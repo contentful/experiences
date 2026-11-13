@@ -35,13 +35,16 @@ Web owns one connection for the active editor session. Configure credentials und
 available. Connection failure preserves preview policy. Rendering components and fetches keep their ordinary Experience IDs. `states.preview`
 exposes raw session data, error, status and revision.
 
-The package returns one current Experience payload. The SDK uses its actual
-`sys.id` to route snapshots and updates: only matching requests/subscriptions
-receive that payload, and updates without an ID are ignored. Other Experience
-IDs retain their ordinary fetch source and are not overwritten by the session.
-The SDK shares equivalent in-flight
-fetching/resolution while each consumer receives an independent mutable plan;
-the view keeps its existing presentation state.
+The package returns one current Experience payload. Only the current successfully
+acquired raw snapshot's `sys.id` determines whether a fetch uses session content.
+A mismatched or missing ID uses ordinary Delivery; updates without an ID are ignored
+and only matching subscriptions receive identified updates. Acquisition failure
+rejects before identity is known; see Runtime's [acquisition limits](../runtime/README.md#optional-runtime-live-preview).
+Snapshot acquisition is shared only while in flight, allowing later calls to retry.
+The SDK shares equivalent in-flight fetching/resolution while each consumer receives an independent mutable plan;
+the view keeps its existing presentation state, including usable content while
+pending or failed. Snapshot HTTP errors surface through the fetch or managed
+result; connection/update errors appear in `states.preview`.
 
 `subscribeToPreview(experienceId, resolveOptions, listener)` returns a
 `Subscription` and emits only `PreviewUpdate` plan/error updates, without snapshot
@@ -782,7 +785,10 @@ const experiences = new ContentfulExperiences({
 ```
 
 On the server, the host reads the cookie, supplies it through `forRequest({ profile,
-consent })`, and uses `canPersistProfile` to write or expire the response cookie. See the
+consent })`, and first checks `request.isPreview` to skip both cookie writes and
+expiry in preview. Outside preview, it uses `canPersistProfile` to write or expire
+the response cookie. Preview's false `canPersistProfile` does not request cookie
+expiry. See the
 [Node example](../../examples/node/README.md).
 
 ## Interaction tracking
@@ -1138,7 +1144,10 @@ from both the package root and `@contentful/experiences-web/runtime`.
 
 Missing Experiences surface the delivery client's `NotFoundError`; other delivery and resolution errors propagate so the application can apply its normal error policy. Destination operations use the delivery service and return either a resolved plan or a redirect result; route redirects at the application boundary.
 
-Preview Session errors are exposed through `states.preview` while preview policy stays active. Destination fetches retain their ordinary Delivery source.
+Preview Session snapshot HTTP errors reject the fetch and appear in managed results;
+connection/update errors are exposed through `states.preview` while preview policy stays active.
+See [Runtime acquisition limits](../runtime/README.md#optional-runtime-live-preview).
+Destination fetches retain their ordinary Delivery source.
 
 ## Current limitations
 

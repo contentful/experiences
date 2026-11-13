@@ -133,7 +133,10 @@ export interface RequestRuntime extends PersonalizationMethods, AnalyticsMethods
   readonly profile: RequestContext['profile'];
   /** Builds events without submitting them; explicit inputs override request context. */
   readonly eventBuilder: RequestEventBuilder;
-  /** Whether the host application may persist this request's profile id. */
+  /**
+   * Whether the host may persist this request's profile id. Always false in preview;
+   * skip cookie writes and expiry when `isPreview`, rather than treating it as withdrawal.
+   */
   readonly canPersistProfile: boolean;
   resolveExperience(
     payload: ExperiencePayload,
@@ -359,8 +362,9 @@ class RequestBoundExperiences implements RequestRuntime {
     this.assertActive();
     const resolve = mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions);
     if (this.#previewOptions !== undefined) {
-      const plan = await this.fetchPreview(options, resolve);
-      if (plan !== undefined) return plan;
+      const payload = await this.readPreviewSnapshot();
+      const load = this.preparePreview(payload, options, resolve);
+      if (load !== undefined) return load();
     }
     return this.fetchPersonalized(options, (request) =>
       this.runtime.fetchExperience(request, resolve)
@@ -390,7 +394,27 @@ class RequestBoundExperiences implements RequestRuntime {
     };
     const resolve = mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions);
     if (this.isPreview) {
-      return { handoff, plan: await this.fetchExperience(options, resolveOptions) };
+      let payload: ExperiencePayload;
+      try {
+        payload = await this.readPreviewSnapshot();
+      } catch (error) {
+        this.assertActive();
+        return { handoff, error };
+      }
+      // Matching Preview overrides are invocation errors, not content failures.
+      const load = this.preparePreview(payload, options, resolve);
+      try {
+        const plan = await (load !== undefined
+          ? load()
+          : this.fetchPersonalized(options, (request) =>
+              this.runtime.fetchExperience(request, resolve)
+            ));
+        this.assertActive();
+        return { handoff, plan };
+      } catch (error) {
+        this.assertActive();
+        return { handoff, error };
+      }
     }
     const profileRevision = this.#profileRevision;
     let expectedProfileId = this.#profile?.id;
@@ -461,24 +485,33 @@ class RequestBoundExperiences implements RequestRuntime {
     }
   }
 
-  private async fetchPreview(
+  private readPreviewSnapshot(): Promise<ExperiencePayload> {
+    if (this.#previewSnapshot !== undefined) return this.#previewSnapshot;
+    const pending = this.fetchSessionPayload(this.#previewOptions!).catch((error: unknown) => {
+      if (this.#previewSnapshot === pending) this.#previewSnapshot = undefined;
+      this.assertActive();
+      throw error;
+    });
+    return (this.#previewSnapshot = pending);
+  }
+
+  private preparePreview(
+    payload: ExperiencePayload,
     options: FetchExperienceOptions,
     resolveOptions: FetchResolveOptions
-  ): Promise<PortableRenderPlan | undefined> {
-    if (this.#previewOptions === undefined) return undefined;
-    const payload = await (this.#previewSnapshot ??= this.fetchSessionPayload(
-      this.#previewOptions
-    ));
+  ): (() => Promise<PortableRenderPlan>) | undefined {
     this.assertActive();
     if (payload.sys?.id !== options.experienceId) return undefined;
     assertPreviewRequest(options);
     this.gatePersonalizationEvents(options);
     this.assertActive();
     const resolve = mergePreviewResolveOptions(this.runtime.config, resolveOptions);
-    const plan = await this.runtime.resolveExperience(payload, resolve);
-    // Snapshot HTTP cannot be aborted through the package API; discard after disposal.
-    this.assertActive();
-    return plan;
+    return async () => {
+      const plan = await this.runtime.resolveExperience(payload, resolve);
+      // Snapshot HTTP cannot be aborted through the package API; discard after disposal.
+      this.assertActive();
+      return plan;
+    };
   }
 
   fetchByDestinationNode(

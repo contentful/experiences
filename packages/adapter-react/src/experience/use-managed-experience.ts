@@ -107,6 +107,7 @@ export function useExperienceSource(
     const previewRequest = liveSdk?.isPreview === true;
     controller.updateOptions({
       seedRequest: request,
+      effectiveLocale: request.locale ?? locale,
       request: {
         ...request,
         // Session-owned locale and parameters remain server-controlled.

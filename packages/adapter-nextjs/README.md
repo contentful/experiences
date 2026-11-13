@@ -328,7 +328,10 @@ export const { ExperiencesRoot, Experience } = binding.request;
 ```
 
 Configure the server binder’s separate `preview` object with its private
-`accessToken`. Server snapshots use that normal
+`accessToken` (including a token supplier) or an explicit trusted proxy `host`.
+Supplied server Preview configuration must contain one of those transport options;
+otherwise the binder throws during construction, before cookie or event work.
+Server snapshots use that normal
 Preview transport; the browser’s synchronous package factory stays in the client
 module. Continue using the server load/serialization and injected client root shown
 above. Client callbacks are never copied from the server. For Pages, supply the same context options to the server binder and
@@ -348,8 +351,10 @@ Experience JSX and complete request results stay unchanged:
 ```
 
 The session contains one current Experience. Its raw payload's `sys.id` controls
-which ordinary ID receives its content; unrelated IDs retain their normal by-ID
-source, and missing identity is never broadcast or guessed from child order.
+which ordinary ID receives its content. After a successful snapshot lookup,
+unrelated IDs retain their normal by-ID source; missing identity is never broadcast
+or guessed from child order. See Runtime's [acquisition limits](../runtime/README.md#optional-runtime-live-preview)
+for failures before identity is known and the absence of published-content fallback.
 Repeated matching views keep their own resolution options. There are no renderer
 session props, target IDs, replacement APIs or per-Experience session records.
 

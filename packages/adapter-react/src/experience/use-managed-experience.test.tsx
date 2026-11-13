@@ -128,6 +128,7 @@ describe('useManagedExperience', () => {
   it('suppresses automatic defaults for the Preview context while keeping errors scoped to its payload ID', async () => {
     const source = sourceSdk();
     source.preview.emit(previewState({ error: new Error('home only') }));
+    source.fetchExperience.mockImplementation(async () => plan(source.locale.state.current));
     await act(async () => root.render(content(source, { experienceId: 'other', config })));
     expect(source.fetchExperience.mock.calls[0]?.[0]).toMatchObject({
       experienceId: 'other',
@@ -135,6 +136,14 @@ describe('useManagedExperience', () => {
       extensions: undefined,
     });
     expect(result.error).toBeUndefined();
+    expect(root.container.textContent).toBe('success:en-US');
+    await act(async () => source.locale.emit('de-DE'));
+    expect(source.fetchExperience).toHaveBeenCalledTimes(2);
+    expect(root.container.textContent).toBe('success:de-DE');
+    expect(source.fetchExperience.mock.calls[1]?.[0]).toMatchObject({
+      locale: undefined,
+      extensions: undefined,
+    });
     await act(async () => root.render(content(source, { experienceId: 'home', config })));
     expect(source.fetchExperience.mock.calls.at(-1)?.[0].extensions).toBeUndefined();
     expect(source.fetchExperience.mock.calls.at(-1)?.[0].locale).toBeUndefined();
@@ -142,9 +151,22 @@ describe('useManagedExperience', () => {
     await act(async () => root.render(content(source, { experienceId: 'other', config })));
     await act(async () => result.refresh());
     expect(source.fetchExperience.mock.calls.at(-1)?.[0]).toMatchObject({
-      locale: 'en-US',
+      locale: 'de-DE',
       extensions: { sourceMap: {} },
     });
+  });
+
+  it('keeps an explicit locale authoritative across Preview owner locale changes', async () => {
+    const source = sourceSdk();
+    source.preview.emit(previewState());
+    const options = { experienceId: 'other', config, locale: 'fr-FR' };
+    await act(async () => root.render(content(source, options)));
+    await act(async () => source.locale.emit('de-DE'));
+    expect(source.fetchExperience).toHaveBeenCalledTimes(1);
+    expect(source.fetchExperience.mock.calls[0]?.[0].locale).toBe('fr-FR');
+    await act(async () => root.render(content(source, { ...options, locale: 'es-ES' })));
+    expect(source.fetchExperience).toHaveBeenCalledTimes(2);
+    expect(source.fetchExperience.mock.calls[1]?.[0].locale).toBe('es-ES');
   });
 
   it('cancels initializer observation on unmount and reports keyed initialization errors', async () => {

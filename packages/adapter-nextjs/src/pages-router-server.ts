@@ -22,13 +22,12 @@ import {
   type ServerRequestOverrides,
 } from './server-config.js';
 import { loadPrimaryExperience, resolveRequestPolicy } from './request-policy.js';
-import { resolvePreview } from './preview.js';
 
 export type { RequestResult } from './request-result.js';
 export { serializeRequestResult } from './server-config.js';
 export type { CookieConfig } from './cookies.js';
 export type { ServerRequestOverrides, ServerRequestPolicy } from './server-config.js';
-export type { PreviewConfig, PreviewContext } from './preview.js';
+export type { PreviewConfig, PreviewContext } from './server-config.js';
 
 export interface PagesRouterServerConfig extends ServerConfig {
   /** Trusted HTTP(S) origin. Required here or on every loadExperience call. */
@@ -115,7 +114,7 @@ export function bindPagesRouterServerExperiences<Config extends PagesRouterServe
   } = options;
   const sdk = configureServerExperiences({
     ...nodeConfig,
-    preview: resolvePreview(preview, '/'),
+    preview,
   });
 
   async function loadExperience(

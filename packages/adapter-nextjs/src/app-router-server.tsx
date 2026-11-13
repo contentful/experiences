@@ -37,13 +37,13 @@ import {
   type ServerRequestResult,
 } from './server-config.js';
 import { loadPrimaryExperience, resolveRequestPolicy } from './request-policy.js';
-import { resolvePreview, mergePreview } from './preview.js';
+import { mergePreview } from './preview.js';
 import { AppRouterRequestRoot, AppRouterRequestAnalyticsRoot } from './app-router-client.js';
 
 export { serializeRequestResult } from './server-config.js';
 export type { CookieConfig } from './cookies.js';
 export type { ServerRequestOverrides, ServerRequestPolicy } from './server-config.js';
-export type { PreviewConfig, PreviewContext } from './preview.js';
+export type { PreviewConfig, PreviewContext } from './server-config.js';
 
 export type AppRouterRequestContext = ServerRequestContext;
 export type AppRouterServerConfig = ServerConfig;
@@ -127,7 +127,7 @@ function createAppRouterServerExperiences<PresentationProps extends ServerReques
   } = options;
   const sdk = configureServerExperiences({
     ...nodeConfig,
-    preview: resolvePreview(preview, '/'),
+    preview,
   });
 
   // One React render-local result supplies both the root and presentation.

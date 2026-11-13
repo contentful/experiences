@@ -392,7 +392,22 @@ describe('published declarations', () => {
       // @ts-expect-error DOM handlers cannot cross the server-to-client boundary.
       automaticApp.request.Experience({ rootProps: { onClick: () => {} } });
       bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config,
+        // @ts-expect-error Factory-only browser configuration lacks server transport credentials.
         preview: previewConfig, request: { experience: { experienceId: 'home' } } });
+      const serverPreview: import('${packageName}/server').PreviewConfig = { accessToken: 'preview' };
+      const appPreview: import('${packageName}/app-router/server').PreviewConfig = { accessToken: () => 'preview' };
+      const pagesPreview: import('${packageName}/pages-router/server').PreviewConfig = { host: 'https://example.com/preview' };
+      // @ts-expect-error Server Preview configuration requires credentials or a proxy host.
+      const emptyServerPreview: typeof serverPreview = {};
+      // @ts-expect-error An explicitly undefined token still requires a proxy host.
+      const undefinedAppPreview: typeof appPreview = { accessToken: undefined };
+      // @ts-expect-error Server factories do not supply transport credentials.
+      const factoryPagesPreview: typeof pagesPreview = { createClient: createPreviewClient };
+      for (const preview of [serverPreview, appPreview, pagesPreview]) {
+        bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, preview });
+        bindPagesRouterServerExperiences({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config, preview });
+      }
+      void [emptyServerPreview, undefinedAppPreview, factoryPagesPreview];
       // @ts-expect-error Content identity belongs to Experience, not the shared root.
       appClient.ExperiencesRoot({ experienceId: 'home' });
       // @ts-expect-error Analytics observes the SDK Preview target without a root content ID.

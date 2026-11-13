@@ -122,6 +122,76 @@ it('isolates content fetches from failed live client creation', async () => {
   expect(ordinary).toHaveBeenCalledTimes(1);
 });
 
+it('shares snapshot failure without published fallback, then retries with fresh snapshots', async () => {
+  const f = preview();
+  const hold = deferred<globalThis.Response>();
+  f.fetch.mockReturnValueOnce(hold.promise);
+  const sdk = runtime({ preview: { ...f.config.preview, maxRetries: 0 } });
+  const ordinary = vi.spyOn(Runtime.prototype, 'fetchExperience').mockResolvedValue(plan);
+  const pending = Promise.allSettled([
+    sdk.fetchExperience({ experienceId: 'hero' }, resolve),
+    sdk.fetchExperience({ experienceId: 'other' }, resolve),
+  ]);
+  await vi.waitFor(() => expect(f.fetch).toHaveBeenCalledOnce());
+  expect(ordinary).not.toHaveBeenCalled();
+  hold.resolve(new globalThis.Response('', { status: 500 }));
+  const results = await pending;
+  expect(results).toEqual([
+    { status: 'rejected', reason: expect.objectContaining({ name: 'PreviewSessionFetchError' }) },
+    { status: 'rejected', reason: expect.objectContaining({ name: 'PreviewSessionFetchError' }) },
+  ]);
+  expect(ordinary).not.toHaveBeenCalled();
+  expect(sdk.isPreview).toBe(true);
+  expect(sdk.states.profile.current).toBeUndefined();
+  await expect(sdk.page()).resolves.toMatchObject({ accepted: false, reason: 'preview' });
+
+  await sdk.fetchExperience({ experienceId: 'hero' }, resolve);
+  await sdk.fetchExperience({ experienceId: 'other' }, resolve);
+  expect(f.fetch).toHaveBeenCalledTimes(3);
+  expect(ordinary).toHaveBeenCalledOnce();
+});
+
+it('uses Delivery for a successful snapshot without an ID but rejects matching overrides', async () => {
+  const f = preview();
+  f.fetch.mockResolvedValueOnce(
+    new globalThis.Response(
+      JSON.stringify({
+        sys: { type: 'Experience' },
+        nodes: [],
+      })
+    )
+  );
+  const sdk = runtime(f.config);
+  const ordinary = vi.spyOn(Runtime.prototype, 'fetchExperience').mockResolvedValue(plan);
+  await expect(sdk.fetchExperience({ experienceId: 'hero' }, resolve)).resolves.toEqual(plan);
+  expect(ordinary).toHaveBeenCalledOnce();
+  await expect(
+    sdk.fetchExperience({ experienceId: 'hero', locale: 'de-DE' }, resolve)
+  ).rejects.toThrow(/locale is server-owned/);
+  expect(ordinary).toHaveBeenCalledOnce();
+});
+
+it.each(['reset', 'destroy'] as const)(
+  'discards a pending snapshot after %s',
+  async (operation) => {
+    const f = preview();
+    const hold = deferred<globalThis.Response>();
+    f.fetch.mockReturnValueOnce(hold.promise);
+    const sdk = runtime(f.config);
+    const ordinary = vi.spyOn(Runtime.prototype, 'fetchExperience').mockResolvedValue(plan);
+    const pending = sdk.fetchExperience({ experienceId: 'other' }, resolve);
+    await vi.waitFor(() => expect(f.fetch).toHaveBeenCalledOnce());
+    sdk[operation]();
+    hold.resolve(
+      new globalThis.Response(
+        JSON.stringify({ sys: { type: 'Experience', id: 'hero' }, nodes: [] })
+      )
+    );
+    await expect(pending).rejects.toThrow(operation === 'destroy' ? /destroyed/ : /superseded/);
+    expect(ordinary).not.toHaveBeenCalled();
+  }
+);
+
 it('routes the one session stream only to listeners matching the payload Experience ID', async () => {
   const f = preview(),
     sdk = runtime(f.config);

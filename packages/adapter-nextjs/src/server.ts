@@ -38,4 +38,4 @@ export {
 } from './cache-key.js';
 export type { RequestRuntime, RequestContext, ConsentInput } from '@contentful/experiences-node';
 
-export type { PreviewConfig, PreviewContext } from './preview.js';
+export type { PreviewConfig, PreviewContext } from './server-config.js';

@@ -103,8 +103,16 @@ its session explicitly.
 The frozen package exposes one current Experience payload per session and does
 not select by Experience ID. Runtime's owned Preview client therefore reads raw
 snapshots so Node/Web can check `payload.sys.id` before resolving them for a caller.
-Unrelated IDs retain their ordinary source. Web subscriptions use the same identity
-check; payloads without an ID are never broadcast to arbitrary Experiences.
+Only the current successfully acquired raw snapshot determines that match. A
+mismatched or missing ID uses ordinary Delivery. Snapshot acquisition failure rejects
+before identity is known, so it can affect all by-ID requests in the preview context;
+there is no automatic fallback to published content on failure. One Experience per
+page remains recommended. Node retains a successful request-local snapshot and permits
+retry after acquisition failure; Web shares only in-flight snapshot acquisition.
+Managed views retain existing usable content while pending or failed. Web subscriptions
+use the same identity check; payloads without an ID are never broadcast to arbitrary
+Experiences. Snapshot HTTP errors surface through the fetch or managed result;
+`states.preview` reports connection/update state and errors.
 `createPreviewClient` evaluates token suppliers and passes the session options
 to the configured factory, without requiring
 the optional package as a Runtime dependency. Registries and resolve options stay per call.

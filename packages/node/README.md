@@ -29,7 +29,8 @@ profile lookup, report `onEventBlocked` with reason `preview`, and cannot affect
 Preview fetches omit personalization and do not attach/adopt profiles. Handoff preparation
 returns scope/cache only, without preflight or replay;
 the request discards supplied visitor profiles and `canPersistProfile` is false.
-Hosts skip visitor-cookie work for preview requests so existing visitor identity remains untouched.
+Hosts check `request.isPreview` first and skip both visitor-cookie writes and expiry
+for preview requests so existing visitor identity remains untouched.
 Raw `sdk.api` calls and standalone free fetches remain outside this policy.
 
 For session snapshots, configure `preview.accessToken` (or a trusted proxy host) on
@@ -70,10 +71,14 @@ try {
 
 An active request session with configured Preview transport sets preview policy immediately.
 Preview credentials alone do not enable this policy. The request fetches one raw
-session snapshot lazily and resolves it only when its `sys.id` matches the requested
-Experience ID. Other IDs, including payloads with no ID, use the ordinary by-ID source
-through Delivery. Each matching call retains its own
-registry and Runtime → request → operation metadata/debug precedence. Optional
+session snapshot lazily and resolves it only when the successfully acquired raw
+payload's `sys.id` matches the requested Experience ID. A mismatched or missing ID
+uses the ordinary by-ID source through Delivery. Acquisition failure rejects before
+identity is known, without published-content fallback; see Runtime's
+[acquisition limits](../runtime/README.md#optional-runtime-live-preview).
+A later call can retry a failed acquisition; a successful snapshot is retained for this request.
+Each matching call retains its own registry and Runtime → request → operation
+metadata/debug precedence. Optional
 `resourceResolution` and `sessionHost` override constructor Preview defaults. Session
 identity belongs to the request and cannot be configured on the shared SDK. Destinations retain
 their sources. Node opens no socket. Hosts omit automatic visitor-cookie work for preview.
@@ -256,6 +261,9 @@ handoff state, including `[]` to clear browser flags; omitted changes remain abs
 This uses the same snapshot assumption as
 [Web flag state](../web/README.md#custom-flags), pending live-backend verification.
 Node retains no global flag state. Preview suppresses visitor work.
+In Session preview, content acquisition or resolution failure returns `{ handoff, error }`
+with scope/cache only and no replay or visitor identity. Invalid route/preflight or
+matching Preview overrides still reject, as does unfinished work after request disposal.
 
 Retry of the same Experience is ordinary fetch without events:
 
@@ -329,11 +337,13 @@ dropped, never replayed, and reported to the runtime's `onEventBlocked`. Configu
 `allowedEventTypes` and `onEventBlocked` on the runtime (`allowedEventTypes: []` is strict opt-in);
 consent itself is per request. A boolean `consent` sets event and persistence consent together.
 Consent is scoped to the request facade and is never shared across requests or persisted.
-Check `request.canPersistProfile` before storing the profile id. A host that carries the
-identity in the `ctfl-opt-aid` cookie reads it into `forRequest({ profile })` and uses
-`canPersistProfile` to write or expire the response cookie; the cookie's presence is never
-server-side consent. See the [Node example](../../examples/node/README.md). Events passed in
-`fetchExperience({ personalization: { events } })` are filtered by the same request
+Check `request.isPreview` before any identity-cookie write or expiry: preview requests
+leave the existing cookie untouched even though `request.canPersistProfile` is false.
+Outside preview, check `request.canPersistProfile` before storing the profile id. A host
+that carries identity in the `ctfl-opt-aid` cookie reads it into `forRequest({ profile })`
+and uses `canPersistProfile` to write or expire the response cookie; the cookie's presence
+is never server-side consent. See the [Node example](../../examples/node/README.md).
+Events passed in `fetchExperience({ personalization: { events } })` are filtered by the same request
 consent before the request is sent; the `profileId` still travels. `eventConsent` is a deprecated
 alias for `consent.events`. Personalization methods resolve `{ accepted, data? }`.
 

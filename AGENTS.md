@@ -160,7 +160,10 @@ Renderers and fetches use normal Experience IDs.
 The package returns one current Experience payload, not a multi-Experience source.
 Node/Web route snapshots and updates by the reported `payload.sys.id`; only
 matching requested/subscribed IDs receive session content, and missing IDs are
-never guessed or broadcast. Other IDs retain their ordinary source.
+never guessed or broadcast. Other IDs retain their ordinary source after a successful
+snapshot lookup. Acquisition failures and snapshot lifetimes follow the
+[Runtime preview limits](./packages/runtime/README.md#optional-runtime-live-preview).
+Keep inherited locale invalidation separate from Preview transport overrides.
 `states.preview` exposes shared raw session state.
 `subscribeToPreview(experienceId, FetchResolveOptions,
 listener): Subscription` emits `PreviewUpdate` with optional plan/error, which can
@@ -378,7 +381,9 @@ which Web writes and a server reads: Web adopts a cookie the browser holds, migr
 legacy `ntaid`, removes the identity on withdrawal while keeping the in-memory profile,
 clears it on `reset()` and not on `destroy()`. Node never touches HTTP; the host reads the
 cookie, supplies it through `forRequest({ profile, consent })` and uses `canPersistProfile` to
-write or expire the response cookie. The cookie being present is not server-side consent.
+write or expire the response cookie outside preview. Hosts skip both cookie writes
+and expiry when `request.isPreview`, even though `canPersistProfile` is false.
+The cookie being present is not server-side consent.
 
 Future framework adapters slot in under the same naming pattern: `packages/adapter-vue`, `packages/adapter-swiftui`, `packages/adapter-compose`.
 

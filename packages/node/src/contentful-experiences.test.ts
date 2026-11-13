@@ -184,24 +184,72 @@ describe('Node ContentfulExperiences', () => {
       expect(f.ordinary).toHaveBeenCalledOnce();
     });
 
-    it('discards a snapshot that finishes after request disposal', async () => {
+    it('shares failed acquisition without Delivery fallback and retries on the next call', async () => {
       const f = previewFixture();
-      let complete!: (payload: ExperiencePayload) => void;
-      f.snapshot.mockReturnValue(
-        new Promise((resolve) => {
-          complete = resolve;
+      const failure = new Error('session unavailable');
+      let reject!: (error: Error) => void;
+      f.snapshot.mockReturnValueOnce(
+        new Promise((_resolve, fail) => {
+          reject = fail;
         })
       );
-      const request = f.runtime.forRequest({ preview: { sessionId: 'session' } });
-      const pending = request.fetchExperience(
-        { experienceId: 'edited' },
-        { config: resolverConfig }
-      );
-      request.destroy();
-      complete(f.payload);
-      await expect(pending).rejects.toThrow(/destroyed/);
-      expect(f.resolve).not.toHaveBeenCalled();
+      const request = f.runtime.forRequest({
+        preview: { sessionId: 'session' },
+        consent: true,
+        profile: { id: 'visitor' },
+      });
+      const pending = Promise.allSettled([
+        request.fetchExperience({ experienceId: 'edited' }, { config: resolverConfig }),
+        request.fetchExperience({ experienceId: 'other' }, { config: resolverConfig }),
+      ]);
+      expect(f.snapshot).toHaveBeenCalledOnce();
+      expect(f.ordinary).not.toHaveBeenCalled();
+      reject(failure);
+      expect(await pending).toEqual([
+        { status: 'rejected', reason: failure },
+        { status: 'rejected', reason: failure },
+      ]);
+      expect(f.ordinary).not.toHaveBeenCalled();
+      expect(request.isPreview).toBe(true);
+      expect(request.profile).toBeUndefined();
+      expect(request.canPersistProfile).toBe(false);
+      await expect(request.page()).resolves.toMatchObject({ accepted: false, reason: 'preview' });
+
+      await request.fetchExperience({ experienceId: 'edited' }, { config: resolverConfig });
+      await request.fetchExperience({ experienceId: 'other' }, { config: resolverConfig });
+      expect(f.snapshot).toHaveBeenCalledTimes(2);
+      expect(f.ordinary).toHaveBeenCalledOnce();
     });
+
+    it.each(['success', 'failure'] as const)(
+      'discards snapshot %s after request disposal',
+      async (outcome) => {
+        const f = previewFixture();
+        let complete!: (payload: ExperiencePayload) => void;
+        let fail!: (error: Error) => void;
+        f.snapshot.mockReturnValueOnce(
+          new Promise((resolve, reject) => {
+            complete = resolve;
+            fail = reject;
+          })
+        );
+        const request = f.runtime.forRequest({ preview: { sessionId: 'session' } });
+        const pending = request.fetchExperience(
+          { experienceId: 'edited' },
+          { config: resolverConfig }
+        );
+        request.destroy();
+        if (outcome === 'success') complete(f.payload);
+        else fail(new Error('late snapshot failure'));
+        await expect(pending).rejects.toThrow(/destroyed/);
+        await expect(
+          request.fetchExperience({ experienceId: 'edited' }, { config: resolverConfig })
+        ).rejects.toThrow(/destroyed/);
+        expect(f.snapshot).toHaveBeenCalledOnce();
+        expect(f.resolve).not.toHaveBeenCalled();
+        expect(f.ordinary).not.toHaveBeenCalled();
+      }
+    );
   });
 
   it('forwards changed parameters through request facades independently of event consent', async () => {
