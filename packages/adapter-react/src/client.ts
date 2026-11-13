@@ -45,6 +45,7 @@ export { useManagedExperience } from './experience/use-managed-experience.js';
 export type {
   ManagedExperienceOptions,
   ManagedExperienceSourceOptions,
+  ManagedExperienceKey,
   ManagedExperienceResult,
   ExperienceNotifications,
   ExperienceRedirect,

@@ -17,6 +17,24 @@ const input = {
 };
 
 describe('approved public cache metadata', () => {
+  it('distinguishes Experience ids, Destination paths and Destination nodes', () => {
+    const { experienceId: _id, parameters: _parameters, ...shared } = input;
+    const keys = [
+      createCacheKey({ ...shared, experienceId: '/home' }),
+      createCacheKey({ ...shared, destinationId: 'dest', path: '/home' }),
+      createCacheKey({ ...shared, destinationId: 'dest', nodeId: '/home' }),
+      createCacheKey({ ...shared, destinationId: 'other', path: '/home' }),
+    ];
+    expect(new Set(keys).size).toBe(4);
+    expect(decodeURIComponent(keys[1]!)).toContain('{"destinationId":"dest","path":"/home"}');
+    expect(() =>
+      createCacheKey({ ...shared, destinationId: 'dest', path: '/a', nodeId: 'b' } as never)
+    ).toThrow(TypeError);
+    expect(() =>
+      createCacheKey({ ...shared, experienceId: 'home', destinationId: 'dest' } as never)
+    ).toThrow(TypeError);
+  });
+
   it('normalizes parameter/dimension ordering and retains meaningful input changes', () => {
     const key = createCacheKey(input);
     expect(

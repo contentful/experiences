@@ -7,7 +7,7 @@ import type {
   FetchResolveOptions,
 } from '@contentful/experiences-node';
 import * as server from './server-request.js';
-import { bindPagesRouterServerExperiences } from './pages-router-server.js';
+import { bindPagesRouterServerExperiences, getPagesRouterOutcome } from './pages-router-server.js';
 import type { PreviewConfig } from './preview.js';
 
 const scope = { spaceId: 'space', environmentId: 'master' };
@@ -50,6 +50,11 @@ function setup(extraHeaders: Record<string, string | undefined> = {}) {
     fetchExperience: vi.fn(
       async (_options: FetchExperienceOptions, _resolve: FetchResolveOptions) => plan
     ),
+    fetchByDestinationPath: vi.fn(async () => ({ redirect: { path: '/catalog' } })),
+    fetchDestinationForHandoff: vi.fn(async () => ({
+      handoff: { ...scope, cache: { scope: 'private-request' as const }, profileId: 'evaluated' },
+      redirect: { path: '/catalog' },
+    })),
     fetchExperienceForHandoff: vi.fn(async () => ({
       plan,
       handoff: { ...scope, cache: { scope: 'private-request' as const }, profileId: 'evaluated' },
@@ -314,4 +319,32 @@ describe('Pages native server response helper', () => {
     expect(headers.get('Set-Cookie')).toEqual(['application=kept']);
     expect(request.destroy).toHaveBeenCalledTimes(1);
   });
+});
+
+describe('Pages Destination primary', () => {
+  it.each(['ssr', 'hybrid'] as const)(
+    'serializes %s redirects as private GSSP outcomes without handoff or page payload',
+    async (mode) => {
+      const { factory, context, headers, request } = setup();
+      const result = await factory.request.loadExperience(context, {
+        origin: 'https://example.com',
+        mode,
+        experience: { destinationId: 'dest', path: '/products' },
+      });
+      expect(headers.get('Cache-Control')).toBe('private, no-store');
+      expect(result).toMatchObject({
+        experience: { destinationId: 'dest', path: '/products' },
+        redirect: { path: '/catalog' },
+      });
+      expect(result.plan).toBeUndefined();
+      expect(result.handoff).toBeUndefined();
+      expect(result.initialPageOwner).toBeUndefined();
+      expect(result.initialPagePayload).toBeUndefined();
+      expect(request.fetchExperience).not.toHaveBeenCalled();
+      expect(request.destroy).toHaveBeenCalledOnce();
+      expect(getPagesRouterOutcome(result, { permanent: true })).toEqual({
+        redirect: { destination: '/catalog', permanent: true },
+      });
+    }
+  );
 });

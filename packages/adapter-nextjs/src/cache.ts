@@ -2,7 +2,7 @@ import {
   assertExperiencesCacheSafety,
   type ExperiencesCacheMetadata,
   type RequestContext,
-  type FetchExperienceOptions,
+  type ExperienceRequest,
 } from '@contentful/experiences-node';
 import type { ResponseLike } from './cookies.js';
 import { validatePublicPermutationCacheTags } from './cache-key.js';
@@ -41,7 +41,7 @@ export function applyPrivateResponseCache(response: ResponseLike): void {
 export function assertPublicRequestPolicy(options: {
   readonly cache: Exclude<ExperiencesCacheMetadata, { scope: 'private-request' }>;
   readonly context?: RequestContext;
-  readonly fetchOptions?: FetchExperienceOptions;
+  readonly fetchOptions?: ExperienceRequest;
 }): void {
   const { cache, context, fetchOptions } = options;
   if (cache.scope !== 'static' && cache.scope !== 'public-permutation')

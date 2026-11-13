@@ -143,7 +143,7 @@ describe('App Router request family', () => {
   it('explicit/static rendering reads no framework request state', async () => {
     const binding = bindAppRouterServerExperiences(config);
     const rendered = await binding.Experience({ experience: plan });
-    expect(rendered.props.experience).toBe(plan);
+    expect(rendered?.props.experience).toBe(plan);
     expect(doubles.headers).not.toHaveBeenCalled();
     expect(doubles.cookies).not.toHaveBeenCalled();
     expect(doubles.bind).not.toHaveBeenCalled();
@@ -236,7 +236,7 @@ describe('App Router request family', () => {
       request: { ...config.request, mode },
     });
     const rendered = await binding.Experience({ experience: plan, renderError, renderUnknown });
-    expect(rendered.props).toMatchObject({ renderError, renderUnknown });
+    expect(rendered?.props).toMatchObject({ renderError, renderUnknown });
     const requestRendered = await binding.request.Experience({ renderError, renderUnknown });
     expect(requestRendered?.props).toMatchObject({ renderError, renderUnknown });
     expect((await binding.request.loadExperience()).initialPageOwner).toBe('server');
