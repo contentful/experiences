@@ -2,7 +2,7 @@
 
 Thank you for your interest in contributing! This SDK renders Contentful Experience Orchestration (ExO) payloads against your own design-system components. Contributions from the community are welcome and appreciated.
 
-> ⚠️ This project is **alpha** and actively published to npm. Public APIs are unstable and will change. If you're building something on top of the SDK, expect breaking changes between commits.
+> ⚠️ The SDK is in **Beta Preview** and stays on `0.x` until general availability, so minor versions can include breaking changes. See [Versioning and stability](./README.md#versioning-and-stability).
 
 ## 🤝 How to contribute
 
@@ -249,6 +249,19 @@ CI runs on every push and PR via `.github/workflows/main.yaml`, which orchestrat
 ## Releases
 
 Releases are automated with [Nx Release](https://nx.dev/features/manage-releases) driven by conventional-commit history. Maintainers don't cut releases by hand — merging a `feat:`/`fix:` commit to `main` is what drives the version bump, changelog, and publish.
+
+### Version bumps on `0.x`
+
+Until GA, Nx shifts every bump down one level (`adjustSemverBumpsForZeroMajorVersion` in `nx.json`), so pick the commit type by its effect on customers:
+
+| Change                              | Commit                                            | Bump                        |
+| ----------------------------------- | ------------------------------------------------- | --------------------------- |
+| Breaking change to a public package | `feat!:` / `fix!:` or a `BREAKING CHANGE:` footer | Minor (`0.15.3` → `0.16.0`) |
+| New feature                         | `feat:`                                           | Patch (`0.15.3` → `0.15.4`) |
+| Bug fix                             | `fix:`                                            | Patch (`0.15.3` → `0.15.4`) |
+| Docs, tooling, CI                   | `docs:`, `chore:`, `ci:`                          | No release                  |
+
+A `feat:` never bumps the minor on `0.x`. If a change breaks customers, mark it breaking and describe the migration in the commit body; that text becomes the changelog entry. Mark deprecated APIs with `@deprecated` and name the replacement. See the README's [Versioning and stability](./README.md#versioning-and-stability) section for what customers are promised.
 
 `scripts/release.ts` runs the steps in this order:
 
