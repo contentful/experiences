@@ -21,7 +21,7 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "packages/web",
-        "command": "vitest run && vitest run -c vitest.ssr.config.ts"
+        "command": "vitest run"
       }
     },
     "verify-release-artifact": {

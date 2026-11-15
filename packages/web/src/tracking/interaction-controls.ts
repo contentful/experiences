@@ -1,4 +1,4 @@
-import type { EntryInteractionApi } from '../interaction-tracking.js';
+import type { EntryInteractionApi } from './interaction-tracking.js';
 
 /** Internal names shared by element overrides and mutation observation. */
 export const INTERACTION_ATTRIBUTES = {

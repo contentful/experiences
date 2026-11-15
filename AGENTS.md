@@ -121,10 +121,12 @@ State interceptors apply before browser values are retained or emitted. Direct b
 credentials, but are intentionally browser-visible when their scope and the
 endpoint's CORS policy make that appropriate; otherwise use a trusted proxy.
 
-Web inherits its seven bound event methods from one internal `WebEventEmitter`
-base over Runtime, operating on the same SDK receiver. The leaf retains browser
-state, lifecycle, queues, connectivity, flush and prepared-admission ownership;
-protected `eventEmissionActive`, `getEventConsent` and `reportBlockedEvent` hooks
+Web's internal `WebStateRuntime`, `WebEventRuntime`, `WebHandoffRuntime` and
+`WebContentRuntime` layers operate on one SDK receiver over Runtime. They own
+state, bound event methods and queues, takeover, then ordinary and Preview
+content operations. The browser leaf coordinates activation, resources, consent,
+reset and destruction.
+Protected `eventEmissionActive`, `getEventConsent` and `reportBlockedEvent` hooks
 supply event policy. Runtime's `createEventMethods` retains direct request
 transport only: there is no custom-dispatch overload, exported
 `EventBindings`/`EventDispatch` strategy or `requireProfile` option. Node keeps its
@@ -848,7 +850,9 @@ direct `beforeInitialPage` emission. Preserve
 Optimization's page consent-retry exception in the managed flow; do not
 automatically replay blocked non-page events after grant.
 
-Vitest. Tests live next to source (`src/foo.test.ts`). The `node` environment is fine for everything (we use `react-dom/server` for renderer tests — no jsdom needed).
+Vitest. Unit tests live next to their source (`src/foo.test.ts`); genuine
+cross-owner integration tests live in `src/test/integration`. Use Node for
+server/import checks and jsdom for browser and client-rendering behavior.
 
 ### Build
 
@@ -1056,11 +1060,13 @@ Anything touching snippets or slot rendering needs coverage in **both**.
 the same reason: the SSR path bootstraps through `@angular/platform-server`, which
 behaves differently enough from the jsdom path to need its own environment.
 
-`web` also uses two configs: `vitest.config.ts` runs browser-context behavior in
-jsdom, while `vitest.ssr.config.ts` runs `*.ssr.test.ts` in Node to prove that
-the public entry imports safely and pure context helpers fall back without browser
-globals. It does not promise that the future stateful Web runtime can be constructed
-or operated during SSR.
+`web` runs named browser and Node projects through one `vitest run` command.
+`vitest.config.ts` includes the Node project from `vitest.ssr.config.ts`; shared
+owner files select their browser or Node cases using the provided environment.
+The Node project checks the public entry and context helpers without browser
+globals. React likewise runs its error-boundary owner file in Node and jsdom.
+Keep one unit test file per source while preserving both environments. Web's
+server-import checks do not promise supported stateful SDK operation during SSR.
 
 ### Build everything from scratch
 

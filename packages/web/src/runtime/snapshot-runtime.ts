@@ -9,7 +9,7 @@ import {
   type EventProfile,
 } from '@contentful/experiences-runtime';
 import { staticObservable } from '../signals/Observable.js';
-import type { States } from '../states.js';
+import type { States } from '../state/states.js';
 import type { ExperiencesRuntime } from '../runtime.js';
 
 /**

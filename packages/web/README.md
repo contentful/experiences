@@ -611,14 +611,14 @@ before publication or admission. `trackView` preserves Optimization's early cons
 view-specific validation. `BlockedEvent.method` is a string, matching the
 reference's public payload type.
 
-The seven event methods are bound fields inherited from an internal
-`WebEventEmitter` base over Runtime; detached calls retain the SDK receiver.
-The Web leaf owns state, lifecycle, queues, connectivity, flushes and prepared
-admission. The emitter reads the leaf through the protected
-`eventEmissionActive`, `getEventConsent` and `reportBlockedEvent` hooks, together
-with the existing queue and allowlist hooks. Web events use these browser queues
-rather than Runtime's direct request factory. Missing complete Analytics profiles
-retain the warning/drop behavior.
+The seven event methods are bound fields on the same SDK receiver; detached
+calls retain that receiver. Internal Web layers over Runtime own browser state,
+event construction/admission and queues, then ordinary and Preview content
+operations. The public browser class coordinates constructor activation,
+resources, consent, reset, destruction and current-page handoff operations.
+Protected queue, consent, blocked-event and flush hooks retain their behavior.
+Web events use these browser queues rather than Runtime's direct request factory.
+Missing complete Analytics profiles retain the warning/drop behavior.
 
 Call `reset()` at logout or another browser session boundary. It clears queued
 Personalization work and the current profile; the next successful event response

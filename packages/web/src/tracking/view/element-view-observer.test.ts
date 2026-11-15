@@ -8,7 +8,7 @@ import {
   installIOPolyfill,
   makeElement,
   setDocumentVisibility,
-} from '../../test-fixtures/dom.js';
+} from '../../test/dom.js';
 
 import type { ElementViewCallbackInfo } from './element-view-observer-support.js';
 import { ElementViewObserver } from './element-view-observer.js';

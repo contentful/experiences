@@ -217,9 +217,9 @@ describe('published package entries', () => {
   });
 
   it('keeps optional preview out of emitted declarations', () => {
-    const declarations = readdirSync(path.join(packageRoot, 'dist')).filter((file) =>
-      file.endsWith('.d.ts')
-    );
+    const declarations = readdirSync(path.join(packageRoot, 'dist'), { recursive: true })
+      .map(String)
+      .filter((file) => file.endsWith('.d.ts'));
     for (const filename of declarations) {
       expect(readFileSync(path.join(packageRoot, 'dist', filename), 'utf8')).not.toMatch(
         /experiences-live-preview|useLivePreview|fetchPreviewSession|PREVIEW_WEBSOCKET_HOST/
@@ -246,7 +246,11 @@ describe('published package entries', () => {
       expect(files).toContain(entry.default.slice(2));
       expect(files).toContain(entry.types.slice(2));
     }
-    expect(files.some((file: string) => /\.test\.|^src\//.test(file))).toBe(false);
+    expect(
+      files.filter((file: string) =>
+        /(?:\.(?:test|spec)\.|(?:^|\/)(?:test|test-fixtures|fixtures)\/|^src\/)/.test(file)
+      )
+    ).toEqual([]);
   });
 });
 

@@ -63,7 +63,7 @@ and returned as `{ "identity": "<id>" }`. Without the consent cookie the identit
 ## Tested
 
 Run `npm run typecheck` to check this example against the installed Node SDK.
-The SDK's [request tests](../../packages/node/src/contentful-experiences.test.ts) cover
+The SDK's [request tests](../../packages/node/src/request/request-runtime.test.ts) cover
 direct page events, request-local profiles, and consent. The Web SDK's
-[identity-cookie tests](../../packages/web/src/identity-cookie.test.ts) cover browser cookie
+[identity-cookie tests](../../packages/web/src/browser/identity-cookie.test.ts) cover browser cookie
 persistence, withdrawal, and legacy-cookie migration.

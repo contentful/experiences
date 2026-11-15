@@ -4,7 +4,7 @@ export {
   configureServerExperiences,
   bindExperiencesRequest,
   type BindExperiencesRequestOptions,
-} from './server-request.js';
+} from './request/server-request.js';
 export {
   createPageContext,
   createEventContext,
@@ -17,25 +17,25 @@ export {
   type SearchParams,
   type CookieReader,
   type RequestLike,
-} from './request-context.js';
+} from './request/request-context.js';
 export {
   createAnonymousIdSetCookieHeader,
   persistAnonymousId,
   type AnonymousIdCookieOptions,
   type PersistAnonymousIdOptions,
   type ResponseLike,
-} from './cookies.js';
+} from './request/cookies.js';
 export {
   createPrivateFetch,
   applyPrivateResponseCache,
   assertPublicRequestPolicy,
-} from './cache.js';
-export { serializePlan, serializeHandoff, serializeJsonForHtml } from './serialization.js';
+} from './cache/cache.js';
+export { serializePlan, serializeHandoff, serializeJsonForHtml } from './cache/serialization.js';
 export {
   createCacheKey,
   createPublicPermutationCacheMetadata,
   type CacheKeyInput,
-} from './cache-key.js';
+} from './cache/cache-key.js';
 export type { RequestRuntime, RequestContext, ConsentInput } from '@contentful/experiences-node';
 
-export type { PreviewConfig, PreviewContext } from './server-config.js';
+export type { PreviewConfig, PreviewContext } from './request/server-config.js';

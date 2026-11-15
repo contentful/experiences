@@ -14,7 +14,7 @@ import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import { RuntimeContext } from './context.js';
 import { useRequestContext, type RequestContextValue } from './request-context.js';
 import { createDomTestRoot, type DomTestRoot } from '../test/dom-root.js';
-import { profileFixture } from '../test/profile.js';
+import { profileFixture } from '../test/fixtures/profile.js';
 import { PageSequence, type BeforeInitialPageOptions } from './page-sequence.js';
 
 const plan: PortableRenderPlan = { nodes: [], metadata: {}, debug: false, diagnostics: [] };

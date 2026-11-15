@@ -5,7 +5,7 @@
  */
 
 import { NOOP_TRACKING } from './tracking/interaction-controls.js';
-import type { ContentfulExperiences } from './contentful-experiences.js';
+import type { ContentfulExperiences } from './sdk/contentful-experiences.js';
 import { createSnapshotRuntime, type ExperiencesSnapshot } from './runtime/snapshot-runtime.js';
 
 type RuntimeMembers =

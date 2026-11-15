@@ -9,7 +9,7 @@ export {
   ANONYMOUS_ID_KEY,
   ANONYMOUS_ID_KEY_LEGACY,
   PROFILE_CACHE_KEY,
-} from './constants.js';
+} from './events/constants.js';
 export {
   CONSENT_CACHE_KEY,
   DEFAULT_ALLOWED_EVENT_TYPES,
@@ -21,7 +21,7 @@ export {
   PERSISTENCE_CONSENT_CACHE_KEY,
   resolvePersistedPersistenceConsent,
   toConsentState,
-} from './consent.js';
+} from './events/consent.js';
 export type {
   AllowedEventType,
   BlockedEvent,
@@ -31,9 +31,12 @@ export type {
   ConsentStorageValue,
   EventMethod,
   EventType,
-} from './consent.js';
-export { ContentfulExperiences, buildFetchPersonalization } from './contentful-experiences.js';
-export { resolveFlagChange } from './resolve-flag-change.js';
+} from './events/consent.js';
+export {
+  ContentfulExperiences,
+  buildFetchPersonalization,
+} from './runtime/contentful-experiences.js';
+export { resolveFlagChange } from './flags/resolve-flag-change.js';
 export type {
   DestinationSitemapResult,
   FetchDestinationSitemapPaginationOptions,
@@ -55,15 +58,15 @@ export type {
   FetchResolveOptions,
   ResolveDefaults,
   ResolveOptions,
-} from './contentful-experiences.js';
-export type { DeliveryClientOptions } from './create-delivery-client.js';
+} from './runtime/contentful-experiences.js';
+export type { DeliveryClientOptions } from './runtime/create-delivery-client.js';
 export { getPreviewSessionBinding, resolvePreviewSessionId } from './preview-session-binding.js';
 export type { PreviewSessionBinding } from './preview-session-binding.js';
 export {
   assertPreviewRequest,
   createPreviewClient,
   mergePreviewResolveOptions,
-} from './live-preview.js';
+} from './preview/live-preview.js';
 export type {
   LivePreviewOwnerConfig,
   PreviewConfig,
@@ -73,42 +76,48 @@ export type {
   PreviewClientFactory,
   PreviewSessionIdentity,
   PreviewStatus,
-} from './live-preview.js';
-export type { ApiClient, OptimizationConfig } from './create-optimization-client.js';
-export { default as EventBuilder } from './event-builder.js';
-export * from './event-builder.js';
+} from './preview/live-preview.js';
+export type { ApiClient, OptimizationConfig } from './runtime/create-optimization-client.js';
+export { default as EventBuilder } from './events/event-builder.js';
+export * from './events/event-builder.js';
 export {
   EventProfileRequiredError,
   EventProfileSchema,
   warnMissingEventProfile,
-} from './event-methods.js';
-export type { PersonalizationRequestOptions, AnalyticsRequestOptions } from './event-methods.js';
-export type { EventEmissionResult } from './event-emission-result.js';
-export { AnalyticsDelivery } from './analytics-delivery.js';
+} from './events/event-methods.js';
+export type {
+  PersonalizationRequestOptions,
+  AnalyticsRequestOptions,
+} from './events/event-methods.js';
+export type { EventEmissionResult } from './events/event-emission-result.js';
+export { AnalyticsDelivery } from './delivery/analytics-delivery.js';
 export type {
   QueueFlushFailureContext,
   QueueFlushPolicy,
   QueueFlushRecoveredContext,
   QueuePolicy,
-} from './lib/queue/index.js';
-export { resolveQueuePolicy } from './lib/queue/index.js';
-export type { AnalyticsFlushOptions } from './analytics-delivery.js';
-export { PersonalizationDelivery } from './personalization-delivery.js';
+} from './delivery/queue/index.js';
+export { resolveQueuePolicy } from './delivery/queue/index.js';
+export type { AnalyticsFlushOptions } from './delivery/analytics-delivery.js';
+export { PersonalizationDelivery } from './delivery/personalization-delivery.js';
 export type {
   PersonalizationRequestState,
   PersonalizationRequestFailureReason,
-} from './personalization-request-state.js';
-export { validatePersonalizationEvent } from './event-interceptors.js';
-export type { EventInterceptors, OptimizationEventStreamEvent } from './event-interceptors.js';
+} from './delivery/personalization-request-state.js';
+export { validatePersonalizationEvent } from './events/event-interceptors.js';
+export type {
+  EventInterceptors,
+  OptimizationEventStreamEvent,
+} from './events/event-interceptors.js';
 export {
   InterceptorManager,
   type Interceptor,
   type InterceptorMerge,
   type MaybePromise,
-} from './lib/interceptor/InterceptorManager.js';
+} from './events/interceptor/InterceptorManager.js';
 export type { PersonalizationEvent, AnalyticsEvent };
-export { validatePreparedEvents, withEventConsent } from './prepared-events.js';
-export type { PreparedPersonalizationEvent } from './prepared-events.js';
+export { validatePreparedEvents, withEventConsent } from './events/prepared-events.js';
+export type { PreparedPersonalizationEvent } from './events/prepared-events.js';
 export {
   assertExperiencesCacheSafety,
   assertExperiencesHandoffScope,
@@ -116,7 +125,7 @@ export {
   getExperiencesCacheSafetyWarnings,
   parseExperiencesHandoff,
   parseExperiencesHandoffEnvelope,
-} from './experiences-handoff.js';
+} from './handoff/experiences-handoff.js';
 export type {
   FetchExperienceForHandoffResult,
   ExperiencesCacheMetadata,
@@ -124,7 +133,7 @@ export type {
   ExperiencesCacheSafetyWarningCode,
   ExperiencesHandoff,
   ExperiencesScope,
-} from './experiences-handoff.js';
+} from './handoff/experiences-handoff.js';
 export type {
   EventOptimizationData,
   EventProfile,
@@ -132,4 +141,4 @@ export type {
   PersonalizationEventMethod,
   DirectEventBindings,
   EventMethods,
-} from './event-methods.js';
+} from './events/event-methods.js';
