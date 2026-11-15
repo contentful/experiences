@@ -441,6 +441,12 @@ retained on the SDK or request facade.
 
 ## Delivery, preview, and destinations
 
+Use `sdk.fetchDestinationSitemap({ destinationId }, { limit?, pageNext?, pagePrev? })`
+on the Node SDK instance to list one page of published Destination paths through
+its configured space and Delivery client. The result contains `items`
+(`path`, `experienceId`, `type`), `limit`, and `pages.next`/`pages.prev` cursors.
+This optional enumeration is independent of request facades and content rendering.
+
 `fetchExperience({ experienceId }, { config: experienceConfig })` uses Delivery unless
 the request has an active Preview Session whose payload matches the Experience ID.
 The same method accepts `{ destinationId, path }` or `{ destinationId, nodeId }`;

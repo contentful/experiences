@@ -659,8 +659,10 @@ Free fetch functions use ordinary Delivery and accept no `ClientOptions.preview`
 or `previewToken`. Preview Session support belongs to runtime owners and existing low-level
 helpers; preserve their `previewToken` credential API. The Node and Web runtimes
 expose per-request destination fetches (`fetchByDestinationNode` /
-`fetchByDestinationPath`), but `fetchDestinationSitemap` is a free function only —
-there is no sitemap method on either runtime.
+`fetchByDestinationPath`). Node and Web instances also inherit
+`sdk.fetchDestinationSitemap({ destinationId }, pagination)`, using their configured
+space and ordinary Delivery client. It enumerates published paths without resolving
+content or supplying analytics attribution; the free function remains available.
 
 **Examples are destinations-first.** The framework examples (`examples/nextjs`, `sveltekit`, `angular`, `astro`, `vite-react`, and `vite-svelte`) resolve the URL path against a Destination (`DESTINATION_ID`, printed by the bootstrap for you to paste into the example's env file) and fetch by Experience id only at `/experiences/[id]`. Next.js uses managed App Router bindings for both selectors, including Preview Sessions; the other server-rendered examples keep preview on the by-id route. Vite React uses one managed root and `Experience` for both selectors; the client-only Vite examples have no preview. Destination delivery is master-only and space-scoped; configured `ENVIRONMENT_ID` also governs whether Destination preview can use matching session content, which requires `master`. The Next.js, SvelteKit, and Angular examples also show a demo hub at `/` (the route list and the `?personalization` and `?debug` options) above the home node.
 

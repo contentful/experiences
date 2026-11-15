@@ -1,10 +1,13 @@
 import {
   ContentfulViewDeliveryClient,
   createUserAgentHeaders,
+  fetchDestinationSitemap,
   fetchExperiencePayload,
   serializePersonalization,
   PREVIEW_HOST,
   type DestinationRedirectResult,
+  type DestinationSitemapResult,
+  type FetchDestinationSitemapPaginationOptions,
   type ByIdExperienceOptions,
   type ByDestinationNodeIdExperienceOptions,
   type ByDestinationPathExperienceOptions,
@@ -104,6 +107,8 @@ export type FetchByDestinationPathOptions =
 export type FetchExperienceOptions =
   FetchByIdExperienceOptions | FetchByDestinationNodeOptions | FetchByDestinationPathOptions;
 
+export type FetchDestinationSitemapOptions = { destinationId: string };
+
 /** @internal Leaf owners build admitted intent before interception and XDA validation. */
 export type BuiltFetchExperienceOptions = FetchExperienceOptions extends infer T
   ? T extends FetchExperienceOptions
@@ -164,6 +169,10 @@ export interface ExperienceRuntime {
     options: FetchByDestinationPathOptions,
     resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult>;
+  fetchDestinationSitemap(
+    options: FetchDestinationSitemapOptions,
+    pagination?: FetchDestinationSitemapPaginationOptions
+  ): Promise<DestinationSitemapResult>;
 }
 
 export type Config = {
@@ -349,6 +358,18 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
     resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     return this.fetchExperience(options, resolveOptions);
+  }
+
+  /** Fetch one page of published Destination paths using the configured Delivery client. */
+  fetchDestinationSitemap(
+    options: FetchDestinationSitemapOptions,
+    pagination: FetchDestinationSitemapPaginationOptions = {}
+  ): Promise<DestinationSitemapResult> {
+    return fetchDestinationSitemap(
+      { spaceId: this.spaceId, destinationId: options.destinationId },
+      { client: this.#deliveryClient },
+      pagination
+    );
   }
 
   #mergeFetchResolveOptions(options: FetchResolveOptions): ResolveDefaults {

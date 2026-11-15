@@ -34,6 +34,11 @@ export type {
 } from './consent.js';
 export { ContentfulExperiences, buildFetchPersonalization } from './contentful-experiences.js';
 export { resolveFlagChange } from './resolve-flag-change.js';
+export type {
+  DestinationSitemapResult,
+  FetchDestinationSitemapPaginationOptions,
+  SitemapPathItem,
+} from '@contentful/experiences-client';
 export { ChangeArray, VariableChange } from '@contentful/optimization-api-client/api-schemas';
 export type { Json } from '@contentful/optimization-api-client/api-schemas';
 export type {
@@ -45,6 +50,7 @@ export type {
   BuiltFetchExperienceOptions,
   FetchByDestinationNodeOptions,
   FetchByDestinationPathOptions,
+  FetchDestinationSitemapOptions,
   EventBuilderOptions,
   FetchResolveOptions,
   ResolveDefaults,

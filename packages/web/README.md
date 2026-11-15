@@ -191,6 +191,12 @@ same consent, interceptor, profile/changes and lifecycle handling. Equivalent
 event-free source requests share in-flight work; event-bearing evaluations do not.
 Destinations are master-only and accept no by-ID parameters/extensions.
 
+`sdk.fetchDestinationSitemap({ destinationId }, { limit?, pageNext?, pagePrev? })`
+lists one page of published Destination paths through the configured space and
+Delivery client. It returns `items` (`path`, `experienceId`, `type`), `limit`, and
+`pages.next`/`pages.prev` cursors. This optional enumeration does not fetch content
+or supply analytics attribution.
+
 By-ID fetches use matching session content while Preview is active. Destination
 acquisition is event-free in Preview, and can substitute session content only for
 the actual selected Experience ID in the SDK's `master` environment. Redirects

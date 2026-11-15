@@ -22,6 +22,9 @@ export {
 } from '@contentful/experiences-client';
 export type {
   DestinationRedirectResult,
+  DestinationSitemapResult,
+  FetchDestinationSitemapPaginationOptions,
+  SitemapPathItem,
   ExperienceRequestExtensions,
   ExperienceParameters,
   ExperienceParameterValue,
@@ -60,6 +63,7 @@ export type {
   DeliveryClientOptions,
   FetchByDestinationNodeOptions,
   FetchByDestinationPathOptions,
+  FetchDestinationSitemapOptions,
   FetchExperienceOptions,
   FetchByIdExperienceOptions,
   PersonalizationOptions,

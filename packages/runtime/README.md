@@ -277,6 +277,14 @@ Destinations are master-only and do not accept by-ID `parameters` or `extensions
 `plan.experienceId`, when present, comes from the acquired payload's actual `sys.id`.
 No destination lookup cache or second by-ID fetch is introduced.
 
+Node and Web instances inherit
+`sdk.fetchDestinationSitemap({ destinationId }, { limit?, pageNext?, pagePrev? })`.
+It uses the configured space and ordinary Delivery client to fetch one page of
+published paths, returning `{ items: { path, experienceId, type }[], limit, pages }`.
+Follow the opaque `pages.next` or `pages.prev` cursor in a subsequent call; do not
+combine both cursors. This optional enumeration supports static generation and
+`sitemap.xml`; it does not fetch Experience content or supply analytics attribution.
+
 Destination service parity is incomplete: live verification found that destination
 `preflight: false` did not finalize fresh event-bearing profiles, while the same
 by-ID request did. Destination source-map requests also returned no source map or

@@ -153,7 +153,7 @@ A Destination maps URL paths to Experiences through its nodes, so your app route
 - **Personalization.** Both destination forms accept `personalization` (a profile id plus events), the same as by-id. It switches the request from a cacheable GET to a POST.
 - **Scope.** Destination delivery is space-scoped: master-only delivery, with no `environmentId`, `parameters`, or `extensions` on the destination forms. Both forms accept `locale` for content resolution.
 - **Preview Sessions.** Free fetches use ordinary Delivery. A Node/Web runtime with configured session capability first acquires the Destination payload through Delivery, then uses session content only when its actual Experience ID matches and the configured environment is `master`. Redirects remain terminal. See [Live preview](#live-preview) and [Runtime destination limits](./packages/runtime/README.md#destination-selection).
-- **Static generation.** Page through `fetchDestinationSitemap` to enumerate paths, then call `fetchExperience` for each `path`. The sitemap is a free function; the Node and Web runtimes have no sitemap method.
+- **Static generation.** Page through `fetchDestinationSitemap` to enumerate paths, then call `fetchExperience` for each `path`. Node and Web instances also expose `sdk.fetchDestinationSitemap({ destinationId }, pagination)`, using their configured space and Delivery client.
 
 ```ts
 const paths: string[] = [];
