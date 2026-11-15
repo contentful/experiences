@@ -2,7 +2,7 @@
 
 > **Internal package.** The public Node and Web SDKs consume this shared runtime. Framework adapters re-export its `EventBuilder` API but do not construct the runtime.
 
-Runtime owns the shared `ContentfulExperiences` base, the complete `EventBuilder` implementation and argument schemas, event metadata, runtime-only Delivery and Preview client construction, direct Optimization transport, event methods, and the current Node-to-Web handoff contract. Node binds request-local state; Web owns browser locale, context, and persisted profile state. Runtime itself does not retain those per-request or browser values.
+Runtime owns the shared `ContentfulExperiences` base, the complete `EventBuilder` implementation and argument schemas, event metadata, runtime-only Delivery and Preview client construction, direct Optimization transport, direct request event methods, and the current Node-to-Web handoff contract. Node binds request-local state; Web owns browser locale, context, and persisted profile state. Runtime itself does not retain those per-request or browser values.
 
 Web exposes
 its browser state through `states` observables and owns the module signals and
@@ -29,6 +29,15 @@ by the public leaf. Delivery and Preview clients remain internal to Runtime.
 Delivery and Preview options accept a token or token supplier. A tokenless trusted proxy requires an explicit `host` and disables generated bearer authentication. Endpoint precedence is explicit `host`, then the generated client's `environment`, then the Delivery or Preview default. `environmentId` is the Contentful environment identifier used by by-ID requests, not the generated client's endpoint-valued `environment` option.
 
 The base owns one `EventBuilder`, configured with a default library identity of `@contentful/experiences-runtime` when a leaf does not supply one. Node and Web supply their own library metadata. The builder's schemas, defaults, IDs, timestamps, context assembly, consent metadata, and event construction are colocated here. `identify`, `page`, and `track` use Personalization; view, click, hover, and flag-view events use Analytics. Node prepares one noncommitting request handoff batch. Web uses the Runtime-owned `PersonalizationDelivery` sender for ordinary online/offline events and imperative prepared-batch admission.
+
+`createEventMethods(api, eventBuilder, bindings)` accepts `DirectEventBindings`
+and returns `EventMethods` for direct request transport. The protected base
+factory binds the configured clients and builder. There is no custom-dispatch
+overload, exported `EventBindings`/`EventDispatch` strategy, or `requireProfile`
+option. Direct Analytics requires a complete profile and throws
+`EventProfileRequiredError` when it is missing. Web implements its browser event
+policy on the SDK receiver through an internal inherited emitter and uses
+Runtime's `warnMissingEventProfile` helper for its warning/drop policy.
 
 Event methods build and validate arguments before consent admission or a
 missing-profile drop. `trackView` follows Optimization's early consent guard

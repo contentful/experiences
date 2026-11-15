@@ -77,7 +77,11 @@ export type {
 export type { ApiClient, OptimizationConfig } from './create-optimization-client.js';
 export { default as EventBuilder } from './event-builder.js';
 export * from './event-builder.js';
-export { EventProfileRequiredError, EventProfileSchema } from './event-methods.js';
+export {
+  EventProfileRequiredError,
+  EventProfileSchema,
+  warnMissingEventProfile,
+} from './event-methods.js';
 export type { PersonalizationRequestOptions, AnalyticsRequestOptions } from './event-methods.js';
 export type { EventEmissionResult } from './event-emission-result.js';
 export { AnalyticsDelivery } from './analytics-delivery.js';
@@ -126,8 +130,6 @@ export type {
   EventProfile,
   AnalyticsEventMethod,
   PersonalizationEventMethod,
-  EventBindings,
   DirectEventBindings,
-  EventDispatch,
   EventMethods,
 } from './event-methods.js';

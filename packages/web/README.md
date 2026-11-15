@@ -605,11 +605,21 @@ persisted and restored from LocalStorage once persistence consent is granted.
 precedence over the active profile id. The default provider reads the stored
 anonymous id only when persistence consent is `true`; an `undefined` result falls
 back to the current profile or adopted handoff identity.
-Runtime event methods retain the original consent gate, run interceptors, then
+Web event methods retain the original consent gate, run interceptors, then
 validate transformed output and recheck its final type against current consent
 before publication or admission. `trackView` preserves Optimization's early consent check before its
 view-specific validation. `BlockedEvent.method` is a string, matching the
 reference's public payload type.
+
+The seven event methods are bound fields inherited from an internal
+`WebEventEmitter` base over Runtime; detached calls retain the SDK receiver.
+The Web leaf owns state, lifecycle, queues, connectivity, flushes and prepared
+admission. The emitter reads the leaf through the protected
+`eventEmissionActive`, `getEventConsent` and `reportBlockedEvent` hooks, together
+with the existing queue and allowlist hooks. Web events use these browser queues
+rather than Runtime's direct request factory. Missing complete Analytics profiles
+retain the warning/drop behavior.
+
 Call `reset()` at logout or another browser session boundary. It clears queued
 Personalization work and the current profile; the next successful event response
 establishes and persists the next profile. `destroy()` stops owned listeners and

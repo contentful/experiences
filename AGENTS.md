@@ -121,6 +121,17 @@ State interceptors apply before browser values are retained or emitted. Direct b
 credentials, but are intentionally browser-visible when their scope and the
 endpoint's CORS policy make that appropriate; otherwise use a trusted proxy.
 
+Web inherits its seven bound event methods from one internal `WebEventEmitter`
+base over Runtime, operating on the same SDK receiver. The leaf retains browser
+state, lifecycle, queues, connectivity, flush and prepared-admission ownership;
+protected `eventEmissionActive`, `getEventConsent` and `reportBlockedEvent` hooks
+supply event policy. Runtime's `createEventMethods` retains direct request
+transport only: there is no custom-dispatch overload, exported
+`EventBindings`/`EventDispatch` strategy or `requireProfile` option. Node keeps its
+complete-profile Analytics error; Web reuses Runtime's `warnMissingEventProfile`
+helper for its warning/drop policy. Preserve Node's existing initial versus
+post-interceptor blocked-callback receiver behavior.
+
 Both public leaves expose direct event methods: `identify`, `page`, and `track`
 use the Personalization API, while `trackView`, `trackClick`,
 `trackHover`, and `trackFlagView` use the Analytics API. Web now has an in-memory

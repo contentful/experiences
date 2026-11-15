@@ -304,7 +304,6 @@ class RequestBoundExperiences implements RequestRuntime {
       getEventContext: () => this.getRequestEventContext(),
       getPersonalizationOptions: () => this.#personalizationOptions,
       getAnalyticsOptions: () => this.#analyticsOptions,
-      requireProfile: true,
       getConsent: () => this.#consent,
       allowedEventTypes: consentPolicy.allowedEventTypes,
       onEventBlocked: consentPolicy.onEventBlocked,

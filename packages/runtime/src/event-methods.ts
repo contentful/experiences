@@ -40,6 +40,11 @@ import type {
 
 const eventLogger = createScopedLogger('Experiences:Events');
 
+/** Warn when stateful Analytics cannot emit without a complete profile. */
+export function warnMissingEventProfile(): void {
+  eventLogger.warn('Attempting to emit an event without a complete Optimization profile');
+}
+
 /** Request-scoped Analytics API options a runtime may forward with direct sends. */
 export type AnalyticsRequestOptions = Pick<AnalyticsApiClientRequestOptions, 'beacon'>;
 
@@ -62,17 +67,17 @@ export interface EventApi {
   readonly analytics: Pick<AnalyticsApiClient, 'sendBatchEvents'>;
 }
 
-/** Internal strategy used by a runtime to commit or stage built events. */
-export interface EventDispatch {
+/** Private transport operations for direct event methods. */
+interface EventDispatch {
   personalization(
     event: PersonalizationEvent,
-    profile: ReturnType<EventBindings['getProfile']>
+    profile: ReturnType<DirectEventBindings['getProfile']>
   ): Promise<EventEmissionResult>;
   analytics(event: AnalyticsEvent, profile: EventProfile): Promise<void | false>;
 }
 
-/** Runtime-owned state and context used to bind otherwise stateless event methods. */
-export interface EventBindings {
+/** Owner bindings for direct transport, which publishes returned profiles. */
+export interface DirectEventBindings {
   getProfile: () => EventProfile | Pick<EventProfile, 'id'> | undefined;
   /** Fixed preview intent of the owning instance/request. */
   getIsPreview?: () => boolean;
@@ -83,22 +88,10 @@ export interface EventBindings {
   getConsent?: () => ConsentState | undefined;
   /** Event types emitted while event consent is not granted. Defaults to identify and page. */
   allowedEventTypes?: readonly AllowedEventType[];
-  /** Owner publication when consent drops an event; subscriber errors propagate. */
-  reportBlockedEvent?: (event: BlockedEvent) => void;
-  /**
-   * Whether an Analytics call without a profile throws `EventProfileRequiredError`, as in
-   * Optimization's stateless requests. When unset, the call warns and is dropped, as in
-   * Optimization's stateful queue.
-   */
-  requireProfile?: boolean;
   /** Analytics API options forwarded with each direct Analytics send, such as `beacon`. */
   getAnalyticsOptions?: () => AnalyticsRequestOptions | undefined;
   /** Personalization API options forwarded with each direct Personalization send. */
   getPersonalizationOptions?: () => PersonalizationRequestOptions | undefined;
-}
-
-/** Owner bindings for the default transport, which publishes returned profiles. */
-export interface DirectEventBindings extends Omit<EventBindings, 'reportBlockedEvent'> {
   /** Configured diagnostic callback; its errors must not interrupt event delivery. */
   onEventBlocked?: (event: BlockedEvent) => void;
   setProfile: (profile: EventProfile) => void;
@@ -118,7 +111,7 @@ export interface DirectEventBindings extends Omit<EventBindings, 'reportBlockedE
  * blocked Analytics call resolves `{ accepted: false }`.
  */
 export interface EventMethods {
-  readonly profile: ReturnType<EventBindings['getProfile']>;
+  readonly profile: ReturnType<DirectEventBindings['getProfile']>;
   identify(args: IdentifyBuilderArgs): Promise<EventEmissionResult>;
   page(args?: PageViewBuilderArgs): Promise<EventEmissionResult>;
   track(args: TrackBuilderArgs): Promise<EventEmissionResult>;
@@ -144,11 +137,12 @@ export class EventProfileRequiredError extends Error {
 class BoundEventMethods implements EventMethods {
   constructor(
     private readonly eventBuilder: EventBuilder,
-    private readonly bindings: EventBindings,
+    private readonly bindings: DirectEventBindings,
+    private readonly reportBlockedEvent: (event: BlockedEvent) => void,
     private readonly dispatch: EventDispatch
   ) {}
 
-  get profile(): ReturnType<EventBindings['getProfile']> {
+  get profile(): ReturnType<DirectEventBindings['getProfile']> {
     return this.bindings.getProfile();
   }
 
@@ -185,7 +179,7 @@ class BoundEventMethods implements EventMethods {
   /**
    * Like Optimization's non-sticky view, the result reports consent admission: an admitted
    * view resolves `{ accepted: true }` and a blocked one `{ accepted: false }`. It is not a
-   * delivery result, so a view dropped later for want of a profile is still accepted.
+   * delivery result. A missing complete profile throws as for other Analytics methods.
    */
   async trackView(args: ViewBuilderArgs): Promise<EventEmissionResult> {
     const skipped = this.skipPreview('trackView', args);
@@ -231,7 +225,7 @@ class BoundEventMethods implements EventMethods {
 
   private skipPreview(method: EventMethod, args: unknown): EventEmissionResult | undefined {
     if (this.bindings.getIsPreview?.() !== true) return undefined;
-    this.bindings.reportBlockedEvent?.({ reason: 'preview', method, args: [args] });
+    this.reportBlockedEvent({ reason: 'preview', method, args: [args] });
     return { accepted: false, reason: 'preview' };
   }
 
@@ -248,11 +242,11 @@ class BoundEventMethods implements EventMethods {
 
   /** Whether `method` may emit; reports a blocked event to its owner otherwise. */
   private admit(method: EventMethod, args: readonly unknown[]): boolean {
-    const { getConsent, allowedEventTypes, reportBlockedEvent } = this.bindings;
+    const { getConsent, allowedEventTypes } = this.bindings;
     if (getConsent === undefined || hasEventConsent(method, getConsent(), allowedEventTypes)) {
       return true;
     }
-    reportBlockedEvent?.({ reason: 'consent', method, args });
+    this.reportBlockedEvent({ reason: 'consent', method, args });
     return false;
   }
 
@@ -275,11 +269,7 @@ class BoundEventMethods implements EventMethods {
     if (!this.admit(method, [args])) return { accepted: false };
     const profile = EventProfileSchema.safeParse(this.profile);
     if (!profile.success) {
-      // Stateless requests are bound to a profile, so a missing one is a caller error.
-      // Stateful runtimes follow Optimization's queue: warn and drop the event.
-      if (this.bindings.requireProfile === true) throw new EventProfileRequiredError(method);
-      eventLogger.warn('Attempting to emit an event without a complete Optimization profile');
-      return { accepted: true };
+      throw new EventProfileRequiredError(method);
     }
     const admitted = await this.dispatch.analytics(this.withConsent(event), profile.data);
     return { accepted: admitted !== false };
@@ -365,22 +355,19 @@ function admitInterceptedEvent(
 export function createEventMethods(
   api: EventApi,
   eventBuilder: EventBuilder,
-  ...args: [bindings: DirectEventBindings] | [bindings: EventBindings, dispatch: EventDispatch]
+  bindings: DirectEventBindings
 ): EventMethods {
-  if (args.length === 2) return new BoundEventMethods(eventBuilder, args[0], args[1]);
-  const { onEventBlocked, ...bindings } = args[0];
+  const { onEventBlocked, ...ownerBindings } = bindings;
   return new BoundEventMethods(
     eventBuilder,
-    {
-      ...bindings,
-      reportBlockedEvent: (event) => {
-        try {
-          onEventBlocked?.(event);
-        } catch {
-          // A failing diagnostic callback must not break event delivery.
-        }
-      },
+    { ...ownerBindings },
+    (event) => {
+      try {
+        onEventBlocked?.(event);
+      } catch {
+        // A failing diagnostic callback must not break event delivery.
+      }
     },
-    createDirectEventDispatch(api, args[0])
+    createDirectEventDispatch(api, bindings)
   );
 }
