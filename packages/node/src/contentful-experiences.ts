@@ -1,4 +1,5 @@
 import {
+  assertExperienceSelector,
   serializePersonalization,
   type DestinationRedirectResult,
   type PersonalizationOptions as BuiltPersonalizationOptions,
@@ -375,6 +376,7 @@ class RequestBoundExperiences implements RequestRuntime {
     resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     this.assertActive();
+    assertExperienceSelector(options);
     const resolve = mergeFetchResolveOptions(this.context.resolveOptions, resolveOptions);
     if (this.#previewOptions !== undefined && options.experienceId === undefined) {
       const request = this.finalizePersonalizationEvents<FetchExperienceOptions>(
@@ -416,6 +418,7 @@ class RequestBoundExperiences implements RequestRuntime {
     replay: { readonly routeKey: string }
   ): Promise<FetchExperienceForHandoffResult> {
     this.assertActive();
+    assertExperienceSelector(options);
     if (
       options.personalization?.preflight !== undefined &&
       options.personalization.preflight !== true

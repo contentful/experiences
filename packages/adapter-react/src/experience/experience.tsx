@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { assertExperienceSelector } from '@contentful/experiences-client';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import {
   ClientExperienceRenderer,
@@ -35,6 +36,14 @@ export type ManagedExperienceProps =
 
 /** Managed and seeded presentation share the supplied-plan renderer and tracking surface. */
 export function Experience(props: ManagedExperienceProps): ReactNode {
+  if (
+    !('experience' in props) ||
+    props.experienceId !== undefined ||
+    props.destinationId !== undefined ||
+    props.nodeId !== undefined ||
+    props.path !== undefined
+  )
+    assertExperienceSelector(props);
   const result = useExperienceSource(props);
   const { children, loadingFallback, errorFallback } = props;
   if (children) return children(result);

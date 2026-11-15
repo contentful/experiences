@@ -922,6 +922,14 @@ Renaming the folder needs all three updated. Cross-reference: `project.json#sour
 
 ## Things known to be broken
 
+### Malformed selector diagnostics before normalization (fixed)
+
+One internal Client assertion checks selector shape, nonempty strings and absolute
+paths. Owners validate before Preview/event work, and managed React validates raw
+selectors before normalization or seeds. Next's explicit server descriptor retains
+all selector fields until Node validates them. Keep the invalid-input matrix in
+Client; other layers cover only their normalization or early-return boundaries.
+
 ### Missing-content classification across Next results (fixed)
 
 Next request results retain `notFound: true` for missing primary Delivery content

@@ -43,6 +43,7 @@ import {
 } from '@contentful/experiences-runtime';
 import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import {
+  assertExperienceSelector,
   serializePersonalization,
   type DestinationRedirectResult,
   type PersonalizationOptions as BuiltPersonalizationOptions,
@@ -703,6 +704,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     const { assertCurrent } = this.#createFreshnessGuard();
     assertCurrent();
+    assertExperienceSelector(options);
     if (this.#previewOptions) {
       const preview = await this.#fetchPreview(options, resolveOptions, assertCurrent);
       assertCurrent();

@@ -76,6 +76,30 @@ afterEach(() => {
   window.history.replaceState(null, '', initialUrl);
 });
 
+it('validates selectors before preview acquisition or page-event preparation', async () => {
+  const f = preview();
+  const sdk = runtime(f.config);
+  const ordinary = vi.spyOn(Runtime.prototype, 'fetchExperience').mockResolvedValue(plan);
+  const invalid = {
+    experienceId: 'hero',
+    destinationId: 'site',
+    path: '/',
+    personalization: { events: [{ type: 'page' }] },
+  } as never;
+  await expect(sdk.fetchExperience(invalid, resolve)).rejects.toBeInstanceOf(TypeError);
+  expect(f.fetch).not.toHaveBeenCalled();
+  sdk.destroy();
+
+  window.history.replaceState(null, '', '/');
+  const browser = runtime({ defaults: { consent: true } });
+  const build = vi.spyOn(browser.eventBuilder, 'buildPageView');
+  await expect(browser.fetchExperience(invalid, resolve, { routeKey: '/' })).rejects.toBeInstanceOf(
+    TypeError
+  );
+  expect(build).not.toHaveBeenCalled();
+  expect(ordinary).not.toHaveBeenCalled();
+});
+
 it.each([false, true])(
   'establishes policy immediately and uses the session only for its actual Experience (live: %s)',
   async (live) => {

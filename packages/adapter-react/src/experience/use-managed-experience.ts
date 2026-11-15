@@ -1,6 +1,7 @@
 'use client';
 
 import { useContext, useEffect, useRef, useState } from 'react';
+import { assertExperienceSelector } from '@contentful/experiences-client';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import type {
   DestinationRedirectResult,
@@ -70,6 +71,7 @@ function useExperienceNotifications(
 
 /** Resolve managed content after commit, preserving an application-supplied initial plan. */
 export function useManagedExperience(options: ManagedExperienceOptions): ManagedExperienceResult {
+  assertExperienceSelector(options);
   return useExperienceSource(options);
 }
 

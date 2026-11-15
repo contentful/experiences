@@ -1,4 +1,5 @@
 import {
+  assertExperienceSelector,
   ContentfulViewDeliveryClient,
   createUserAgentHeaders,
   fetchDestinationSitemap,
@@ -327,6 +328,11 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
     options: FetchExperienceOptions,
     resolveOptions: FetchResolveOptions
   ): Promise<ExperiencePayload | DestinationRedirectResult> {
+    try {
+      assertExperienceSelector(options);
+    } catch (error) {
+      return Promise.reject(error);
+    }
     requireResolverConfig(resolveOptions);
     const personalization = buildFetchPersonalization(options.personalization, this.eventBuilder);
     const common = {

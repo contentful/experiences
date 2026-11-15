@@ -13,6 +13,7 @@ import {
   type ManagedExperienceResult,
 } from './use-managed-experience.js';
 import { deferred, plan, previewState, sourceSdk } from '../test/managed-experience.js';
+import { Experience } from './experience.js';
 
 const config = { components: {} };
 let result: ManagedExperienceResult;
@@ -49,6 +50,37 @@ describe('useManagedExperience', () => {
       </RequestContext.Provider>
     </RuntimeContext.Provider>
   );
+
+  it('rejects raw selectors before a seed can bypass normalization and fetching', () => {
+    const source = sourceSdk();
+    expect(() =>
+      renderToStaticMarkup(
+        content(source, {
+          experienceId: 'home',
+          destinationId: 'site',
+          path: '/',
+          config,
+          initialPlan: plan(),
+        } as never)
+      )
+    ).toThrow(TypeError);
+    expect(() =>
+      renderToStaticMarkup(
+        <Experience
+          {...({ path: '/', config, initialPlan: plan() } as unknown as Parameters<
+            typeof Experience
+          >[0])}
+        />
+      )
+    ).toThrow(TypeError);
+    const unselected = { config, initialPlan: plan() } as unknown as Parameters<
+      typeof Experience
+    >[0];
+    expect(() => renderToStaticMarkup(<Experience {...unselected} />)).toThrow(TypeError);
+    expect(renderToStaticMarkup(<Experience config={config} experience={undefined} />)).toBe('');
+    expect(source.fetchExperience).not.toHaveBeenCalled();
+    expect(source.subscribeToPreview).not.toHaveBeenCalled();
+  });
 
   it('reports a committed redirect once across StrictMode and callback replacement', async () => {
     const source = sourceSdk();

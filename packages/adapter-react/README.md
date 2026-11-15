@@ -101,6 +101,11 @@ resolve in master and do not accept by-ID `parameters` or `extensions`. For exam
 <Experience destinationId={destinationId} path={pathname} locale="en-US" />
 ```
 
+Invalid managed selectors throw `TypeError` during render, before prop selection
+or seeded presentation can hide the invalid input. Supplied-plan and idle
+presentations retain their existing behavior. Fetch APIs reject invalid selectors
+before Delivery, Preview acquisition, or event preparation.
+
 `useManagedExperience({ destinationId, path: pathname, ...requestOptions })` and the
 other selector forms return `{ status, data, error, redirect, refresh, retry }`;
 status is `idle`, `loading`, `success`, `error` or `redirect`. `data` always remains

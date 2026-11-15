@@ -92,6 +92,33 @@ export type ByDestinationPathExperienceOptions = {
 export type ExperienceOptions =
   ByIdExperienceOptions | ByDestinationNodeIdExperienceOptions | ByDestinationPathExperienceOptions;
 
+/** @internal Validate selector shape before client construction or content dispatch. */
+export function assertExperienceSelector(value: unknown): void {
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError('Experience selector must be an object.');
+  }
+
+  const selector = value as Record<string, unknown>;
+  const byId = selector.experienceId !== undefined;
+  const byDestination = selector.destinationId !== undefined;
+  const byPath = selector.path !== undefined;
+  const byNode = selector.nodeId !== undefined;
+  if (byId === byDestination || (byId ? byPath || byNode : byPath === byNode)) {
+    throw new TypeError(
+      'Specify experienceId or destinationId with exactly one of path or nodeId.'
+    );
+  }
+  for (const field of ['experienceId', 'destinationId', 'path', 'nodeId']) {
+    if (selector[field] === undefined) continue;
+    if (typeof selector[field] !== 'string' || selector[field].length === 0) {
+      throw new TypeError(`${field} must be a nonempty string.`);
+    }
+  }
+  if (byPath && !(selector.path as string).startsWith('/')) {
+    throw new TypeError('path must start with /.');
+  }
+}
+
 /**
  * A Destination resolution that the app must act on as control flow — honor
  * it by navigating or re-resolving at the new path — rather than a hydrated
@@ -151,6 +178,7 @@ export async function fetchExperience(
   clientOptions: ClientOptions,
   resolveOptions: ResolveOptions
 ): Promise<PortableRenderPlan | DestinationRedirectResult> {
+  assertExperienceSelector(experienceOptions);
   const { config, metadata, debug } = resolveOptions;
   const log = createDebugLogger(debug, 'client');
 
@@ -187,6 +215,7 @@ export async function fetchExperiencePayload(
   client: ContentfulViewDeliveryClient,
   debug?: boolean
 ): Promise<ExperiencePayload | DestinationRedirectResult> {
+  assertExperienceSelector(experienceOptions);
   const log = createDebugLogger(debug, 'client');
   if (experienceOptions.nodeId !== undefined) {
     const { spaceId, destinationId, nodeId, locale, personalization } = experienceOptions;

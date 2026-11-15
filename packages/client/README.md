@@ -124,6 +124,11 @@ const plan = await fetchExperience(
 
 Returns `PortableRenderPlan`. An empty-nodes payload (draft / unpublished / empty locale) resolves to a valid plan with `nodes: []` — it is not a 404. For the missing-experience case, catch `NotFoundError` (re-exported below).
 
+Malformed selectors reject with `TypeError` before Delivery: supply either a
+nonempty `experienceId`, or a nonempty `destinationId` with exactly one nonempty
+`path` or `nodeId`. Paths must start with `/`. Selector values are validated
+without trimming or normalization; content existence remains a Delivery concern.
+
 Successful responses can carry upstream field-resolution errors alongside useful
 content. Core projects recognized errors into optional `plan.deliveryDiagnostics`
 records with string `fieldPath` and `message`, preserving order and omitting

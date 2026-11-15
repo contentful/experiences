@@ -71,6 +71,30 @@ class DynamicLocaleExperiences extends ContentfulExperiences {
 }
 
 describe('ContentfulExperiences', () => {
+  it('rejects invalid selectors before building fetch events', async () => {
+    mockFetchExperiencePayload.mockClear();
+    const runtime = createRuntime({
+      spaceId: 'space',
+      environmentId: 'env',
+      delivery: { accessToken: 'delivery' },
+      eventBuilder: { channel: 'server' },
+    });
+    const build = vi.spyOn(runtime.eventBuilder, 'buildPageView');
+    await expect(
+      runtime.fetchExperience(
+        {
+          experienceId: 'experience',
+          destinationId: 'site',
+          path: '/',
+          personalization: { events: [{ type: 'page' }] },
+        } as never,
+        { config: { components: {} } }
+      )
+    ).rejects.toBeInstanceOf(TypeError);
+    expect(build).not.toHaveBeenCalled();
+    expect(mockFetchExperiencePayload).not.toHaveBeenCalled();
+  });
+
   it('looks up flags only from explicit caller data without transport or retained state', () => {
     const runtime = createRuntime({
       spaceId: 'space',

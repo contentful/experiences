@@ -112,6 +112,20 @@ describe('Node ContentfulExperiences', () => {
       return { runtime, payload, snapshot, ordinary, resolve };
     }
 
+    it('validates normal and handoff selectors before preview acquisition', async () => {
+      const f = previewFixture();
+      const request = f.runtime.forRequest({ preview: { sessionId: 'session' } });
+      const invalid = { experienceId: 'edited', destinationId: 'site', path: '/' } as never;
+      await expect(
+        request.fetchExperience(invalid, { config: resolverConfig })
+      ).rejects.toBeInstanceOf(TypeError);
+      await expect(
+        request.fetchExperienceForHandoff(invalid, { config: resolverConfig }, { routeKey: '/' })
+      ).rejects.toBeInstanceOf(TypeError);
+      expect(f.snapshot).not.toHaveBeenCalled();
+      expect(f.ordinary).not.toHaveBeenCalled();
+    });
+
     it.each([
       [true, ' session ', true],
       [true, '  ', false],

@@ -275,6 +275,9 @@ Configured-space `fetchExperience` accepts exactly one selector: `{ experienceId
 `{ destinationId, path }`, or `{ destinationId, nodeId }`. The by-ID overload
 returns a plan; destination and union overloads return a plan or `{ redirect: { path } }`.
 `fetchByDestinationPath` and `fetchByDestinationNode` remain convenience wrappers.
+Malformed selectors reject with `TypeError` before Preview acquisition or event
+preparation. Required selector fields must be nonempty strings; paths start with
+`/`, and selector families cannot be combined. Values are not normalized.
 All selectors accept `locale` and Runtime's builder-or-built `personalization.events`.
 Destinations are master-only and do not accept by-ID `parameters` or `extensions`.
 `plan.experienceId`, when present, comes from the acquired payload's actual `sys.id`.

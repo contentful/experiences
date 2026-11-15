@@ -572,12 +572,14 @@ describe('fetchExperience — destinationId + nodeId', () => {
   });
 
   it('rejects mixing experienceId with destinationId at compile time', () => {
-    void fetchExperience(
-      // @ts-expect-error — Experience and Destination selectors are exclusive.
-      { ...destinationOptions, experienceId: 'exp-1' },
-      { accessToken: 'token-123' },
-      resolveOptions
-    );
+    const invalidCall = () =>
+      fetchExperience(
+        // @ts-expect-error — Experience and Destination selectors are exclusive.
+        { ...destinationOptions, experienceId: 'exp-1' },
+        { accessToken: 'token-123' },
+        resolveOptions
+      );
+    expectTypeOf(invalidCall).toBeFunction();
   });
 });
 
@@ -687,12 +689,14 @@ describe('fetchExperience — destinationId + path', () => {
   });
 
   it('rejects mixing experienceId with destinationId at compile time', () => {
-    void fetchExperience(
-      // @ts-expect-error — Experience and Destination selectors are exclusive.
-      { ...destinationOptions, experienceId: 'exp-1' },
-      { accessToken: 'token-123' },
-      resolveOptions
-    );
+    const invalidCall = () =>
+      fetchExperience(
+        // @ts-expect-error — Experience and Destination selectors are exclusive.
+        { ...destinationOptions, experienceId: 'exp-1' },
+        { accessToken: 'token-123' },
+        resolveOptions
+      );
+    expectTypeOf(invalidCall).toBeFunction();
   });
 });
 
@@ -766,6 +770,91 @@ describe('fetchExperience — destination personalization', () => {
     );
 
     expect(result).toEqual({ redirect: { path: '/new-path' } });
+  });
+});
+
+describe('Experience selector validation', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const invalidSelectors = [
+    null,
+    undefined,
+    'private-selector-value',
+    {},
+    { experienceId: '' },
+    { experienceId: 42 },
+    { destinationId: 'destination' },
+    { path: '/private-selector-value' },
+    { destinationId: 'destination', path: '/', nodeId: 'node' },
+    { experienceId: 'private-selector-value', destinationId: 'destination', path: '/' },
+    { experienceId: 'private-selector-value', path: '/' },
+    { destinationId: '', path: '/' },
+    { destinationId: 'destination', nodeId: null },
+    { destinationId: 'destination', path: 42 },
+    { destinationId: 'destination', path: 'private-selector-value' },
+  ];
+
+  it.each(invalidSelectors.map((selector, index) => ({ selector, index })))(
+    'rejects invalid selector $index before constructing or dispatching Delivery',
+    async ({ selector }) => {
+      const result = fetchExperience(
+        selector as ExperienceOptions,
+        { accessToken: 'token' },
+        resolveOptions
+      );
+      await expect(result).rejects.toBeInstanceOf(TypeError);
+      await expect(result).rejects.not.toThrow('private-selector-value');
+      expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
+      for (const method of [
+        mockGet,
+        mockGetWithOverrides,
+        mockResolveByNodeId,
+        mockResolveByNodeIdWithOverrides,
+        mockResolveByPath,
+        mockResolveByPathWithOverrides,
+      ]) {
+        expect(method).not.toHaveBeenCalled();
+      }
+    }
+  );
+
+  it('validates the shared payload boundary before logging or dispatch', async () => {
+    const { createDebugLogger } = await import('@contentful/experiences-sdk-core');
+    const client = new ContentfulViewDeliveryClient({
+      token: 'token',
+      spaceId: 'space-1',
+      environmentId: 'master',
+    });
+    await expect(
+      fetchExperiencePayload(
+        { ...experienceOptions, path: '/' } as unknown as ExperienceOptions,
+        client,
+        true
+      )
+    ).rejects.toBeInstanceOf(TypeError);
+    expect(createDebugLogger).not.toHaveBeenCalled();
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(mockResolveByPath).not.toHaveBeenCalled();
+  });
+
+  it('preserves selector values and ignores unrelated properties', async () => {
+    const input = Object.freeze({
+      spaceId: experienceOptions.spaceId,
+      experienceId: undefined,
+      destinationId: ' destination ',
+      nodeId: ' node ',
+      path: undefined,
+      locale: 'en-US',
+      ignored: { value: true },
+    });
+    const before = { ...input, ignored: { ...input.ignored } };
+    await expect(
+      fetchExperience(input, { accessToken: 'token' }, resolveOptions)
+    ).resolves.toBeDefined();
+    expect(input).toEqual(before);
+    expect(mockResolveByNodeId).toHaveBeenCalledWith(' destination ', ' node ', {
+      locale: 'en-US',
+    });
   });
 });
 

@@ -88,6 +88,13 @@ beforeEach(() => {
 });
 
 describe('App Router request family', () => {
+  it('preserves conflicting selector fields for validation by the Node boundary', async () => {
+    const binding = bindAppRouterServerExperiences(config);
+    const selector = { experienceId: 'home', destinationId: 'site', path: '/' };
+    await binding.Experience(selector as never);
+    expect(doubles.fetch.mock.calls[0]![0]).toMatchObject(selector);
+  });
+
   it('routes an explicit missing selection to native notFound', async () => {
     const binding = bindAppRouterServerExperiences(config);
     doubles.fetch.mockRejectedValueOnce(new NotFoundError());

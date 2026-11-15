@@ -284,10 +284,26 @@ function createAppRouterServerExperiences<
     } = props;
     const descriptor: FetchExperienceOptions =
       experienceId !== undefined
-        ? { experienceId, locale, parameters, personalization, extensions }
+        ? {
+            experienceId,
+            destinationId,
+            nodeId,
+            path,
+            locale,
+            parameters,
+            personalization,
+            extensions,
+          }
         : nodeId !== undefined
-          ? { destinationId: destinationId!, nodeId, locale, personalization }
-          : { destinationId: destinationId!, path: path!, locale, personalization };
+          ? { experienceId, destinationId: destinationId!, nodeId, path, locale, personalization }
+          : {
+              experienceId,
+              destinationId: destinationId!,
+              nodeId,
+              path: path!,
+              locale,
+              personalization,
+            };
     if (cachePolicy)
       assertPublicRequestPolicy({
         cache: cachePolicy,
