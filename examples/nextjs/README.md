@@ -4,7 +4,7 @@ A Next.js 15.5 App Router app demonstrating the managed `@contentful/experiences
 
 ## What it shows
 
-- **Destinations as the primary route**: the server binding selects `{ destinationId, path, locale }` from the incoming request URL. `/` renders the home node; `app/[...path]/page.tsx` handles other paths. Bound components follow Destination redirects with native Next navigation, and the page maps `NotFoundError` to `notFound()`. Personalized requests render dynamically with private fetches.
+- **Destinations as the primary route**: the server binding selects `{ destinationId, path, locale }` from the incoming request URL. `/` renders the home node; `app/[...path]/page.tsx` handles other paths. Bound components follow Destination redirects and handle missing content with native Next `notFound()`. Personalized requests render dynamically with private fetches.
 - **A demo hub at `/`**: `app/page.tsx` explains the example, has the personalization and debug checkboxes, lists every route with its options, and renders the Destination's home Experience below.
 - **By Experience id as the secondary route**: `app/experiences/[id]/page.tsx` selects one Experience by id. It demonstrates Preview Sessions and by-ID runtime parameters.
 - **Managed server fetch and resolve**: `bindAppRouterServerExperiences` owns one primary load, request lifetime and hybrid handoff. A shared registry retains the existing component resolvers and design tokens.
@@ -190,7 +190,6 @@ export const { ExperiencesRoot, Experience } = binding.request;
 
 // lib/destination-page.tsx — shared page composition
 const result = await binding.request.loadExperience();
-if (result.error instanceof NotFoundError) notFound();
 return (
   <ExperiencesRoot locale={result.experience.locale}>
     <Experience />
@@ -202,7 +201,7 @@ return (
 The loader and both bound components share the same request-memoized result.
 The convenience components serialize and forward that complete result, including
 its `requestId`, handoff, source descriptor and usable plan/error; the client
-`Experience` inherits the same root result. Native redirects are handled before
+`Experience` inherits the same root result. Native redirects and 404s are handled before
 browser adoption. There is no application SDK constructor, request facade,
 manual event builder, route synchronization or separate preview wrapper.
 

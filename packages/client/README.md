@@ -203,20 +203,20 @@ do {
 } while (pageNext);
 ```
 
-Each item is `{ path, experienceId, type }`. Cursors (`pages.next`, `pages.prev`) are opaque; don't combine `pageNext` and `pagePrev`. A missing Destination throws `NotFoundError`. It is a free function only; the Node and Web runtimes have no sitemap method.
+Each item is `{ path, experienceId, type }`. Cursors (`pages.next`, `pages.prev`) are opaque; don't combine `pageNext` and `pagePrev`. A missing Destination throws `NotFoundError`. Node and Web instances also expose `sdk.fetchDestinationSitemap({ destinationId }, pagination)` through their configured Delivery client.
 
 ### `NotFoundError`
 
-Re-exported from `@contentful/experience-delivery` as a value + type. Thrown by the underlying delivery client on 404 responses. Route it to your framework's 404 idiom:
+Re-exported from `@contentful/experience-delivery` as a value + type. Thrown by the underlying delivery client on 404 responses. Use `isNotFoundError(error)` to recognize that class or a numeric `statusCode: 404` across package/serialization boundaries, then route it to your framework's 404 idiom. The predicate does not inspect error names, messages or nested causes:
 
 ```ts
-import { fetchExperience, NotFoundError } from '@contentful/experiences-react';
+import { fetchExperience, isNotFoundError } from '@contentful/experiences-react';
 
 try {
   const experience = await fetchExperience(/* … */);
   // …
 } catch (err) {
-  if (err instanceof NotFoundError) notFound(); // Next.js
+  if (isNotFoundError(err)) notFound(); // Next.js
   throw err;
 }
 ```

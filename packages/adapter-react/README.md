@@ -113,6 +113,11 @@ same result and takes precedence over default rendering. Without custom children
 usable `data` takes precedence over either fallback, including when an error
 coexists with content.
 
+Use the exported `isNotFoundError(error)` in `errorFallback` to distinguish a
+missing Experience, Destination, path or node from other fetch failures. It
+recognizes Delivery's `NotFoundError` and numeric `statusCode: 404`, including
+errors seeded from a Next server result. Preview Session failures remain distinct.
+
 Both the hook and `Experience` accept committed presentation notifications,
 exported together as the `ExperienceNotifications` type from `/client`:
 
@@ -286,6 +291,7 @@ fetchDestinationSitemap(destinationOptions, clientOptions, paginationOptions?) /
 createClient(options)                       // Functional constructor matching the SDK's option shape
 ContentfulViewDeliveryClient                // Re-exported delivery client for advanced use cases
 NotFoundError                               // Thrown when the Experience ID or Destination path doesn't exist
+isNotFoundError(error)                       // Recognizes Delivery 404s and browser-seeded not-found errors
 ContentfulViewDelivery                      // Full error namespace from the delivery client
 type ExperienceOptions, ByIdExperienceOptions, ByDestinationPathExperienceOptions,
   ByDestinationNodeIdExperienceOptions, DestinationRedirectResult, DestinationSitemapResult,

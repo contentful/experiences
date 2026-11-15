@@ -5,12 +5,13 @@ import {
   type ServerExperienceRendererProps,
 } from '@contentful/experiences-react/server';
 import {
+  isNotFoundError,
   type ExperiencesHandoff,
   type FetchExperienceOptions,
   type FetchResolveOptions,
   type PortableRenderPlan,
 } from '@contentful/experiences-node';
-import { redirect } from 'next/navigation.js';
+import { notFound, redirect } from 'next/navigation.js';
 import { cookies, headers } from 'next/headers.js';
 import { cache, createElement, type ComponentType } from 'react';
 import { ServerPreviewRefresh } from './server-preview-refresh.js';
@@ -228,6 +229,7 @@ function createAppRouterServerExperiences<
   async function RequestExperiencesRoot(props: BoundServerRequestRootProps) {
     const result = await loadExperience();
     if (result.redirect) redirect(result.redirect.path);
+    if (result.notFound) notFound();
     return ExperiencesRoot({ ...props, result: browserResult(result) });
   }
 
@@ -246,6 +248,7 @@ function createAppRouterServerExperiences<
   async function RequestExperiencesAnalyticsRoot(props: BoundServerRequestRootProps) {
     const loaded = await loadExperience();
     if (loaded.redirect) redirect(loaded.redirect.path);
+    if (loaded.notFound) notFound();
     const { plan: _plan, ...result } = browserResult(loaded);
     return ExperiencesAnalyticsRoot({ ...props, result });
   }
@@ -253,6 +256,7 @@ function createAppRouterServerExperiences<
   async function RequestExperience(props: PresentationProps) {
     const result = await loadExperience();
     if (result.redirect) redirect(result.redirect.path);
+    if (result.notFound) notFound();
     if (result.plan === undefined && result.contentError === undefined) return null;
     if (client?.request?.Experience)
       return createElement(client.request.Experience, { ...props, result: browserResult(result) });
@@ -291,7 +295,12 @@ function createAppRouterServerExperiences<
       });
     const request = sdk.forRequest({ consent: false });
     try {
-      const plan = await request.fetchExperience(descriptor, { ...resolveOptions, config });
+      const plan = await request
+        .fetchExperience(descriptor, { ...resolveOptions, config })
+        .catch((error: unknown) => {
+          if (isNotFoundError(error)) notFound();
+          throw error;
+        });
       if ('redirect' in plan) redirect(plan.redirect.path);
       return <ServerExperienceRenderer {...presentation} experience={plan} config={config} />;
     } finally {

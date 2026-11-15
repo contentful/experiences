@@ -31,6 +31,25 @@ const result: RequestResult = {
 };
 
 describe('Next request presentation inputs', () => {
+  it.each([true, undefined] as const)(
+    'preserves seeded error classification (notFound=%s)',
+    (notFound) => {
+      const seeded = { ...result, contentError: 'Experience content unavailable.', notFound };
+      function Probe() {
+        const { initialError } = useRequestOptions();
+        expect(initialError?.message).toBe(seeded.contentError);
+        if (notFound) expect(initialError).toHaveProperty('statusCode', 404);
+        else expect(initialError).not.toHaveProperty('statusCode');
+        return null;
+      }
+      renderToStaticMarkup(
+        <RequestResultBoundary result={seeded}>
+          <Probe />
+        </RequestResultBoundary>
+      );
+    }
+  );
+
   it('inherits the whole result, gives explicit results precedence and requires a root otherwise', () => {
     const explicit = { ...result, requestId: 'explicit' };
     const observed: (RequestResult | undefined)[] = [];

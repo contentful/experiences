@@ -56,6 +56,15 @@ before passing props. A terminal redirect does not replay its handoff or emit a
 fallback page on the destination route. Browser managed components and hooks use
 native router navigation by default; an explicit `onRedirect` overrides it.
 
+Missing Experiences, Destinations, paths and nodes produce `notFound: true` on
+raw request results. App server convenience roots/presentations and the explicit
+server `Experience` invoke Next's native `notFound()`; Pages callers return
+`{ notFound: true }` from GSSP. Other content failures retain `contentError`, and
+successful empty Experiences remain valid content. Preview Session acquisition
+failures are session errors, not route 404s. When a raw missing-content result is
+presented in the browser, its seeded error retains a numeric `statusCode: 404`
+for `isNotFoundError(error)` in the existing React `errorFallback`.
+
 ### App Router
 
 Export named components from `binding.request` in the binding modules, then import
@@ -260,6 +269,7 @@ export const getServerSideProps: GetServerSideProps<{ result: RequestResult }> =
   context
 ) => {
   const result = await pagesExperiences.request.loadExperience(context);
+  if (result.notFound) return { notFound: true };
   if (result.redirect) return { redirect: { destination: result.redirect.path, permanent: false } };
   return { props: { result } };
 };
@@ -565,7 +575,7 @@ selects SSR page ownership. This setting is independent of editor Preview Sessio
 The App server `request` family memoizes one primary Experience result for
 `loadExperience`, `Experience`, `ExperiencesRoot` and `ExperiencesAnalyticsRoot`.
 Request roots and presentations receive one JSON-safe `result: RequestResult`:
-`requestId`, `routeKey`, event-free `experience`, optional `plan`, `redirect`, `handoff`,
+`requestId`, `routeKey`, event-free `experience`, optional `plan`, `redirect`, `notFound`, `handoff`,
 `contentError` string, `initialPagePayload`, optional `initialPageOwner: 'server'`
 and optional credential/client-free `preview` context metadata. `requestId` distinguishes fresh results;
 request presentations accept no descriptor or seed overlays. App's `request.loadExperience` also

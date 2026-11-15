@@ -1,3 +1,16 @@
+import { ContentfulViewDelivery } from '@contentful/experience-delivery';
+
+/** Recognizes Delivery not-found errors, including errors from another SDK copy. */
+export function isNotFoundError(error: unknown): boolean {
+  return (
+    error instanceof ContentfulViewDelivery.NotFoundError ||
+    (typeof error === 'object' &&
+      error !== null &&
+      'statusCode' in error &&
+      error.statusCode === 404)
+  );
+}
+
 /**
  * Thrown by `fetchExperience` for a fetch failure that is not "experience not
  * found" — network failure, an invalid/expired token, a 5xx from the

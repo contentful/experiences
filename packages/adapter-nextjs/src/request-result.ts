@@ -29,6 +29,8 @@ export interface RequestResult<E extends FetchExperienceOptions = FetchExperienc
   readonly experience: RequestExperience<E>;
   readonly plan?: PortableRenderPlan;
   readonly redirect?: { readonly path: string };
+  /** The primary Delivery Experience, Destination, path or node was not found. */
+  readonly notFound?: true;
   readonly contentError?: string;
   readonly handoff?: ExperiencesHandoff;
   /** The server owns the initial attempt, including consent drops and ambiguous failures. */

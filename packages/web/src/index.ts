@@ -18,6 +18,7 @@ export {
   DELIVERY_HOST,
   ExperienceFetchError,
   NotFoundError,
+  isNotFoundError,
   PREVIEW_HOST,
 } from '@contentful/experiences-client';
 export type {

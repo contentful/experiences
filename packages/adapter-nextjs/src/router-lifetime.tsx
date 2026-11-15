@@ -72,7 +72,17 @@ export function useRequestOptions(supplied?: RequestResult) {
   const result = supplied ?? inherited?.result;
   const canAdopt = useInitialData(result?.requestId);
   const error = result?.contentError;
-  const initialError = useMemo(() => (error === undefined ? undefined : new Error(error)), [error]);
+  const notFound = result?.notFound;
+  const initialError = useMemo(
+    () =>
+      error === undefined && !notFound
+        ? undefined
+        : Object.assign(
+            new Error(error ?? 'Experience content not found.'),
+            notFound ? { statusCode: 404 } : {}
+          ),
+    [error, notFound]
+  );
   return {
     result,
     initialRedirect: canAdopt ? result?.redirect : undefined,

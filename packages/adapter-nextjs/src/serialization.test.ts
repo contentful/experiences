@@ -74,22 +74,25 @@ function plan(): PortableRenderPlan {
 }
 
 describe('browser plan projection', () => {
-  it('retains selected payload identity for destination seeds and projects terminal redirects', () => {
-    expect(serializePlan({ ...plan(), experienceId: 'selected' }).experienceId).toBe('selected');
-    const projected = serializeRequestResult({
-      requestId: 'request',
-      routeKey: '/source?q=1',
-      experience: { destinationId: 'site', path: '/source' },
-      redirect: { path: '/target' },
-      error: new Error('private'),
-    });
-    expect(projected).toEqual({
-      requestId: 'request',
-      routeKey: '/source?q=1',
-      experience: { destinationId: 'site', path: '/source' },
-      redirect: { path: '/target' },
-    });
-  });
+  it.each([{ redirect: { path: '/target' } }, { notFound: true as const }])(
+    'retains payload identity and projects routing outcome %j',
+    (outcome) => {
+      expect(serializePlan({ ...plan(), experienceId: 'selected' }).experienceId).toBe('selected');
+      const projected = serializeRequestResult({
+        requestId: 'request',
+        routeKey: '/source?q=1',
+        experience: { destinationId: 'site', path: '/source' },
+        ...outcome,
+        error: new Error('private'),
+      });
+      expect(projected).toEqual({
+        requestId: 'request',
+        routeKey: '/source?q=1',
+        experience: { destinationId: 'site', path: '/source' },
+        ...outcome,
+      });
+    }
+  );
   it('preserves render data and attribution while excluding diagnostic/identity/default metadata', () => {
     const input = plan();
     const output = serializePlan(input);

@@ -112,6 +112,9 @@ retry after acquisition failure; Web shares only in-flight snapshot acquisition.
 Managed views retain existing usable content while pending or failed. Web subscriptions
 use the same identity check; payloads without an ID are never broadcast to arbitrary
 Experiences. Snapshot HTTP errors surface through the fetch or managed result;
+all snapshot acquisition failures, including HTTP 404, use the existing
+`PreviewSessionFetchError` wrapper with the original error as `cause`. A missing
+session is distinct from missing Delivery content for `isNotFoundError` checks.
 `states.preview` reports connection/update state and errors.
 `createPreviewClient` evaluates token suppliers and passes the session options
 to the configured factory, without requiring

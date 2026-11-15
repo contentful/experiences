@@ -27,25 +27,35 @@ describe('Runtime Live Preview wrapper', () => {
   });
 
   it.each([
-    [new globalThis.Response(null, { status: 404 }), NotFoundError],
     [new globalThis.Response(null, { status: 500 }), /HTTP 500/],
     [globalThis.Response.json({ nodes: [], sys: { type: 'Entry' } }), /valid Experience/],
-  ])(
-    'preserves missing-session errors and rejects failed or invalid snapshots',
-    async (response, error) => {
-      const fetch = vi.fn().mockResolvedValue(response);
-      await expect(
-        fetchPreviewSessionPayload(
-          {
-            spaceId: 'space',
-            environmentId: 'master',
-            sessionId: 'session',
-          },
-          { fetch }
-        )
-      ).rejects.toThrow(error);
-    }
-  );
+  ])('rejects failed or invalid snapshots', async (response, error) => {
+    const fetch = vi.fn().mockResolvedValue(response);
+    await expect(
+      fetchPreviewSessionPayload(
+        {
+          spaceId: 'space',
+          environmentId: 'master',
+          sessionId: 'session',
+        },
+        { fetch }
+      )
+    ).rejects.toThrow(error);
+  });
+
+  it('keeps a missing Preview Session distinct from missing Delivery content', async () => {
+    const fetch = vi.fn().mockResolvedValue(new globalThis.Response(null, { status: 404 }));
+    const failure = await fetchPreviewSessionPayload(
+      { spaceId: 'space', environmentId: 'master', sessionId: 'session' },
+      { fetch }
+    ).catch((error: unknown) => error);
+    expect(failure).toMatchObject({
+      name: 'PreviewSessionFetchError',
+      cause: expect.any(NotFoundError),
+    });
+    expect(failure).not.toBeInstanceOf(NotFoundError);
+    expect(failure).not.toHaveProperty('statusCode');
+  });
 
   it('passes session context and evaluated credentials to the Preview package factory', async () => {
     const client = {

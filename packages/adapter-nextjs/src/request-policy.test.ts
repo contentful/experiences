@@ -1,4 +1,8 @@
-import { ExperienceFetchError, type RequestRuntime } from '@contentful/experiences-node';
+import {
+  ExperienceFetchError,
+  NotFoundError,
+  type RequestRuntime,
+} from '@contentful/experiences-node';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   resolveRequestPolicy as resolvePolicy,
@@ -35,6 +39,28 @@ const request = {
 
 describe('Next primary request policy', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it.each([
+    { mode: 'ssr' as const, experience: { experienceId: 'missing' } },
+    { mode: 'hybrid' as const, experience: { destinationId: 'site', path: '/missing' } },
+  ])(
+    'classifies primary content 404 without discarding handoff ($mode, $experience)',
+    async ({ mode, experience }) => {
+      const error = new NotFoundError();
+      const handoff = {
+        spaceId: 'space',
+        environmentId: 'master',
+        cache: { scope: 'private-request' as const },
+      };
+      if (mode === 'ssr') fetchExperience.mockRejectedValueOnce(error);
+      else fetchExperienceForHandoff.mockResolvedValueOnce({ error, handoff } as never);
+      const resolved = await resolvePolicy(config, { mode, experience }, context);
+      const result = await loadPrimary(request, resolved, context, config);
+      expect(result).toMatchObject({ notFound: true, error, handoff });
+      expect(result.plan).toBeUndefined();
+      expect(result.initialPageOwner).toBe(mode === 'ssr' ? 'server' : undefined);
+    }
+  );
 
   it.each(['ssr', 'hybrid'] as const)(
     'preserves a destination redirect and composes once (%s)',
@@ -129,6 +155,7 @@ describe('Next primary request policy', () => {
     );
     expect(fetchExperienceForHandoff).not.toHaveBeenCalled();
     expect(result.initialPageOwner).toBe('server');
+    expect(result.notFound).toBeUndefined();
     expect(result.handoff).toEqual({
       spaceId: 'space',
       environmentId: 'master',
@@ -163,6 +190,7 @@ describe('Next primary request policy', () => {
       handoff: { profileId: profile.id },
     });
     expect(failed.plan).toBeUndefined();
+    expect(failed.notFound).toBeUndefined();
     expect(failed.handoff?.state).toBeUndefined();
     expect(failed.handoff?.replay).toBeUndefined();
   });

@@ -922,6 +922,15 @@ Renaming the folder needs all three updated. Cross-reference: `project.json#sour
 
 ## Things known to be broken
 
+### Missing-content classification across Next results (fixed)
+
+Next request results retain `notFound: true` for missing primary Delivery content
+across serialization; App server conveniences use native `notFound()`, and Pages
+GSSP callers map the flag. Public `isNotFoundError` recognizes Delivery's class or
+numeric `statusCode: 404`, including seeded browser errors. Empty content and other
+fetch failures remain distinct. Preview Session acquisition wraps its own 404
+with the existing session-fetch error and cause, so it cannot become a route 404.
+
 ### Next request result source typing (fixed)
 
 Managed load results retain the supplied selector type or configured default.

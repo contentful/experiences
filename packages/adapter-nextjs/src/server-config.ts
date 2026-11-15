@@ -1,6 +1,6 @@
 import {
   ExperienceFetchError,
-  NotFoundError,
+  isNotFoundError,
   type ConsentInput,
   type PreviewConfig,
   type Config as NodeConfig,
@@ -100,7 +100,7 @@ export async function resolveServerValue<T>(
 
 /** Only expected Delivery failures are content results; preparation and control flow propagate. */
 export function isContentError(error: unknown): boolean {
-  return error instanceof ExperienceFetchError || error instanceof NotFoundError;
+  return error instanceof ExperienceFetchError || isNotFoundError(error);
 }
 
 /** The explicit browser config is the only credential source for built-in client roots. */
@@ -121,6 +121,7 @@ export function serializeRequestResult<E extends FetchExperienceOptions>(
       routeKey: result.routeKey,
       experience: result.experience,
       ...(result.redirect ? { redirect: { path: result.redirect.path } } : {}),
+      ...(result.notFound ? { notFound: true } : {}),
       ...(result.plan ? { plan: serializePlan(result.plan, options) } : {}),
       ...(result.contentError ? { contentError: result.contentError } : {}),
       ...(result.handoff ? { handoff: result.handoff } : {}),

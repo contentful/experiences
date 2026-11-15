@@ -1,4 +1,5 @@
 import {
+  isNotFoundError,
   parseExperiencesHandoffEnvelope,
   type ExperiencesHandoff,
   type RequestRuntime,
@@ -140,6 +141,7 @@ export async function loadPrimaryExperience(
     ...(!request.isPreview && mode === 'ssr' ? { initialPageOwner: 'server' as const } : {}),
     ...(initialPagePayload ? { initialPagePayload } : {}),
     ...(output.error !== undefined ? { contentError: 'Experience content unavailable.' } : {}),
+    ...(isNotFoundError(output.error) ? { notFound: true as const } : {}),
   };
   await policy.composeRequest?.(request, primary, context);
   return {
