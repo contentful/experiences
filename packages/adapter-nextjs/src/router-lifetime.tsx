@@ -26,6 +26,19 @@ import {
 } from './live-preview.js';
 
 const InitialDataContext = createContext<(requestId: string | undefined) => boolean>(() => true);
+const RequestResultContext = createContext<{ result?: NextjsRequestResult } | undefined>(undefined);
+
+/** Only request roots provide inherited results, including an initially empty result. */
+export function NextjsRequestResultBoundary({
+  result,
+  children,
+}: {
+  result?: NextjsRequestResult;
+  children: ReactNode;
+}) {
+  const value = useMemo(() => ({ result }), [result]);
+  return <RequestResultContext.Provider value={value}>{children}</RequestResultContext.Provider>;
+}
 
 /** One stable root excludes only restored original bootstrap inputs after departure. */
 export function NextjsInitialDataBoundary({
@@ -56,16 +69,18 @@ export function useNextjsInitialData(requestId: string | undefined) {
   return useContext(InitialDataContext)(requestId);
 }
 
-/** Request presentation adopts the whole descriptor and its matching startup outcome. */
-export function useNextjsRequestOptions(result: NextjsRequestResult) {
-  const canAdopt = useNextjsInitialData(result.requestId);
-  const initialError = useMemo(
-    () => (result.contentError === undefined ? undefined : new Error(result.contentError)),
-    [result.contentError]
-  );
+/** Explicit results override inheritance; history guards apply only to startup seeds. */
+export function useNextjsRequestOptions(supplied?: NextjsRequestResult) {
+  const inherited = useContext(RequestResultContext);
+  if (supplied === undefined && inherited === undefined)
+    throw new Error('request.Experience requires a result prop or a request ExperiencesRoot.');
+  const result = supplied ?? inherited?.result;
+  const canAdopt = useNextjsInitialData(result?.requestId);
+  const error = result?.contentError;
+  const initialError = useMemo(() => (error === undefined ? undefined : new Error(error)), [error]);
   return {
-    ...result.experience,
-    initialPlan: canAdopt ? result.plan : undefined,
+    result,
+    initialPlan: canAdopt ? result?.plan : undefined,
     initialError: canAdopt ? initialError : undefined,
   };
 }

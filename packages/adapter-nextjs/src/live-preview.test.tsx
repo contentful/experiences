@@ -187,7 +187,7 @@ describe('managed Next Live Preview', () => {
             <bound.ExperiencesRoot result={result}>
               <Suspend />
               <Probe />
-              <bound.Experience result={result}>
+              <bound.Experience>
                 {(state) => <output>{String(state.data?.metadata.label)}</output>}
               </bound.Experience>
             </bound.ExperiencesRoot>

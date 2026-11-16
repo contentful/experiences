@@ -42,7 +42,7 @@ export type BoundNextjsRequestRootProps = Omit<
 export type NextjsRequestExperienceProps = Omit<
   Extract<BoundManagedExperienceProps, { experienceId: string }>,
   keyof FetchExperienceOptions | 'initialPlan' | 'initialError' | 'resolveOptions'
-> & { readonly result: NextjsRequestResult };
+> & { readonly result?: NextjsRequestResult };
 
 /** Plain browser configuration plus server-inherited scope/locale and one whole result. */
 export type NextjsDefaultRequestRootProps = Omit<

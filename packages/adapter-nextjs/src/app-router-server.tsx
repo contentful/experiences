@@ -13,7 +13,10 @@ import {
 import { cookies, headers } from 'next/headers.js';
 import { cache, createElement, type ComponentType } from 'react';
 import { ServerPreviewRefresh } from './server-preview-refresh.js';
-import type { BoundNextjsRequestRootProps } from './request-result.js';
+import type {
+  BoundNextjsRequestRootProps,
+  NextjsRequestExperienceProps,
+} from './request-result.js';
 import {
   bindNextjsExperiencesRequest,
   configureNextjsServerExperiences,
@@ -56,6 +59,7 @@ export type NextjsAppRouterServerExperiencesConfig = NextjsServerExperiencesConf
 
 export interface NextjsAppRouterServerExperiencesOptions {
   readonly request?: {
+    readonly Experience?: ComponentType<NextjsRequestExperienceProps>;
     readonly ExperiencesRoot?: ComponentType<BoundNextjsRequestRootProps>;
     readonly ExperiencesAnalyticsRoot?: ComponentType<BoundNextjsRequestRootProps>;
   };
@@ -80,6 +84,12 @@ export type NextjsServerRequestExperienceProps = Omit<
   >;
 };
 
+/** Client renderer callbacks must be configured in the injected client module. */
+export type NextjsServerRequestClientExperienceProps = Omit<
+  NextjsServerRequestExperienceProps,
+  'renderError' | 'renderUnknown'
+>;
+
 export type NextjsServerExperienceProps = Omit<
   ServerExperienceRendererProps,
   'experience' | 'config'
@@ -94,6 +104,29 @@ export type NextjsServerExperienceProps = Omit<
   );
 
 export function bindNextjsAppRouterServerExperiences(
+  options: NextjsAppRouterServerExperiencesConfig,
+  client?: NextjsAppRouterServerExperiencesOptions & {
+    readonly request?: NonNullable<NextjsAppRouterServerExperiencesOptions['request']> & {
+      readonly Experience?: never;
+    };
+  }
+): ReturnType<typeof createAppRouterServerExperiences<NextjsServerRequestExperienceProps>>;
+// eslint-disable-next-line no-redeclare -- TypeScript overload, not a runtime redeclaration.
+export function bindNextjsAppRouterServerExperiences(
+  options: NextjsAppRouterServerExperiencesConfig,
+  client: NextjsAppRouterServerExperiencesOptions
+): ReturnType<typeof createAppRouterServerExperiences<NextjsServerRequestClientExperienceProps>>;
+// eslint-disable-next-line no-redeclare -- TypeScript overload implementation.
+export function bindNextjsAppRouterServerExperiences(
+  options: NextjsAppRouterServerExperiencesConfig,
+  client?: NextjsAppRouterServerExperiencesOptions
+) {
+  return createAppRouterServerExperiences(options, client);
+}
+
+function createAppRouterServerExperiences<
+  PresentationProps extends NextjsServerRequestExperienceProps,
+>(
   options: NextjsAppRouterServerExperiencesConfig,
   client?: NextjsAppRouterServerExperiencesOptions
 ) {
@@ -160,9 +193,9 @@ export function bindNextjsAppRouterServerExperiences(
     }
   );
 
-  function browserResult(result: NextjsAppRouterExperienceResult) {
-    return serializeNextjsRequestResult(result, { metadataKeys: options.request?.metadataKeys });
-  }
+  const browserResult = cache((result: NextjsAppRouterExperienceResult) =>
+    serializeNextjsRequestResult(result, { metadataKeys: options.request?.metadataKeys })
+  );
 
   function inheritedRootProps() {
     return {
@@ -184,7 +217,9 @@ export function bindNextjsAppRouterServerExperiences(
       });
     return createElement(NextjsAppRouterRequestRoot, {
       ...props,
-      children: (
+      children: client?.request?.Experience ? (
+        props.children
+      ) : (
         <>
           <ServerPreviewRefresh experienceId={props.result?.experience.experienceId} />
           {props.children}
@@ -219,8 +254,11 @@ export function bindNextjsAppRouterServerExperiences(
     return ExperiencesAnalyticsRoot({ ...props, result });
   }
 
-  async function RequestExperience(props: NextjsServerRequestExperienceProps) {
+  async function RequestExperience(props: PresentationProps) {
     const result = await loadExperience();
+    if (result.plan === undefined && result.contentError === undefined) return null;
+    if (client?.request?.Experience)
+      return createElement(client.request.Experience, { ...props, result: browserResult(result) });
     return result.plan ? (
       <ServerExperienceRenderer {...props} config={config} experience={result.plan} />
     ) : null;

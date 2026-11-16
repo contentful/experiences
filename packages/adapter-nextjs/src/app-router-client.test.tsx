@@ -6,6 +6,7 @@ import {
   type ManagedExperienceResult,
 } from '@contentful/experiences-react/client';
 import { createRoot, type Root } from 'react-dom/client';
+import { renderToStaticMarkup } from 'react-dom/server';
 import {
   CONSENT_CACHE_KEY,
   EventBuilder,
@@ -222,7 +223,7 @@ describe('App committed route inputs', () => {
       return (
         <ExperiencesRoot sdk={sdk} result={result}>
           <Actions />
-          <Experience key={routeKey} result={result}>
+          <Experience key={routeKey}>
             {(state) => <output>{String(state.data?.metadata.label)}</output>}
           </Experience>
         </ExperiencesRoot>
@@ -278,7 +279,7 @@ describe('App committed route inputs', () => {
           result={result}
         >
           <Probe />
-          <Experience result={result}>
+          <Experience>
             {(state) => <output>{String(state.data?.metadata.label)}</output>}
           </Experience>
         </NextjsAppRouterRequestRoot>
@@ -445,6 +446,48 @@ describe('App committed route inputs', () => {
       personalization: { events: [{ type: 'page', properties: { path: '/page' } }] },
     });
   });
+
+  it.each(['bound', 'standalone'] as const)(
+    'keeps an empty %s request root inactive',
+    async (kind) => {
+      const bound = bindNextjsAppRouterClientExperiences({ config: { components: {} } });
+      const Owner = kind === 'bound' ? bound.request.ExperiencesRoot : NextjsAppRouterRequestRoot;
+      await act(async () =>
+        root.render(
+          <Owner
+            spaceId="space"
+            environmentId="master"
+            browser={{ delivery: { accessToken: 'browser-token' } }}
+            sdk={createWebSnapshotRuntime() as ContentfulExperiences}
+          >
+            <bound.request.Experience>
+              {(state) => <output>{state.status}</output>}
+            </bound.request.Experience>
+          </Owner>
+        )
+      );
+      expect(container.textContent).toBe('idle');
+    }
+  );
+
+  it.each([false, true])(
+    'requires a request result outside request roots (plain preview root=%s)',
+    (preview) => {
+      const bound = bindNextjsAppRouterClientExperiences({
+        config: { components: {} },
+        spaceId: 'space',
+        environmentId: 'master',
+        delivery: { accessToken: 'delivery' },
+        livePreview: { enabled: true, loadImplementation: vi.fn() },
+      });
+      const content = <bound.request.Experience />;
+      expect(() =>
+        renderToStaticMarkup(
+          preview ? <bound.ExperiencesRoot>{content}</bound.ExperiencesRoot> : content
+        )
+      ).toThrow('requires a result prop or a request ExperiencesRoot');
+    }
+  );
 
   it('passes client configuration and prop overrides to the shared request presentation', async () => {
     const configured = vi.fn(() => ({ properties: { path: '/configured' } }));

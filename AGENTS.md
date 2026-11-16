@@ -165,8 +165,11 @@ Next integration reuses the same framework-neutral SDK owners. Its normal workfl
 automatically fetches, resolves and manages one primary Experience.
 App/Pages server families expose `request.loadExperience`. Both client bindings
 expose ordinary Web components and a separate `request` family for full server
-results. App server `request.Experience` uses `ServerExperienceRenderer`; Pages
-uses native GSSP and client request presentation. Bind `config` and resolve options
+results. App server `request.Experience` defaults to `ServerExperienceRenderer`;
+optional client `request.Experience` injection forwards its serialized result
+through the same memoized load. Client request presentations inherit the nearest
+request root's complete result unless explicitly supplied. Pages uses native GSSP
+and client request presentation. Bind `config` and resolve options
 once, with flat browser options, `consent.clientDefaults` and `cookie` in a client module.
 Follow the canonical [rendering compositions](./packages/adapter-nextjs/README.md#automatic-single-experience-setup)
 and [server preparation contract](./packages/adapter-nextjs/README.md#router-bindings)
