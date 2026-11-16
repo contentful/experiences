@@ -357,8 +357,8 @@ main.yaml
 ```
 
 The build job hands `packages/*/dist` to every downstream job through one GitHub
-Actions cache key, `build-cache-${{ github.run_id }}-${{ github.run_attempt }}`
-— scoped to a single run, so each CI run builds once and reuses it. Both release workflows set
+Actions cache key, `build-cache-${{ github.run_id }}`
+— scoped to a single run, so downstream retries reuse its completed build. Both release workflows set
 `fail-on-cache-miss: true`, so a missing cache fails the release rather than
 publishing something unbuilt.
 

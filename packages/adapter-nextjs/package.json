@@ -44,6 +44,24 @@
         "types": "./dist/request-handler.d.ts",
         "default": "./dist/request-handler.js"
       }
+    },
+    "./app-router/server": {
+      "import": {
+        "types": "./dist/app-router-server.d.ts",
+        "default": "./dist/app-router-server.js"
+      }
+    },
+    "./app-router/client": {
+      "import": {
+        "types": "./dist/app-router-client.d.ts",
+        "default": "./dist/app-router-client.js"
+      }
+    },
+    "./cache-middleware": {
+      "import": {
+        "types": "./dist/cache-middleware.d.ts",
+        "default": "./dist/cache-middleware.js"
+      }
     }
   },
   "files": [

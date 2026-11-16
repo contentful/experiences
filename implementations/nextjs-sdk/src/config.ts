@@ -8,6 +8,7 @@ import { parse } from 'dotenv';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import process from 'node:process';
+import type { BrowserEnvironment } from './reference';
 
 const defaultExperienceIds = [
   '3fLAdFb3BYAuImRhcW8k4t',
@@ -48,26 +49,62 @@ function configureServer() {
     locale: env.LOCALE?.trim() || 'en-US',
     experienceIds,
     preview: livePreviewEnabled
-      ? { accessToken: required('PREVIEW_TOKEN'), host: env.PREVIEW_HOST?.trim() || undefined }
+      ? {
+          accessToken: required('PREVIEW_TOKEN'),
+          host: env.PREVIEW_HOST?.trim() || undefined,
+        }
       : undefined,
     livePreview: livePreviewEnabled
       ? {
           experienceId: env.LIVE_PREVIEW_EXPERIENCE_ID?.trim() || experienceIds[0],
-          sessionHost: env.LIVE_PREVIEW_SESSION_HOST?.trim() || undefined,
-          resourceResolution: env.LIVE_PREVIEW_RESOURCE_RESOLUTION?.trim() || undefined,
+          ...(env.LIVE_PREVIEW_SESSION_HOST?.trim()
+            ? { sessionHost: env.LIVE_PREVIEW_SESSION_HOST.trim() }
+            : {}),
+          ...(env.LIVE_PREVIEW_RESOURCE_RESOLUTION?.trim()
+            ? {
+                resourceResolution: env.LIVE_PREVIEW_RESOURCE_RESOLUTION.trim(),
+              }
+            : {}),
         }
       : undefined,
   };
-  return {
-    config,
-    sdk: configureNextjsServerExperiences({
+  const nodeConfig = {
+    spaceId: config.spaceId,
+    environmentId: config.environmentId,
+    locale: config.locale,
+    delivery: { ...config.delivery, fetch: createNextjsPrivateFetch() },
+    // The frozen Preview Session helper owns its fetch transport.
+    preview: config.preview,
+  };
+  const browser: BrowserEnvironment = {
+    web: {
       spaceId: config.spaceId,
       environmentId: config.environmentId,
       locale: config.locale,
-      delivery: { ...config.delivery, fetch: createNextjsPrivateFetch() },
-      // The frozen Preview Session helper owns its fetch transport.
-      preview: config.preview,
-    }),
+      // Only explicitly browser-designated credentials may cross this boundary.
+      // Without one, the real same-app proxy owns private upstream authentication.
+      delivery: env.BROWSER_CDA_TOKEN?.trim()
+        ? { accessToken: env.BROWSER_CDA_TOKEN.trim() }
+        : { host: `${config.origin}/api/delivery` },
+      ...(livePreviewEnabled && env.BROWSER_PREVIEW_TOKEN?.trim()
+        ? {
+            preview: {
+              accessToken: env.BROWSER_PREVIEW_TOKEN.trim(),
+              ...(env.BROWSER_PREVIEW_HOST?.trim()
+                ? { host: env.BROWSER_PREVIEW_HOST.trim() }
+                : {}),
+            },
+          }
+        : {}),
+    },
+    experienceIds,
+    ...(config.livePreview ? { livePreview: config.livePreview } : {}),
+  };
+  return {
+    config,
+    nodeConfig,
+    browser,
+    sdk: configureNextjsServerExperiences(nodeConfig),
   };
 }
 

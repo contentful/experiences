@@ -46,6 +46,8 @@ interface PresentationOptions {
   /** Static page arguments; update route-varying values on navigation. The builder takes precedence. */
   readonly initialPagePayload?: Exclude<ReturnType<CurrentPageOptions['buildPayload']>, undefined>;
   readonly beforeInitialPage?: BeforeInitialPageOptions;
+  /** Analytics-only presentation emits browser page intent without managed content. */
+  readonly pageMode?: 'analytics';
 }
 
 export type ExperiencesProviderProps = PropsWithChildren<
@@ -171,6 +173,7 @@ function ActivationProvider(props: ActivationProps) {
           buildPagePayload: _buildPagePayload,
           initialPagePayload: _initialPagePayload,
           beforeInitialPage: _beforeInitialPage,
+          pageMode: _pageMode,
           ...config
         } = initial;
         binding = createExperiencesRootSdkBinding({ config, onStatesReady });
@@ -251,6 +254,7 @@ function ActivationProvider(props: ActivationProps) {
         handoff={handoff}
         buildPagePayload={buildPagePayload}
         beforeInitialPage={props.beforeInitialPage}
+        pageMode={props.pageMode}
         resetRevision={resetRevision}
         onReset={resetRequests}
       >

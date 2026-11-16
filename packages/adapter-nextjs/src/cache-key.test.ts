@@ -1,0 +1,76 @@
+import { describe, expect, it } from 'vitest';
+import {
+  createExperiencesCacheKey,
+  createPublicPermutationCacheMetadata,
+  validateNextjsPublicPermutationCacheTags,
+  type NextjsExperiencesCacheKeyInput,
+} from './cache-key.js';
+
+const input = {
+  spaceId: 'space',
+  environmentId: 'master',
+  experienceId: 'home',
+  contentRevision: 2,
+  locale: 'en-US',
+  selectionDimensions: { audience: 'public', enabled: false, count: 1.5 },
+  parameters: { text: '', count: -1.5, filter: { b: 2, a: 1 }, empty: {} },
+};
+
+describe('approved public cache metadata', () => {
+  it('normalizes parameter/dimension ordering and retains meaningful input changes', () => {
+    const key = createExperiencesCacheKey(input);
+    expect(
+      createExperiencesCacheKey({
+        ...input,
+        parameters: { empty: {}, filter: { a: 1, b: 2 }, count: -1.5, text: '' },
+        selectionDimensions: { count: 1.5, enabled: false, audience: 'public' },
+      })
+    ).toBe(key);
+    expect(createExperiencesCacheKey({ ...input, locale: 'de-DE' })).not.toBe(key);
+    expect(createExperiencesCacheKey({ ...input, contentRevision: 3 })).not.toBe(key);
+    expect(createExperiencesCacheKey({ ...input, contentRevision: 'revision' })).not.toBe(key);
+    expect(createExperiencesCacheKey({ ...input, parameters: { filter: {} } })).not.toBe(key);
+    expect(decodeURIComponent(key)).toBe(
+      '["space","master","home",2,"en-US",[["count",-1.5],["empty",[]],["filter",[["a",1],["b",2]]],["text",""]],[["audience","public"],["count",1.5],["enabled",false]]]'
+    );
+  });
+  it.each([
+    ['parameters', null, 'parameters'],
+    ['parameters', { filter: null }, 'parameters.filter'],
+    ['parameters', { filter: ['value'] }, 'parameters.filter'],
+    ['parameters', { filter: new Date(0) }, 'parameters.filter'],
+    ['parameters', { filter: { nested: {} } }, 'parameters.filter.nested'],
+    ['parameters', { filter: { count: Infinity } }, 'parameters.filter.count'],
+    ['parameters', { value: true }, 'parameters.value'],
+    ['parameters', { value: undefined }, 'parameters.value'],
+    ['parameters', { value: NaN }, 'parameters.value'],
+    ['selectionDimensions', [], 'selectionDimensions'],
+    ['selectionDimensions', { audience: {} }, 'selectionDimensions.audience'],
+    ['selectionDimensions', { audience: -Infinity }, 'selectionDimensions.audience'],
+    ['contentRevision', Infinity, 'contentRevision'],
+    ['contentRevision', true, 'contentRevision'],
+  ])('rejects unsupported %s input %j with its location', (field, value, path) => {
+    expect(() =>
+      createExperiencesCacheKey({
+        ...input,
+        [field]: value,
+      } as unknown as NextjsExperiencesCacheKeyInput)
+    ).toThrow(new RegExp(`${path} must be`));
+  });
+  it('carries detached tags with the application permutation key and version', () => {
+    const tags = ['content:home'];
+    const metadata = createPublicPermutationCacheMetadata({
+      ...input,
+      permutationKey: 'public',
+      cacheVersion: '2',
+      tags,
+    });
+    expect(metadata).toMatchObject({ scope: 'public-permutation', tags });
+    expect(metadata.tags).not.toBe(tags);
+    expect(metadata.key).toContain('2:public:');
+  });
+  it('enforces the Next tag boundary', () => {
+    for (const tags of [['bad,tag'], ['bad\nline'], ['a'.repeat(257)], Array(129).fill('tag')])
+      expect(() => validateNextjsPublicPermutationCacheTags(tags)).toThrow();
+  });
+});

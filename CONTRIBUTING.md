@@ -194,12 +194,12 @@ automatic/manual presentations under one SDK root. Run
 `npx nx run implementation-react-sdk:dev`. Its README covers local configuration,
 consent, navigation/visitor intent, tracking and scoped validation commands.
 
-The [standalone Next.js server reference](./implementations/nextjs-sdk/README.md)
-uses the packed Next/Node/React SDKs with one explicit request facade, server-rendered
-Home/Page Two content and optional Preview Sessions. Run
+The [standalone Next.js reference](./implementations/nextjs-sdk/README.md)
+uses the packed Next/Node/React SDKs for automatic single-Experience App
+presentation, diagnostic Home/Page Two comparisons and optional Preview Sessions. Run
 `npx nx run implementation-nextjs-sdk:setup`, then
-`npx nx run implementation-nextjs-sdk:dev`. Browser router takeover remains later
-integration work; its README describes the supported server and response boundaries.
+`npx nx run implementation-nextjs-sdk:dev`. Its README describes the automatic App setup, preserved Home/Page Two server
+flow and supported response boundaries.
 
 All five references activate Live Preview only with `LIVE_PREVIEW_ENABLED=true`
 and a nonempty URL `preview_session_id`. The local `.env` session ID is retained

@@ -39,6 +39,12 @@ export const loadServerPage = cache(async (pathname: string, searchParams: Nextj
     config.livePreview && sessionId && experienceId
       ? { ...config.livePreview, sessionId, experienceId }
       : undefined;
+  const livePreview = previewBinding
+    ? {
+        ...previewBinding,
+        loadImplementation: () => import('@contentful/experiences-live-preview'),
+      }
+    : undefined;
   const request = bindNextjsExperiencesRequest(sdk, {
     request: { url: page.url, headers: incomingHeaders },
     // The binding derives event context and gates cookie identity; page-event
@@ -49,13 +55,14 @@ export const loadServerPage = cache(async (pathname: string, searchParams: Nextj
     },
     cookies: incomingCookies,
     locale: config.locale,
-    livePreview: previewBinding
-      ? {
-          ...previewBinding,
-          loadImplementation: () => import('@contentful/experiences-live-preview'),
-        }
-      : undefined,
+    livePreview,
     isPreview: Boolean(previewBinding),
+  });
+  // Reference comparisons do not inherit the primary's provisional identity.
+  const comparisons = sdk.forRequest({
+    locale: request.locale,
+    isPreview: request.isPreview,
+    livePreview,
   });
   const displayIds =
     pathname === '/page-two' ? config.experienceIds.slice(-1) : config.experienceIds;
@@ -68,7 +75,7 @@ export const loadServerPage = cache(async (pathname: string, searchParams: Nextj
     for (const [index, id] of fetchIds.entries()) {
       const content: ServerContent = { experienceId: id };
       try {
-        content.plan = await request.fetchExperience(
+        content.plan = await (index === 0 ? request : comparisons).fetchExperience(
           {
             experienceId: id,
             extensions: previewBinding?.experienceId === id ? undefined : { sourceMap: {} },
@@ -105,6 +112,7 @@ export const loadServerPage = cache(async (pathname: string, searchParams: Nextj
   } finally {
     // Server Components cannot mutate response cookies. No transfer or browser
     // initialization is produced by this ordinary server-only presentation.
+    comparisons.destroy();
     request.destroy();
   }
 });

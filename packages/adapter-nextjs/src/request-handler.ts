@@ -10,7 +10,7 @@ import { persistNextjsAnonymousId, type PersistNextjsAnonymousIdOptions } from '
 import {
   cookieReaderFromHeader,
   normalizedRequestUrl,
-  NEXTJS_EXPERIENCES_REQUEST_HEADER_PREFIX,
+  isNextjsSpeculativeRequest,
   NEXTJS_EXPERIENCES_REQUEST_URL_HEADER,
   type NextjsCookieReader,
   type NextjsRequestLike,
@@ -20,13 +20,11 @@ import {
   type BindNextjsExperiencesRequestOptions,
 } from './server-request.js';
 
-const OVERRIDE = 'x-middleware-override-headers';
-const REQUEST_PREFIX = 'x-middleware-request-';
-function headerNames(headers: globalThis.Headers): string[] {
-  const names: string[] = [];
-  headers.forEach((_value, name) => names.push(name));
-  return names;
-}
+import {
+  isMiddlewareContinuation,
+  createForwardedRequestHeaders,
+  applyForwardedRequestHeaders,
+} from './forwarded-request-headers.js';
 
 export interface NextjsExperiencesResolverContext {
   readonly request: NextRequest;
@@ -65,31 +63,19 @@ export function createNextjsExperiencesContextHandler(
       responseOrEvent instanceof globalThis.Response
         ? (responseOrEvent as NextResponse)
         : undefined;
-    if (
-      existing &&
-      ((existing.status >= 300 && existing.status < 400 && existing.headers.has('location')) ||
-        (!existing.headers.has('x-middleware-next') &&
-          !existing.headers.has('x-middleware-rewrite') &&
-          !existing.headers.has(OVERRIDE)))
-    )
-      return existing;
-    const overridden = existing?.headers.get(OVERRIDE);
-    const headers = new globalThis.Headers(overridden == null ? request.headers : undefined);
-    for (const name of overridden?.split(',') ?? []) {
-      const key = name.trim();
-      if (!key) continue;
-      const value = existing!.headers.get(`${REQUEST_PREFIX}${key}`);
-      if (value !== null) headers.set(key, value);
-    }
-    for (const name of headerNames(headers)) {
-      if (name.startsWith(NEXTJS_EXPERIENCES_REQUEST_HEADER_PREFIX)) headers.delete(name);
-    }
+    if (existing && !isMiddlewareContinuation(existing)) return existing;
+    const headers = createForwardedRequestHeaders(request.headers, existing);
     headers.set(
       NEXTJS_EXPERIENCES_REQUEST_URL_HEADER,
       normalizedRequestUrl(request.url).toString()
     );
     let experiencesRequest: ReturnType<typeof bindNextjsExperiencesRequest> | undefined;
-    if (options) {
+    if (
+      options &&
+      !isNextjsSpeculativeRequest(headers) &&
+      headers.get('rsc') !== '1' &&
+      headers.get('x-nextjs-data') !== '1'
+    ) {
       const cookies = cookieReaderFromHeader(headers.get('cookie'));
       const context = { request, headers, cookies };
       const {
@@ -109,17 +95,8 @@ export function createNextjsExperiencesContextHandler(
       });
     }
     try {
-      const forwarded = NextResponse.next({ request: { headers } });
-      const response = existing ?? forwarded;
-      if (existing) {
-        for (const name of headerNames(response.headers)) {
-          if (name === OVERRIDE || name.startsWith(REQUEST_PREFIX)) response.headers.delete(name);
-        }
-        forwarded.headers.forEach((value, name) => {
-          if (name === OVERRIDE || name.startsWith(REQUEST_PREFIX))
-            response.headers.set(name, value);
-        });
-      }
+      const response = existing ?? NextResponse.next();
+      applyForwardedRequestHeaders(response, headers);
       if (experiencesRequest && options) {
         applyNextjsPrivateResponseCache(response);
         persistNextjsAnonymousId(response, experiencesRequest, {

@@ -1,4 +1,4 @@
-import { ServerContentPage, type PageSearchParams } from '../components/ServerContentPage';
+import { ServerContentPage, type PageSearchParams } from '../../components/ServerContentPage';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
