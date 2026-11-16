@@ -137,6 +137,7 @@ describe('fetchExperience transport (real generated Delivery client)', () => {
       expect(request(fetch).body).toEqual({
         extensions: { personalization: { profileId: 'profile', preflight: expected } },
       });
+      expect(personalization).toEqual(original);
     }
   );
 

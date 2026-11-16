@@ -325,7 +325,9 @@ Independent profile-only reads with a concrete profile can still run concurrentl
 
 Built XDA events retain `context.gdpr`. Default Web-built page context follows the
 [documented browser metadata](../runtime/README.md#xda-preflight-and-profile-finalization);
-raw caller-built XDA metadata is not sanitized.
+raw caller-built XDA metadata passes through Client's canonical schema parsing,
+which applies defaults and strips undeclared fields except schema catchalls
+without mutating input.
 Ordinary by-ID and destination fetches default supplied
 `personalization.preflight` to `false`, requesting commitment of events and profile
 changes through XDA. An explicit `true` evaluates without commitment; XDA itself
@@ -527,7 +529,10 @@ XDA runs event chains concurrently with `Promise.all`, preserving the input arra
 order; each event's handler chain remains sequential. Valid consent-blocked events
 are omitted without cancelling the profile/content fetch. Hook/schema failures
 reject before transport. Client owns final XDA request validation and serialization,
-preserving supported event fields and caller input. Passing raw events to another
+using canonical Optimization schemas to preserve supported fields, apply defaults
+and strip undeclared fields except schema catchalls without mutating input. XDA
+rejects `exo_node_view` and null property/trait values; direct Optimization sends
+retain their own contract. Passing raw events to another
 ordinary fetch runs the chain again and is not exact replay. The actual server Node producer
 retains finalized events for XDA evaluation and optional browser commit without repeating hooks.
 The actual Node transfer producer runs event chains sequentially, matching Optimization; browser
@@ -1070,7 +1075,7 @@ const result = await experiences.hydrateAndTrackCurrentPage(handoff, {
 ```
 
 The SDK validates scope and cache safety before state/event work, and replay
-schema/order/count/current consent/capacity before admission. The Node producer retains raw final Client events,
+schema/order/count/current consent/capacity before admission. The Node producer retains final Client events,
 including query arrays, without a server replay-compatibility check before XDA;
 receiving refusal leaves available content usable. The existing event wire union
 covers raw Client and normal SDK events without a new DTO or safety layer. See the [Runtime aggregate contract](../runtime/README.md#shared-handoff-primitives) for optional-page replay and complete-operation rules.

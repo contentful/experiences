@@ -12,7 +12,10 @@ import type { ContentfulExperiences } from '../../sdk/contentful-experiences.js'
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from '../../sdk-info.js';
 
 /** Stable runtime dependencies only; no clients, request state, consent or transport. */
-export function requestRuntimeFixture() {
+export function requestRuntimeFixture(): Pick<
+  ContentfulExperiences,
+  'config' | 'locale' | 'interceptors' | 'eventBuilder'
+> {
   const config: ContentfulExperiences['config'] = {
     spaceId: 'space',
     environmentId: 'environment',

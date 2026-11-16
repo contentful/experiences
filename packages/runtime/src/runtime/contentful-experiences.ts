@@ -71,16 +71,12 @@ export type EventBuilderOptions = Omit<EventBuilderConfig, 'channel' | 'library'
   library?: Partial<EventBuilderConfig['library']>;
 };
 
-/** Caller-built events are validated against XDA after owner interception. */
-export type FetchPersonalizationOptions = Omit<BuiltPersonalizationOptions, 'events'> & {
-  events?: (NonNullable<BuiltPersonalizationOptions['events']>[number] | PersonalizationEvent)[];
-};
-
 type FetchEventArguments =
   | ({ type: 'identify' } & IdentifyBuilderArgs)
   | ({ type: 'page' } & PageViewBuilderArgs)
   | ({ type: 'track' } & TrackBuilderArgs);
-type BuiltFetchEvent = NonNullable<FetchPersonalizationOptions['events']>[number];
+type BuiltFetchEvent =
+  NonNullable<BuiltPersonalizationOptions['events']>[number] | PersonalizationEvent;
 type BuiltFetchPersonalization = Omit<BuiltPersonalizationOptions, 'events'> & {
   events?: BuiltFetchEvent[];
 };
@@ -89,6 +85,9 @@ export type PersonalizationOptions = Omit<BuiltPersonalizationOptions, 'events'>
   /** Event builder arguments or already-built XDA events; no page is added implicitly. */
   events?: (FetchEventArguments | BuiltFetchEvent)[];
 };
+
+/** Fetch personalization input, validated against XDA after owner interception. */
+export type FetchPersonalizationOptions = PersonalizationOptions;
 
 type RuntimeExperienceOptions<T> = Omit<T, 'spaceId' | 'environmentId' | 'personalization'> & {
   personalization?: PersonalizationOptions;

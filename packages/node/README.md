@@ -177,7 +177,7 @@ const plan = await request.fetchExperience(
 );
 ```
 
-The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's complete `plan.personalization.profile` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. This is local adoption, not upstream finalization; a newly previewed ID remains provisional and a subsequent profile-only fetch can fail with Personalization API GET 404. The preview-generated ID can instead be reused by a subsequent Personalization API POST carrying events, through XDA or a direct event call. Supplying a profile or events switches the XDA call to POST; that SDK-to-XDA method does not change XDA's internal profile-only GET. The Client boundary validates personalization and preserves built event fields, including `context.gdpr` and `context.page.title`, without mutating caller input. To request a source map in the same call, add `extensions: { sourceMap: {} }`. See [XDA preflight and profile finalization](../runtime/README.md#xda-preflight-and-profile-finalization) for chained evaluation and independent browser submission.
+The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's complete `plan.personalization.profile` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. This is local adoption, not upstream finalization; a newly previewed ID remains provisional and a subsequent profile-only fetch can fail with Personalization API GET 404. The preview-generated ID can instead be reused by a subsequent Personalization API POST carrying events, through XDA or a direct event call. Supplying a profile or events switches the XDA call to POST; that SDK-to-XDA method does not change XDA's internal profile-only GET. The Client boundary validates personalization after interception and preserves supported fields, including `context.gdpr` and `context.page.title`, without mutating caller input. See [Client validation](../client/README.md#fetchexperienceexperienceoptions-clientoptions-resolveoptions) for schema defaults and XDA exclusions. To request a source map in the same call, add `extensions: { sourceMap: {} }`. See [XDA preflight and profile finalization](../runtime/README.md#xda-preflight-and-profile-finalization) for chained evaluation and independent browser submission.
 
 Ordinary by-ID and destination fetches default supplied personalization to
 `preflight: false`, requesting commitment of events and profile changes. Pass
@@ -250,7 +250,7 @@ pathname plus search beginning with `/`. The first two arguments retain ordinary
 fetch/resolve shapes. Node exports `FetchExperienceForHandoffResult` with full
 `handoff`, optional `plan` and optional `error`. Finalized replay survives
 content fetch/resolve failure; invalid route, hook/schema failure or stale ownership
-does not promise usable replay. The producer captures raw final Client events,
+does not promise usable replay. The producer captures final Client events,
 including query arrays, unchanged without a server replay-compatibility check before
 XDA. Normal SDK builder Personalization API validation and Client XDA validation suffice; manually
 built/raw transmission remains the consumer's compatibility risk. Receiving replay
@@ -408,8 +408,8 @@ not a consent refusal. A valid transformed event blocked by consent is reported
 through `onEventBlocked` with its transformed method/type and the existing blocked
 return contract. In XDA calls, those blocked events are removed while preserving
 order and the profile/content fetch; hook or schema errors reject before transport.
-Client remains responsible for XDA request validation and serialization, preserving
-the full supported event shape and caller input.
+Client remains responsible for canonical XDA request validation and serialization,
+preserving supported event fields without mutating caller input.
 
 The Node root exports `InterceptorManager`, `Interceptor`, `InterceptorMerge`,
 `MaybePromise`, and `OptimizationEventStreamEvent`, using the same names as Web;

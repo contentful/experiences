@@ -328,10 +328,12 @@ includes `title`, `hash`, `width` and `height`. Shared `buildPageView` keeps the
 required `properties.title` string fallback; explicit `page` context and raw
 caller-built XDA/Node/Client metadata remain caller-owned.
 Client validates final XDA events with the canonical Optimization schemas,
-including their defaults and omission of undeclared fields, without mutating caller
-input. Keep its direct Optimization API client and `zod` dependencies. XDA events
-exclude `exo_node_view` and null property/trait values. Validate transformed output
-after interception and before final consent callbacks/publication.
+including their defaults and omission of undeclared fields except schema catchalls,
+without mutating caller input. Keep its direct Optimization API client and `zod`
+dependencies. XDA events exclude `exo_node_view` and null property/trait values.
+Validate transformed output after interception and before final consent callbacks
+or publication. See [Client validation](./packages/client/README.md#fetchexperienceexperienceoptions-clientoptions-resolveoptions)
+for the event contract.
 Ordinary SSR uses Node fetch; CSR and
 browser-local navigation/actions use Web fetch, accepting existing type-tagged arguments or raw built events
 with SDK-owned construction once. Only actual server-to-browser transfers retain
@@ -404,14 +406,14 @@ Future framework adapters slot in under the same naming pattern: `packages/adapt
 
 ---
 
-Only the actual hybrid Node transfer producer prepares replay. It preserves raw
-final Client events, including supported query arrays, unchanged without an
+Only the actual hybrid Node transfer producer prepares replay. It preserves final
+canonically parsed Client events, including supported query arrays, unchanged without an
 additional replay-compatibility check before XDA. Normal SDK builder Personalization API
 validation and Client XDA validation remain; manually built/raw replay retains
 consumer-owned compatibility risk. Receiving browser replay checks still enforce
 schema/order/count, capacity, scope/cache/consent and lifetime. Refusing replay
-does not discard available content. Ordinary fetch retains the wider XDA
-contract; ordinary SSR uses normal fetch and has no replay requirement. See [Runtime replay transport limits](./packages/runtime/README.md#replay-transport-limits).
+does not discard available content. Ordinary fetch uses the same canonical Client
+validation; ordinary SSR uses normal fetch and has no replay requirement. See [Runtime replay transport limits](./packages/runtime/README.md#replay-transport-limits).
 
 Prepared event attempts publish only after the whole batch is admitted and before
 transport begins; refusal publishes none. Preserve the original operation revision

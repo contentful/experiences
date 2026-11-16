@@ -5,7 +5,7 @@ import { serializeHandoff } from '../../cache/serialization.js';
 
 const scope = { spaceId: 'space', environmentId: 'master' };
 
-it('serializes the actual Node producer replay after content failure with absent nested SDK fields', async () => {
+it('serializes the actual Node producer replay after content failure with absent optional SDK fields', async () => {
   const failure = new Error('content failed');
   class FailedContentRuntime extends ContentfulExperiences {
     override async fetchExperiencePayload(): Promise<ExperiencePayload> {
@@ -31,8 +31,6 @@ it('serializes the actual Node producer replay after content failure with absent
   });
   try {
     const event = request.eventBuilder.buildPageView();
-    Object.assign(event.context.page!, { hash: undefined, width: undefined, height: undefined });
-    Object.assign(event.properties, { category: undefined });
     const result = await request.fetchExperienceForHandoff(
       { experienceId: 'home', personalization: { events: [event] } },
       { config: { components: {} } },

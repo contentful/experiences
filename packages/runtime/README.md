@@ -12,10 +12,7 @@ type, while the Web leaf owns its observable value.
 
 The shared base and Node do not impose a singleton restriction. Multiple Node instances can coexist, and each `forRequest()` facade belongs to its creating instance. Web owns a `globalThis` lock allowing one live Experiences Web SDK per JavaScript runtime. Its `destroy()` stops browser-owned work before releasing that lock.
 
-Client remains the lower-level Delivery and free-function boundary. Runtime imports `ContentfulViewDeliveryClient`, `fetchExperiencePayload`, host constants, and XDA-derived request types from `@contentful/experiences-client`. Client has no dependency on Runtime. It supplements generated XDA validation only for
-`context.gdpr.isConsentGiven` (boolean) and optional `context.page.title` (string),
-using local primitive constraints in `zod/mini`. Existing XDA event/context
-contracts and the generated passthrough result are preserved. Core remains dependency-free.
+Client remains the lower-level Delivery and free-function boundary. Runtime imports `ContentfulViewDeliveryClient`, `fetchExperiencePayload`, host constants, and XDA-derived request types from `@contentful/experiences-client`. Client has no dependency on Runtime. It validates XDA events with the canonical Optimization event schemas, applying defaults and omitting undeclared fields except schema catchalls without mutating caller input. Its XDA boundary also rejects unsupported event variants and null property/trait values. Core remains dependency-free.
 
 ## Shared base
 
@@ -484,7 +481,7 @@ explicit `context.page` input alongside `properties.title` and `context.gdpr`.
 
 ### Replay transport limits
 
-The actual Node transfer producer captures raw final Client events unchanged,
+The actual Node transfer producer captures final Client events unchanged,
 including supported `context.page.query` arrays, and preserves available content.
 Normal SDK-built events already pass Personalization API builder validation and Client XDA
 validation; no additional server replay-compatibility validation is required before
@@ -495,8 +492,8 @@ types in the existing wire contract, without a new DTO.
 The receiving browser retains existing replay schema/order/count, capacity,
 scope/cache/consent and lifetime checks. It may refuse unsupported replay while
 available content remains usable. The pinned Personalization API client's schema/serialization
-remains the commit boundary; wider XDA metadata/query arrays do not establish
-exact replay compatibility. Add no SDK safety-validation layer, custom transport
+remains the commit boundary; canonical XDA parsing alone does not establish
+replay admission under the browser's other checks. Add no SDK safety-validation layer, custom transport
 or dependency upgrade.
 
 Prepared event attempts publish only after the whole batch is admitted and before

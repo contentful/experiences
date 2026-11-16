@@ -40,13 +40,21 @@ By-ID options accept a first-class `personalization` object containing a profile
 with Optimization's event types. Client validates events directly with the
 Identify, PageView, ScreenView, Track and View schemas from
 `@contentful/optimization-api-client/api-schemas`. Their canonical parsing rules
-apply, including the `en-US` locale default and omission of undeclared fields,
-without mutating input. Supported channels are `mobile`, `server` and `web`.
+apply, including the `en-US` locale default and omission of undeclared fields
+except schema catchalls, without mutating input. Supported channels are `mobile`, `server` and `web`.
 Events require campaign context and original/sent timestamps; page properties
 require a title, Track properties and Identify traits are required, and country
 codes must contain two characters. XDA does not support Optimization's
 `exo_node_view` event or null property/trait values; Client rejects those before
-transport. Invalid input throws `TypeError` before Delivery is called.
+transport. Screen events require `name` and `context.screen`; screen properties
+are optional. `context.gdpr.isConsentGiven` is boolean, optional
+`context.page.title` is a string, and page query values accept `string | string[]`.
+Invalid input throws `TypeError` before Delivery is called.
+
+Node/Web separately stamp admitted events with owner consent before interception,
+preserving caller input and allowing explicit interceptor transforms. They validate
+transformed events after interception and before final consent callbacks or Web
+event publication; malformed transformed fields reject before transport.
 
 The generated dev.13 request supports optional `personalization.preflight`.
 Client validates the boolean and defaults supplied personalization to `false`
@@ -64,8 +72,8 @@ for finalization requirements and the subsequent GET limitation. Node's
 transfer, with `{ routeKey }` as its third argument. It retains finalized replay
 for optional explicit browser consumption; ordinary SSR/CSR uses ordinary fetch
 and relies on verified upstream commitment behavior. Handoff is never content
-Retry input. Replay compatibility remains stricter than ordinary XDA's supported
-metadata/query arrays. Client owns no consent, construction or replay decision.
+Retry input. Both ordinary XDA fetches and the transfer producer use canonical
+Client parsing, including supported query arrays. Client owns no consent, construction or replay decision.
 
 By-ID `parameters` accepts strings, numbers, and one-level Records of strings/numbers:
 `{ featuredPosts: { limit: 6, order: '-fields.title' } }`. IDs are declared in
@@ -261,7 +269,7 @@ const client = new ContentfulViewDeliveryClient({
 - Do not import `@contentful/experience-delivery` from anywhere except this package.
 - Re-export only what framework adapters need to surface to their users.
 - Keep `fetchExperience` thin — fetch + cast + resolve. Business logic belongs in `packages/core`.
-- Validate personalization with the canonical Optimization event schemas, retaining their defaults and omission of undeclared fields. Keep the direct Optimization API client and `zod` dependencies; reject XDA-unsupported event variants and null property/trait values. Do not import Runtime or `EventBuilder` into Client.
+- Validate events directly with `@contentful/optimization-api-client/api-schemas`, preserving canonical defaults and unknown-field stripping except schema catchalls. Keep the generated request/event type intersection and XDA exclusions for `exo_node_view` and null property/trait values. Keep the direct Optimization API client and `zod` dependencies; do not import Runtime or `EventBuilder` into Client.
 - Name mappings between SDK options and delivery-client options live in `create-delivery-client.ts` — one place to change.
 
 ## License
