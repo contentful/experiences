@@ -5,7 +5,7 @@ from locally built npm tarballs. It has its own dependencies, configuration, and
 tooling, outside the root npm workspaces. It follows Optimization's Express/EJS
 layout and request-facade pattern. It builds optional identify and one page into
 XDA evaluation through ordinary Node fetch and renders available plans. This SSR
-flow does not commit XDA-carried events. `GET /health` makes no API calls.
+flow commits admitted XDA-carried intent through ordinary fetch. `GET /health` makes no API calls.
 
 ## Request flow
 
@@ -15,7 +15,8 @@ flow does not commit XDA-carried events. `GET /health` makes no API calls.
 user agent from request context. No direct `request.identify()` / `request.page()`
 is required before rendering. Ordinary `request.fetchExperience` builds admitted
 type-tagged arguments once, also accepting raw built XDA events. XDA evaluates with
-Personalization API preflight and returns a selected plan and locally adopted profile ID.
+`personalization.preflight: false` by default, committing admitted intent and returning
+a selected plan and locally adopted profile ID.
 This Node-only app creates no handoff and performs no aggregate commit.
 
 The lightweight best-effort loop compares distinct configured Experiences only.
@@ -68,15 +69,18 @@ See [Runtime preview limits](../../packages/runtime/README.md#shared-limitations
 
 ## Personalization contract and validation limits
 
-Event-bearing XDA always invokes Personalization API with `preflight: true`, without an override,
-and commits neither events nor profile creation/changes. New IDs are provisional;
-an existing concrete ID can remain concrete while previewed changes stay uncommitted.
+XDA defaults to `preflight: true`, which evaluates without committing events or
+profile creation/changes. The SDK explicitly defaults supplied personalization to
+`preflight: false` for ordinary fetches, so this SSR reference commits admitted intent.
+Node `forRequest({ preflight })` supplies a request default; an explicit per-call
+`personalization.preflight` wins. Explicit true keeps new IDs provisional and
+changes uncommitted.
 Profile-only XDA internally uses Personalization API GET, returning 404 for an uncommitted ID even
 when the SDK-to-XDA request is POST. SDK local adoption is not finalization. See
 [XDA preflight and profile finalization](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
 
-SSR XDA-carried events remain uncommitted as a tolerated service bug awaiting
-upstream force-commit support. There is no current force flag or SDK workaround.
+This Node-only reference uses the ordinary committed path and creates no browser
+replay. Actual hybrid producers instead pin preflight true and reject explicit false.
 Direct event APIs remain callable without becoming an initial rendering prerequisite
 or compensation. Preserve transformed-event validation, consent metadata and
 caller-input immutability. Local adoption and storage do not prove upstream commit.
@@ -94,7 +98,7 @@ The EJS shell uses Optimization's CSS, including its font stack, 1040px width,
 spacing, centered gray panels, and fixed 75dvh rows. Branding and the Experiences
 section label reflect this SDK. The States link requests one identify action on
 the next request. XDA selects Experience content from the embedded built events
-and chained SDK-owned profile ID during preflight evaluation.
+and chained SDK-owned profile ID during evaluation.
 
 Experiences returns nested plans instead of CDA entries. The recursive `nodes.ejs` partial
 renders this space's `title`, plain `text`, `richText.document`, and slot children.

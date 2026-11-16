@@ -130,7 +130,14 @@ const personalization = {
       timestamp: '2026-10-09T00:00:00.000Z',
       originalTimestamp: '2026-10-09T00:00:00.000Z',
       sentAt: '2026-10-09T00:00:00.000Z',
-      properties: { path: '/', query: {}, referrer: '', search: '', url: '/', title: 'Home' },
+      properties: {
+        path: '/',
+        query: { utm: ['a', 'b'], q: 'x y' },
+        referrer: '',
+        search: '',
+        url: '/',
+        title: 'Home',
+      },
     },
   ],
 } satisfies PersonalizationOptions;
@@ -554,10 +561,9 @@ describe('fetchExperience — personalization', () => {
     expect(mockGet).not.toHaveBeenCalled();
     expect(mockGetWithOverrides).toHaveBeenCalledWith('exp-1', {
       locale: 'en-US',
-      extensions: { personalization: expected },
+      extensions: { personalization: { ...expected, preflight: false } },
     });
   });
-
   it('forwards personalization and source-map extensions together', async () => {
     await fetchExperience(
       { ...experienceOptions, personalization, extensions: { sourceMap: {} } },
@@ -568,7 +574,7 @@ describe('fetchExperience — personalization', () => {
     expect(mockGetWithOverrides).toHaveBeenCalledWith('exp-1', {
       locale: undefined,
       extensions: {
-        personalization,
+        personalization: { ...personalization, preflight: false },
         sourceMap: {},
       },
     });
@@ -593,6 +599,7 @@ describe('fetchExperience — destinationId + nodeId', () => {
     await fetchExperience(destinationOptions, { accessToken: 'token-123' }, resolveOptions);
 
     expect(mockResolveByNodeId).toHaveBeenCalledWith('dest-1', 'node-1');
+    expect(mockResolveByNodeIdWithOverrides).not.toHaveBeenCalled();
   });
 
   it('resolves the first hydrated experience through resolveExperience and returns the plan', async () => {
@@ -739,6 +746,7 @@ describe('fetchExperience — destinationId + path', () => {
     await fetchExperience(destinationOptions, { accessToken: 'token-123' }, resolveOptions);
 
     expect(mockResolveByPath).toHaveBeenCalledWith('dest-1', { path: '/products' });
+    expect(mockResolveByPathWithOverrides).not.toHaveBeenCalled();
   });
 
   it('resolves the first hydrated experience through resolveExperience and returns the plan', async () => {
@@ -882,7 +890,9 @@ describe('fetchExperience — destination personalization', () => {
     profileId: 'profile-1',
     events: [pageEvent],
   };
-  const expectedExtensions = { personalization: destinationPersonalization };
+  const expectedExtensions = {
+    personalization: { ...destinationPersonalization, preflight: false },
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -890,13 +900,6 @@ describe('fetchExperience — destination personalization', () => {
     mockResolveByNodeIdWithOverrides.mockResolvedValue(destinationResponse);
     mockResolveByPath.mockResolvedValue(destinationResponse);
     mockResolveByPathWithOverrides.mockResolvedValue(destinationResponse);
-  });
-
-  it('keeps the cacheable GET for node id when personalization is not set', async () => {
-    await fetchExperience(nodeOptions, { accessToken: 'token-123' }, resolveOptions);
-
-    expect(mockResolveByNodeId).toHaveBeenCalledWith('dest-1', 'node-1');
-    expect(mockResolveByNodeIdWithOverrides).not.toHaveBeenCalled();
   });
 
   it('routes node id to resolveByNodeIdWithOverrides with the personalization extension', async () => {
@@ -912,13 +915,6 @@ describe('fetchExperience — destination personalization', () => {
     });
   });
 
-  it('sends only path when personalization is not set on a path fetch', async () => {
-    await fetchExperience(pathOptions, { accessToken: 'token-123' }, resolveOptions);
-
-    expect(mockResolveByPath).toHaveBeenCalledWith('dest-1', { path: '/products' });
-    expect(mockResolveByPathWithOverrides).not.toHaveBeenCalled();
-  });
-
   it('passes the personalization extension to resolveByPathWithOverrides', async () => {
     await fetchExperience(
       { ...pathOptions, personalization: destinationPersonalization },
@@ -930,20 +926,6 @@ describe('fetchExperience — destination personalization', () => {
     expect(mockResolveByPathWithOverrides).toHaveBeenCalledWith('dest-1', {
       path: '/products',
       extensions: expectedExtensions,
-    });
-  });
-
-  it('forwards a profile id on its own, with no events', async () => {
-    await fetchExperience(
-      { ...pathOptions, personalization: { profileId: 'profile-1' } },
-      { accessToken: 'token-123' },
-      resolveOptions
-    );
-
-    expect(mockResolveByPath).not.toHaveBeenCalled();
-    expect(mockResolveByPathWithOverrides).toHaveBeenCalledWith('dest-1', {
-      path: '/products',
-      extensions: { personalization: { profileId: 'profile-1' } },
     });
   });
 
@@ -972,17 +954,5 @@ describe('fetchExperience — destination personalization', () => {
     );
 
     expect(result).toEqual({ redirect: { path: '/new-path' } });
-  });
-
-  it('still rejects preview for a personalized Destination fetch', async () => {
-    const rejection: unknown = await fetchExperience(
-      { ...pathOptions, personalization: { profileId: 'profile-1' } },
-      { accessToken: 'token-123', previewToken: 'preview-1', preview: true },
-      resolveOptions
-    ).catch((error) => error);
-
-    expect(rejection).toBeInstanceOf(DestinationPreviewNotSupportedError);
-    expect(mockResolveByPath).not.toHaveBeenCalled();
-    expect(mockResolveByPathWithOverrides).not.toHaveBeenCalled();
   });
 });

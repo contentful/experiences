@@ -34,6 +34,8 @@ export interface ServerRequestResult extends RequestResult {
 }
 
 export interface ServerRequestPolicy {
+  /** SSR commits on the server; hybrid previews there and commits browser replay. */
+  readonly mode?: ServerValue<'ssr' | 'hybrid'>;
   readonly experience: ServerValue<FetchExperienceOptions>;
   readonly resolveOptions?: ServerValue<Omit<FetchResolveOptions, 'config'>>;
   readonly metadataKeys?: readonly string[];
@@ -104,6 +106,7 @@ export function serializeRequestResult(
       ...(result.plan ? { plan: serializePlan(result.plan, options) } : {}),
       ...(result.contentError ? { contentError: result.contentError } : {}),
       ...(result.handoff ? { handoff: result.handoff } : {}),
+      ...(result.initialPageOwner ? { initialPageOwner: result.initialPageOwner } : {}),
       ...(result.initialPagePayload ? { initialPagePayload: result.initialPagePayload } : {}),
       ...(result.preview === undefined ? {} : { preview: result.preview }),
     })

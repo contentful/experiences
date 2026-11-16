@@ -29,7 +29,7 @@ result. Its plan and full handoff are reused by the presentation and root; suppl
 plans require no startup browser fetch or duplicate initial page. Later comparison
 IDs fetch sequentially without events on a separate identity-free Node request;
 repeated containers reuse plans. The comparison request retains locale and preview
-policy, and is destroyed after loading. It never inherits the primary's provisional
+policy and the selected rendering mode's preflight policy, and is destroyed after loading. It never inherits the primary's provisional
 XDA profile ID or changes the primary identity used for handoff and persistence.
 Their ordering, identity and results are application-owned diagnostic behavior;
 the SDK adds no multi-Experience controller, prefetch/result list or reconciliation.
@@ -41,6 +41,8 @@ the SDK server loader itself prepares every actual non-preview load.
 The application-owned `ReferenceRenderingMode` selects `hybrid` or `server-only`.
 Add `?mode=server-only` to either router's diagnostic routes for Node-rendered content with
 optional browser analytics. Add `&analytics=off` to omit the browser owner.
+The bindings set `request.mode: 'ssr'` for server-only rendering and `'hybrid'`
+for actual transfers; the single-Experience routes explicitly use hybrid (the SDK default).
 SSR-only controls use App Server Actions returning server JSX, or Pages Router
 roundtrips through `getServerSideProps`. They perform no Web content fetch,
 resolution or content rendering. Content remains visible while updates are pending
@@ -184,8 +186,10 @@ fetches it after its primary when they differ. Official support is one Experienc
 comparisons leave ordering, identity and result handling to the application and
 provide no SDK multi-Experience or cross-fetch guarantee. Only an actual
 server-to-browser transfer uses the Node full handoff result producer. Content
-presentation does not depend on replay or submission success. XDA preflight leaves
-ordinary SSR/CSR events uncommitted; this app adds no Personalization API compensation or force flag.
+presentation does not depend on replay or submission success. Ordinary SSR/CSR
+fetches default supplied personalization to `preflight: false`, committing admitted
+intent. Hybrid server requests use true before admitted browser replay; XDA itself
+defaults to true. This app adds no compensating Personalization API calls.
 
 The initial ordinary fetch carries literal page-builder arguments and, only for
 `?userId=charles`, literal identify arguments with `traits: { identified: true }`.
@@ -234,6 +238,11 @@ URL identify intent, and retains the same browser root. View keys clear nonpage
 action intent on route changes; Utilities reads initial URL intent, successful server
 Identify intent and the SDK profile. Each `RequestResult` carries its
 request identity, route, descriptor, optional plan/error and optional handoff.
+Actual SSR attempts additionally mark `initialPageOwner: 'server'` and carry
+private state hydration without replay. Matching browser adoption suppresses a
+duplicate initial page, including after server consent drops or ambiguous errors;
+page ownership does not prove commitment. Ordinary browser navigation retains
+its own page behavior.
 Both client request families receive that complete result through their root and
 presentation, retaining its `requestId` history guard. Ordinary top-level
 `Experience` remains the explicit Web flow for fresh actions and event-free
@@ -243,7 +252,8 @@ for result adoption, waiting, replay and preview behavior.
 ## Automatic App integration
 
 `src/single-experience-server.tsx` binds `config`, `request.experience` and
-`request.resolveOptions` through `bindAppRouterServerExperiences`. The request
+`request.resolveOptions`, with `request.mode: 'hybrid'`, through
+`bindAppRouterServerExperiences`. The request
 family owns framework context, render-local memoization, primary fetching,
 resolution and request cleanup. `src/components/SingleExperience.tsx` exports
 `ClientRequestRoot` and `ClientRequestExperience` from the client binding's request
@@ -342,7 +352,7 @@ boundary and JSON-safe result projection, without a manual serializer call in GS
 App's loader still exposes a raw server result, and its bound roots project
 automatically. Both diagnostic request families run the same caller-owned
 sequential comparison loop through `composeRequest`, with no events or second
-initialization; the layout reads only the shared primary. Comparisons change
+initialization. Comparison facades receive false for SSR and true for hybrid; the layout reads only the shared primary. Comparisons change
 neither its handoff nor its replay identity. The middleware only
 forwards context through the supported Node request-handler entry.
 

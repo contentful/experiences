@@ -182,6 +182,7 @@ describe('App Router request family', () => {
       { routeKey: '/?q=a+b' }
     );
     expect(doubles.fetch).not.toHaveBeenCalled();
+    expect(doubles.bind.mock.calls[0]![1].preflight).toBe(true);
     expect(doubles.destroy).toHaveBeenCalledTimes(1);
   });
 
@@ -229,11 +230,20 @@ describe('App Router request family', () => {
   it('keeps callbacks on the explicit server renderer', async () => {
     const renderError = () => null;
     const renderUnknown = () => null;
-    const binding = bindAppRouterServerExperiences(config);
+    const mode = vi.fn(() => 'ssr' as const);
+    const binding = bindAppRouterServerExperiences({
+      ...config,
+      request: { ...config.request, mode },
+    });
     const rendered = await binding.Experience({ experience: plan, renderError, renderUnknown });
     expect(rendered.props).toMatchObject({ renderError, renderUnknown });
     const requestRendered = await binding.request.Experience({ renderError, renderUnknown });
     expect(requestRendered?.props).toMatchObject({ renderError, renderUnknown });
+    expect((await binding.request.loadExperience()).initialPageOwner).toBe('server');
+    expect(mode).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ routeKey: '/?q=a+b' }));
+    expect(doubles.bind.mock.calls[0]![1].preflight).toBe(false);
+    expect(doubles.fetch).toHaveBeenCalledOnce();
+    expect(doubles.transfer).not.toHaveBeenCalled();
   });
 
   it.each([

@@ -12,6 +12,7 @@ import {
 } from '@contentful/experiences-web';
 import { useExperiences } from '@contentful/experiences-react/client';
 import { bindPagesRouterExperiences, PagesRouterRequestRoot } from './pages-router.js';
+import { profileFixture } from '../../adapter-react/src/test/profile.js';
 import type { RequestResult } from './request-result.js';
 
 const router = vi.hoisted(() => ({
@@ -35,27 +36,7 @@ const startup: RequestResult = {
     environmentId: 'master',
     cache: { scope: 'private-request' },
     state: {
-      profile: {
-        id: 'server-profile',
-        stableId: 'server-profile',
-        random: 0.5,
-        audiences: [],
-        traits: {},
-        location: {},
-        session: {
-          isReturningVisitor: false,
-          landingPage: {
-            path: '/',
-            query: {},
-            referrer: '',
-            search: '',
-            url: 'https://example.com/',
-          },
-          count: 1,
-          activeSessionLength: 0,
-          averageSessionLength: 0,
-        },
-      },
+      profile: profileFixture('server-profile'),
     },
   },
 };
@@ -108,6 +89,7 @@ describe('Pages managed request sequence', () => {
     } finally {
       container.remove();
       window.localStorage.clear();
+      vi.restoreAllMocks();
       vi.unstubAllGlobals();
     }
   });
@@ -127,31 +109,47 @@ describe('Pages managed request sequence', () => {
     for (const key of keys) expect(window.localStorage.getItem(key)).toBe('denied');
   });
 
-  it('adopts the destination result before asPath catches up without browser content fetching', async () => {
-    const { sdk, fetchExperience } = sdkFixture();
+  it('adopts SSR startup and destination results, then restores browser page ownership after departure', async () => {
+    let current!: ContentfulExperiences;
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    function Probe() {
+      current = useExperiences() as ContentfulExperiences;
+      return null;
+    }
     const {
       request: { ExperiencesRoot, Experience },
     } = bindPagesRouterExperiences({
       config: { components: {} },
+      spaceId: 'space',
+      environmentId: 'master',
+      delivery: { host: 'https://trusted-proxy.example' },
+      allowedEventTypes: [],
+      consent: { clientDefaults: { consent: false, persistenceConsent: false } },
     });
-    const tree = (experiences: RequestResult) => (
-      <ExperiencesRoot
-        delivery={{ accessToken: 'browser-token' }}
-        spaceId="space"
-        environmentId="master"
-        sdk={sdk}
-        result={experiences}
-      >
-        <Experience key={experiences.routeKey}>
-          {(result) => <output>{result.status}</output>}
-        </Experience>
+    const initial = { ...startup, initialPageOwner: 'server' as const };
+    const tree = (result: RequestResult) => (
+      <ExperiencesRoot result={result}>
+        <Probe />
+        <Experience key={result.routeKey}>{(state) => <output>{state.status}</output>}</Experience>
       </ExperiencesRoot>
     );
-
-    await act(async () => root.render(tree(startup)));
+    await act(async () => root.render(tree(initial)));
+    expect(current.states.profile.current?.id).toBe('server-profile');
     expect(container.textContent).toBe('success');
-    expect(fetchExperience).not.toHaveBeenCalled();
-
+    expect(fetch).not.toHaveBeenCalled();
+    const fetchExperience = vi.spyOn(current, 'fetchExperience').mockResolvedValue(plan);
+    vi.spyOn(current.api.personalization, 'upsertProfile').mockResolvedValue({
+      profile: profileFixture('server-profile'),
+      changes: [],
+      selectedOptimizations: [],
+    });
+    const page = vi.spyOn(current, 'trackCurrentPage');
+    await act(async () => {
+      current.consent({ events: true });
+    });
+    expect(page).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
     const start = router.events.on.mock.calls.find(([event]) => event === 'routeChangeStart')![1];
     const complete = router.events.on.mock.calls.find(
       ([event]) => event === 'routeChangeComplete'
@@ -160,22 +158,36 @@ describe('Pages managed request sequence', () => {
       start(destination, { shallow: false });
       root.render(tree(navigation));
     });
-
-    // New page props have committed while the router and browser still name Home.
+    // Destination props commit before the Pages router/browser URL catches up.
     expect(router.asPath).toBe('/pages');
     expect(window.location.pathname).toBe('/pages');
     expect(container.textContent).toBe('success');
     expect(fetchExperience).not.toHaveBeenCalled();
-
-    // Completion must preserve the already-settled request context, not merely
-    // join an in-flight request that happens to mask a second initial intent.
     await act(async () => {
       router.asPath = destination;
       window.history.replaceState(null, '', destination);
       complete(destination, { shallow: false });
       root.render(tree(navigation));
     });
+    // Completion does not repeat the page emitted when destination props committed.
+    expect(page).toHaveBeenCalledOnce();
     expect(fetchExperience).not.toHaveBeenCalled();
+    await act(async () => {
+      router.asPath = '/pages';
+      window.history.replaceState(null, '', router.asPath);
+      complete(router.asPath, { shallow: false });
+      root.render(tree(initial));
+    });
+    // Restored history uses ordinary managed fetch with fresh browser page intent.
+    expect(fetchExperience).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        personalization: {
+          events: [{ type: 'page', properties: expect.objectContaining({ path: '/pages' }) }],
+        },
+      }),
+      expect.anything(),
+      expect.objectContaining({ isCurrent: expect.any(Function) })
+    );
   });
 
   it('ignores hash, shallow and canceled transitions and waits for matching query props', async () => {

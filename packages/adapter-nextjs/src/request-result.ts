@@ -23,6 +23,8 @@ export interface RequestResult {
   readonly plan?: PortableRenderPlan;
   readonly contentError?: string;
   readonly handoff?: ExperiencesHandoff;
+  /** The server owns the initial attempt, including consent drops and ambiguous failures. */
+  readonly initialPageOwner?: 'server';
   readonly initialPagePayload?: ExperiencesRootProps['initialPagePayload'];
   /** Configuration only; the browser derives session and identity from its route and descriptor. */
   readonly preview?: PreviewContext;

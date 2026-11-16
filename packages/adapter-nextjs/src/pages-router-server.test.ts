@@ -151,6 +151,10 @@ describe('Pages native server response helper', () => {
       composeRequest: compose,
     });
     expect(compose).toHaveBeenCalledTimes(1);
+    expect(server.bindExperiencesRequest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ preflight: true })
+    );
     expect(request.fetchExperienceForHandoff).toHaveBeenCalledExactlyOnceWith(
       descriptor,
       { ...options.resolveOptions, config: { components: {} } },
@@ -231,6 +235,7 @@ describe('Pages native server response helper', () => {
   it('uses the configured locale and resolves server consent with the native context', async () => {
     const { context, bind } = setup();
     const consent = vi.fn(() => ({ events: true, persistence: true }));
+    const mode = vi.fn(() => 'ssr' as const);
     const factory = bindPagesRouterServerExperiences({
       ...scope,
       delivery: { accessToken: 'server-secret' },
@@ -238,7 +243,7 @@ describe('Pages native server response helper', () => {
       origin: 'https://example.com',
       locale: 'fr-FR',
       consent: { server: consent },
-      request: { experience: { experienceId: 'bound' } },
+      request: { experience: { experienceId: 'bound' }, mode },
     });
     await factory.request.loadExperience(context);
     expect(consent).toHaveBeenCalledExactlyOnceWith(
@@ -247,7 +252,9 @@ describe('Pages native server response helper', () => {
         routeKey: '/page?q=hello+world',
       })
     );
+    expect(mode.mock.calls).toEqual(consent.mock.calls);
     expect(bind.mock.calls.at(-1)?.[1]).toMatchObject({
+      preflight: false,
       locale: 'fr-FR',
       consent: { events: true, persistence: true },
     });

@@ -20,9 +20,13 @@ Normal fetch requires no handoff; no Web producer or Node aggregate commit remai
 Usable server replay survives content failure and browser admission is independent
 of SSR display. Direct event APIs are callable, not prerequisites or compensation.
 
-XDA always invokes Personalization API preflight and does not commit. SSR/CSR noncommit is a
-tolerated service bug awaiting upstream force-commit support, with no current flag
-or SDK workaround. Content Retry uses ordinary fetch of the same ID without events,
+XDA defaults to noncommitting `preflight: true`; ordinary SDK fetches explicitly
+default supplied personalization to `preflight: false`, committing admitted intent.
+An explicit per-call value wins over Node `forRequest({ preflight })`. Actual hybrid
+server transfers pin preflight to true, then the browser commits admitted replay.
+Hybrid server facades also set `preflight: true` for later ordinary XDA reads.
+Profile-only lookup of a provisional ID can still return upstream GET 404; add no
+synthetic events or workaround. Content Retry uses ordinary fetch of the same ID without events,
 builders, event hooks or replay; accepted incoming replay delivery retry is queue-owned.
 Reference-only later IDs use ordinary event-free fetch. See the
 [canonical Runtime contract](../packages/runtime/README.md#xda-preflight-and-profile-finalization).
@@ -58,7 +62,12 @@ in client modules. Next bindings accept `preview: { enabled, createClient, ...tr
 and own session inference, replacement and mode changes; do not add consumer
 preview-only wrappers/hooks/keys. Request results carry client-free preview configuration; roots derive sessions
 from existing route/descriptor data. Request history survives owned SDK replacement.
-The server and browser use matching deployment policy and separate credentials. `request.pagePayload` becomes `result.initialPagePayload`; pass
+The server and browser use matching deployment policy and separate credentials.
+Next request bindings select `request.mode: 'ssr'` for committed server-only work
+and `'hybrid'` (the default) for actual browser transfers. SSR results mark
+`initialPageOwner: 'server'` and carry private state hydration without replay;
+matching browser adoption does not compensate with a second initial page, including
+server consent drops or ambiguous errors. Ownership does not prove commitment. `request.pagePayload` becomes `result.initialPagePayload`; pass
 the complete result without overlays and retain the `requestId` history guard.
 `composeRequest` permits application-owned diagnostic composition on the same
 facade after every actual server primary fetch, including RSC and Pages data, before cleanup.

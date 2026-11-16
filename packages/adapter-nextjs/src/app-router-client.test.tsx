@@ -24,6 +24,7 @@ import {
   AppRouterRequestAnalyticsRoot,
   useAppAutoPageInputs,
 } from './app-router-client.js';
+import { profileFixture } from '../../adapter-react/src/test/profile.js';
 import { RequestPresentation } from './router-lifetime.js';
 
 const navigation = vi.hoisted(() => ({
@@ -41,21 +42,7 @@ vi.mock('next/navigation.js', () => ({
   useRouter: () => navigation.router,
 }));
 
-const profile = {
-  id: 'server-profile',
-  stableId: 'server-profile',
-  random: 0.5,
-  audiences: [],
-  traits: {},
-  location: {},
-  session: {
-    isReturningVisitor: false,
-    landingPage: { path: '/', query: {}, referrer: '', search: '', url: 'https://example.com/' },
-    count: 1,
-    activeSessionLength: 0,
-    averageSessionLength: 0,
-  },
-};
+const profile = profileFixture('server-profile');
 
 describe('App committed route inputs', () => {
   let container: HTMLDivElement;

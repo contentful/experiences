@@ -10,8 +10,11 @@ mock.module(new URL('./config.ts', import.meta.url).href, {
 });
 const { loadComparisons } = await import('./server-reference');
 
-test('comparisons omit primary identity, retain preview policy and dispose their request', async (t) => {
-  for (const isPreview of [false, true]) {
+test('comparisons omit primary identity, retain preview/preflight policy and dispose their request', async (t) => {
+  for (const [isPreview, preflight] of [
+    [false, true],
+    [true, false],
+  ] as const) {
     const calls: FetchOptions[] = [];
     sdk = new ContentfulExperiences({
       spaceId: 'space',
@@ -33,7 +36,8 @@ test('comparisons omit primary identity, retain preview policy and dispose their
     const comparisons = await loadComparisons(
       primary,
       { experienceId: ids[0] },
-      new URL('https://reference.invalid/?mode=server-only')
+      new URL('https://reference.invalid/?mode=server-only'),
+      preflight
     );
     assert.deepEqual(comparisons, [{ experienceId: ids[1], plan }]);
     assert.equal(calls.length, 1);
@@ -43,6 +47,7 @@ test('comparisons omit primary identity, retain preview policy and dispose their
     assert.deepEqual(primary.profile, initialProfile);
     assert.equal(factory.mock.calls.length, 1);
     assert.equal(factory.mock.calls[0]!.arguments[0]?.isPreview, isPreview);
+    assert.equal(factory.mock.calls[0]!.arguments[0]?.preflight, preflight);
     await assert.rejects(
       factory.mock.calls[0]!.result!.fetchExperience(
         { experienceId: ids[1] },

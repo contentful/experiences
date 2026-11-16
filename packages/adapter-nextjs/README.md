@@ -533,32 +533,55 @@ exported from a `'use client'` module, or a client-bound `createExperienceNode`
 receiving serializable snapshots. Slot JSX can cross this boundary; server-created
 handlers and DOM refs cannot. See [React root bindings](../adapter-react/README.md#attributed-rendering-and-dom-roots).
 
+Set `request.mode` to `'ssr'` for an ordinary server fetch that requests XDA
+commitment, or `'hybrid'` (the default) to preview the server batch and commit it
+through browser replay. The type is `ServerValue<'ssr' | 'hybrid'>`, so mode can
+resolve from the server request context; Pages also accepts per-load overrides.
+For example, `request: { mode: 'ssr', experience: { experienceId: 'home' } }`
+selects SSR page ownership. This setting is independent of editor `isPreview`,
+CPA and Preview Sessions; no browser mode is required.
+
 The App server `request` family memoizes one primary Experience result for
 `loadExperience`, `Experience`, `ExperiencesRoot` and `ExperiencesAnalyticsRoot`.
 Request roots and presentations receive one JSON-safe `result: RequestResult`:
 `requestId`, `routeKey`, event-free `experience`, optional `plan`, `handoff`,
-`contentError` string, `initialPagePayload` and optional credential/client-free `preview` context metadata. `requestId` distinguishes fresh results;
+`contentError` string, `initialPagePayload`, optional `initialPageOwner: 'server'`
+and optional credential/client-free `preview` context metadata. `requestId` distinguishes fresh results;
 request presentations accept no descriptor or seed overlays. App's `request.loadExperience` also
 retains server-local `experienceId` and raw `error`; browser projection excludes
 those fields and sanitizes the optional plan. Analytics roots omit that plan for
 opaque server children while preserving the handoff.
 Only the App opt-in path reads `headers()`/`cookies()`; configure the sanitized request
-handler first. `request.experience`, `initialEvents`, `pagePayload` and `resolveOptions`
+handler first. `request.mode`, `request.experience`, `initialEvents`, `pagePayload` and `resolveOptions`
 can be request-context resolvers. `ServerRequestPolicy` binds one primary request.
-Document, RSC and Pages data requests evaluate the primary Experience on Node using the
-transfer producer; preview uses ordinary fetch and suppresses events. Requests marked
+Document, RSC and Pages data requests evaluate the primary Experience on Node using
+ordinary fetch in SSR mode or the transfer producer in hybrid mode. The latter
+fixes `preflight: true` and rejects explicit per-call `false`; ordinary supplied
+personalization defaults to the request facade's mode-derived value (`false`
+in SSR and `true` in hybrid); explicit `personalization.preflight` overrides
+that default. Editor preview uses ordinary fetch and
+suppresses events. Requests marked
 as speculative (`next-router-prefetch`, `purpose` or `sec-purpose`) perform no primary
 fetch or composition, and their request `Experience` renders nothing even when a
 client presentation is injected. Next.js can also issue full prefetches without those markers;
 these follow the ordinary RSC path. Configure prefetching at the application boundary
 when server evaluation must wait for navigation. Each actual non-preview server
 load, document, RSC or Pages data, resolves `request.initialEvents` and `request.pagePayload`
-and appends the automatic page event for XDA evaluation and browser replay.
+and appends the automatic page event for XDA evaluation, with server commitment in
+SSR mode or browser replay in hybrid mode.
 Explicit `personalization.events` remains authoritative caller intent, including
 `events: []` to suppress automatic page intent. The resolved `request.pagePayload`
 also travels as `initialPagePayload` for browser fallback.
+Actual non-editor-preview SSR primary attempts set `initialPageOwner: 'server'`.
+For the matching `requestId` and route, browser roots hydrate the existing private
+profile/changes/identity state without replay and suppress initial page emission
+and fallback. The marker records ownership, not proof of event admission or
+commitment: suppression also applies when consent dropped the server event or
+the server outcome is ambiguous. Later browser consent grant does not compensate
+for that SSR page. Hybrid/CSR consent retry stays unchanged when the marker is
+absent, and fresh browser navigation resumes ordinary page behavior.
 Each fresh server preparation can emit a page event, including a same-route
-`router.refresh()`. Adopting the same exact result or prepared message IDs replays
+`router.refresh()`. Adopting the same exact hybrid result or prepared message IDs replays
 only once; a fresh preparation has fresh event identity. Ordinary Web SDK retry and
 refresh continue to use event-free fetches.
 High-level `cookie: CookieConfig` matches Web's shared identity
@@ -571,6 +594,10 @@ server primary fetch, including RSC and Pages data, before browser projection an
 not run for requests marked speculative. Diagnostic comparison ordering, identity changes, result handling and per-ID error
 isolation remain application-owned. The callback is an escape hatch, not a
 declarative prefetch/result list or SDK multi-Experience mechanism.
+Additional ordinary fetches through this facade inherit its mode-derived
+`preflight` default, and their events are not automatically included in the
+primary browser replay. Set `personalization.preflight: false` explicitly when
+an additional fetch's consent-admitted events should commit.
 Callback exceptions propagate; cleanup still runs. Server rendering retains raw metadata.
 
 Explicit no-page intent uses the existing `personalization.events: []` input.

@@ -221,8 +221,9 @@ export function Utilities({
       </div>
       <p className="control-panel__note">
         The SDK owns consent, identity and tracking. Identify and custom actions carry fresh XDA
-        intent; Retry carries no events. XDA preflight currently evaluates without committing.
-        Browser notifications count attempts, not confirmed delivery
+        intent; Retry carries no events. Ordinary XDA fetches commit admitted intent; hybrid server
+        evaluation uses preflight before browser replay. Browser notifications count attempts, not
+        confirmed delivery
         {serverOnly ? '; server events do not appear in this sidebar' : ''}.
       </p>
     </section>

@@ -131,6 +131,26 @@ describe('Next request presentation inputs', () => {
     expect(override).toHaveBeenCalledTimes(source === 'override' ? 1 : 0);
     expect(buildRoutePayload).toHaveBeenCalledTimes(!waiting && expected === 'route' ? 1 : 0);
   });
+  it('suppresses browser initial page work for a matching server-owned result', () => {
+    const Root = vi.fn((_props: BoundRootProps) => <></>);
+    const buildPagePayload = vi.fn();
+    renderToStaticMarkup(
+      <RequestPresentation
+        Root={Root}
+        result={{ ...result, initialPageOwner: 'server', handoff: undefined }}
+        routeKey="/page"
+        pageMode="analytics"
+        buildPagePayload={buildPagePayload}
+        buildRoutePayload={buildPagePayload}
+      />
+    );
+    expect(Root.mock.calls[0]![0]).toMatchObject({
+      buildPagePayload: undefined,
+      pageMode: undefined,
+    });
+    expect(buildPagePayload).not.toHaveBeenCalled();
+  });
+
   it('retains explicit root handoff and static page arguments without a request result', () => {
     const Root = vi.fn((_props: BoundRootProps) => <></>);
     renderToStaticMarkup(

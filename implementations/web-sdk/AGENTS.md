@@ -64,13 +64,15 @@ supported product usage or a cross-fetch guarantee.
   ownership after awaits and before further fetch, admission or UI work. Keep per-ID
   content errors separate from event outcomes; refusal does not block valid content.
 - Consent subscriptions update Utilities only and remain caller-owned. No profile
-  subscription refreshes content. XDA always forces Personalization API preflight; local adoption,
-  storage, admission and generic SDK success do not commit provisional profiles.
+  subscription refreshes content. Ordinary Web XDA fetches default supplied personalization
+  to `preflight: false`, committing admitted intent; explicit `true` evaluates without
+  committing. Local adoption, storage, admission and generic SDK success do not
+  independently prove commitment.
   Keep consent context and the default Web browser provider's title/hash/width/height
   metadata. Custom providers/arguments remain caller-owned; add no instance wrappers
   or event sanitizers. Refresh installed SDK artifacts. See
   [XDA preflight and profile finalization](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
-  Personalization API is actual commit transport; retain no standalone Personalization API preparation workflow.
+  XDA commits admitted ordinary intent through Personalization API; retain no standalone Personalization API preparation workflow.
 - Automatic tracking uses the existing getTrackingAttributes helper on each plan
   container and each node's roots. Web fetches request source maps automatically
   while any automatic type is enabled. Do not restore application lookup maps,

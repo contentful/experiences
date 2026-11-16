@@ -233,7 +233,8 @@ describe('managed Next Live Preview', () => {
       expect(container.textContent).toBe('preview');
       expect(fetch).toHaveBeenCalledWith(
         expect.objectContaining({ experienceId: 'primary' }),
-        expect.anything()
+        expect.anything(),
+        expect.objectContaining({ isCurrent: expect.any(Function) })
       );
       expect(network).not.toHaveBeenCalled();
     }

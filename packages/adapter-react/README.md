@@ -389,10 +389,14 @@ is omitted. Explicit `personalization.events` remains complete caller intent.
 Payload callbacks and objects may be inline. Their latest committed values are
 read when page intent is needed; replacing them does not restart the current
 handoff operation. Adding or removing payload capability still updates the owner.
-Ordinary XDA noncommit is
-tolerated without a compensating Personalization API call or accepted-route mark. Explicit replay
-and page/fallback operations
-retain Web's route admission and consent-change behavior.
+Ordinary managed event-bearing XDA fetches request commitment with
+`personalization.preflight: false`. The page sequence supplies route identity and
+liveness to Web, which owns page admission and deduplication. Consent-grant attempts
+use `trackCurrentPage`: Web waits for any pending fetch preparation and suppresses
+a duplicate when its final batch admits a committing page, including after
+transport failure. A blocked page or explicit `preflight: true` retains eligibility.
+Admission is not proof of service commitment. Explicit replay and page/fallback
+operations use the same Web tracker.
 Handoff cache safety and receiving scope are asserted before SSR children render;
 unsafe public/static handoffs and mismatched space/environment IDs throw before
 their profile state can reach presentation. Scope follows the captured managed

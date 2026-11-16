@@ -9,6 +9,7 @@ import {
   type ContentfulExperiences,
   type ExperiencesHandoff,
 } from '@contentful/experiences-web';
+import { ContentfulExperiences as RuntimeSdk } from '@contentful/experiences-runtime';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import { RuntimeContext } from './context.js';
 import { useRequestContext, type RequestContextValue } from './request-context.js';
@@ -22,10 +23,12 @@ const resetRevision = {};
 const onReset = () => undefined;
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((yes) => {
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<T>((yes, no) => {
     resolve = yes;
+    reject = no;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 describe('React route request and page coordination', () => {
@@ -136,7 +139,8 @@ describe('React route request and page coordination', () => {
           events: [{ type: 'page', properties: { route: '/' } }],
         },
       },
-      { config }
+      { config },
+      expect.objectContaining({ routeKey: '/', isCurrent: expect.any(Function) })
     );
     expect(runtime.trackCurrentPage).not.toHaveBeenCalled();
   });
@@ -152,7 +156,12 @@ describe('React route request and page coordination', () => {
     await requests.fetchExperience(runtime, request, { config }, false);
     const refresh = { ...request, personalization: { profileId: 'visitor' } };
     await requests.fetchExperience(runtime, refresh, { config }, true);
-    expect(runtime.fetchExperience).toHaveBeenNthCalledWith(1, request, { config });
+    expect(runtime.fetchExperience).toHaveBeenNthCalledWith(
+      1,
+      request,
+      { config },
+      expect.objectContaining({ isCurrent: expect.any(Function) })
+    );
     expect(runtime.fetchExperience).toHaveBeenNthCalledWith(2, refresh, { config });
     expect(request.personalization.events).toHaveLength(1);
     await act(async () => {
@@ -186,7 +195,8 @@ describe('React route request and page coordination', () => {
           experienceId: 'home',
           personalization: { events: [{ type: 'page', properties: { route: '/' } }] },
         },
-        { config }
+        { config },
+        expect.objectContaining({ isCurrent: expect.any(Function) })
       );
       initialized.resolve(plan);
       await expect(initial).resolves.toBe(plan);
@@ -266,27 +276,66 @@ describe('React route request and page coordination', () => {
     await act(async () => {
       consent.value = true;
     });
-    expect(runtime.fetchExperience).toHaveBeenCalledExactlyOnceWith(request, resolve);
+    expect(runtime.fetchExperience).toHaveBeenCalledExactlyOnceWith(
+      request,
+      resolve,
+      expect.objectContaining({ isCurrent: expect.any(Function) })
+    );
     expect(runtime.trackCurrentPage).not.toHaveBeenCalled();
     pending.resolve(plan);
     await expect(first).resolves.toBe(plan);
   });
-  it('retains the implicit consent-change page exception without refetching content', async () => {
-    vi.mocked(runtime.hasConsent).mockReturnValue(true); // Default page allowlist.
-    await render({ fetch: true });
-    expect(runtime.trackCurrentPage).not.toHaveBeenCalled();
-    await act(async () => {
-      consent.value = true;
-    });
-    expect(runtime.trackCurrentPage).toHaveBeenCalledTimes(1);
-    expect(runtime.fetchExperience).toHaveBeenCalledTimes(1);
-    await act(async () => {
-      consent.value = false;
-      consent.value = true;
-    });
-    expect(runtime.trackCurrentPage).toHaveBeenCalledTimes(2);
-    expect(runtime.fetchExperience).toHaveBeenCalledTimes(1);
-  });
+  it.each([true, false])(
+    'delegates consent retry to Web while XDA is pending (page allowlisted=%s)',
+    async (allowlisted) => {
+      const { ContentfulExperiences: ActualSdk } = await import('@contentful/experiences-web');
+      const sdk = new ActualSdk({
+        spaceId: 'space',
+        environmentId: 'master',
+        delivery: { accessToken: 'delivery' },
+        allowedEventTypes: allowlisted ? ['identify', 'page'] : ['identify'],
+        defaults: { profile: profileFixture('visitor'), consent: false, persistenceConsent: false },
+      });
+      runtime = sdk;
+      const preparation = deferred<void>();
+      const response = deferred<PortableRenderPlan>();
+      const content = vi
+        .spyOn(RuntimeSdk.prototype, 'fetchExperience')
+        .mockReturnValue(response.promise);
+      const send = vi
+        .spyOn(sdk.api.personalization, 'upsertProfile')
+        .mockResolvedValue({ profile: profileFixture('visitor') } as never);
+      sdk.interceptors.event.add(async (event) => {
+        await preparation.promise;
+        return event;
+      });
+      try {
+        await render({ fetch: true });
+        await act(async () => sdk.consent({ events: true }));
+        expect(send).not.toHaveBeenCalled();
+        await act(async () => preparation.resolve());
+        expect(content).toHaveBeenCalledOnce();
+        expect(
+          content.mock.calls[0]![0].personalization?.events?.map((event) => event.type)
+        ).toEqual(allowlisted ? ['page'] : []);
+        expect(send).toHaveBeenCalledTimes(allowlisted ? 0 : 1);
+        response.reject(new Error('content transport failed'));
+        await act(async () => {
+          await response.promise.catch(() => undefined);
+        });
+        expect(send).toHaveBeenCalledTimes(allowlisted ? 0 : 1);
+        await act(async () => sdk.consent({ events: false }));
+        await act(async () => sdk.consent({ events: true }));
+        expect(send).toHaveBeenCalledTimes(allowlisted ? 1 : 2);
+        expect(content).toHaveBeenCalledOnce();
+      } finally {
+        await act(async () => view.cleanup());
+        sdk.destroy();
+        content.mockRestore();
+        window.localStorage.clear();
+      }
+    }
+  );
   it('lets XDA finish during the callback and delegates overlapping page attempts to Web', async () => {
     const { ContentfulExperiences: ActualSdk } = await import('@contentful/experiences-web');
     const sdk = new ActualSdk({

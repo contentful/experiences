@@ -172,7 +172,15 @@ const plan = await request.fetchExperience(
 );
 ```
 
-The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's complete `plan.personalization.profile` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. This is local adoption, not upstream finalization; a newly previewed ID remains provisional and a subsequent profile-only fetch can fail with Personalization API GET 404. Supplying a profile or events switches the XDA call to POST. The Client boundary validates personalization and preserves built event fields, including `context.gdpr` and `context.page.title`, without mutating caller input. To request a source map in the same call, add `extensions: { sourceMap: {} }`. See [XDA preflight and profile finalization](../runtime/README.md#xda-preflight-and-profile-finalization) for chained evaluation and independent browser submission.
+The request facade supplies its current profile ID when a by-ID fetch does not specify one. An explicit per-call `personalization.profileId` wins. XDA's complete `plan.personalization.profile` updates that request facade for later fetches and events, unless a newer profile response has already taken ownership. This is local adoption, not upstream finalization; a newly previewed ID remains provisional and a subsequent profile-only fetch can fail with Personalization API GET 404. The preview-generated ID can instead be reused by a subsequent Personalization API POST carrying events, through XDA or a direct event call. Supplying a profile or events switches the XDA call to POST; that SDK-to-XDA method does not change XDA's internal profile-only GET. The Client boundary validates personalization and preserves built event fields, including `context.gdpr` and `context.page.title`, without mutating caller input. To request a source map in the same call, add `extensions: { sourceMap: {} }`. See [XDA preflight and profile finalization](../runtime/README.md#xda-preflight-and-profile-finalization) for chained evaluation and independent browser submission.
+
+Ordinary by-ID and destination fetches default supplied personalization to
+`preflight: false`, requesting commitment of events and profile changes. Pass
+`personalization: { preflight: true, events }` for evaluation without commitment.
+`forRequest({ preflight: true })` sets a request-wide XDA default; an explicit
+per-call `personalization.preflight` wins. This optional `RequestContext.preflight`
+does not change direct `identify`, `page`, `track` or Analytics methods, and is
+independent of editor `isPreview`, CPA and Preview Sessions.
 
 Plans can also expose optional `deliveryDiagnostics`, whose public
 `ExperienceDeliveryDiagnostic` records contain only string `fieldPath` and
@@ -212,11 +220,11 @@ closure. See the [ordinary XDA rendering recipe](../../README.md#xda-rendering-a
 ### Actual server-to-browser transfer
 
 For SSR use ordinary `request.fetchExperience` with the existing type-tagged
-arguments or raw built events above. XDA evaluates without committing; direct
+arguments or raw built events above. Supplied personalization defaults to
+`preflight: false`, requesting commitment through XDA; direct
 event APIs remain callable but are not rendering prerequisites or compensation.
-Ordinary SSR integrations do not prepare or consume replay. This remains the
-intended boundary after XDA gains commitment control; see
-[Runtime's current limitation, expected future behavior and release gate](../runtime/README.md#xda-preflight-and-profile-finalization).
+Ordinary SSR integrations do not prepare or consume replay. See
+[Runtime's preflight contract and live-service release gate](../runtime/README.md#xda-preflight-and-profile-finalization).
 
 Only an actual hybrid response uses the retained Node producer:
 
@@ -230,7 +238,9 @@ const { handoff, plan, error } = await request.fetchExperienceForHandoff(
 // Browser optionally consumes the explicitly supplied handoff independently of display.
 ```
 
-The third argument is `{ readonly routeKey: string }` only; `routeKey` is
+The producer always uses `preflight: true`, overriding any request default, and
+rejects an explicit per-call `personalization.preflight: false`. Browser replay
+uses `preflight: false`. The third argument is `{ readonly routeKey: string }` only; `routeKey` is
 pathname plus search beginning with `/`. The first two arguments retain ordinary
 fetch/resolve shapes. Node exports `FetchExperienceForHandoffResult` with full
 `handoff`, optional `plan` and optional `error`. Finalized replay survives
@@ -256,7 +266,7 @@ const plan = await request.fetchExperience({ experienceId }, { config: experienc
 This performs no event building, event hooks or replay. Reference-only later-ID
 comparisons also use ordinary event-free fetch; no cross-fetch guarantee applies.
 See [Runtime's canonical XDA contract](../runtime/README.md#xda-preflight-and-profile-finalization)
-for the tolerated SSR/CSR noncommit bug and hybrid replay ownership.
+for preflight, profile finalization and hybrid replay ownership.
 
 ## Custom flags
 
@@ -392,11 +402,11 @@ have no global interceptor registry.
 
 Only an actual server-to-browser transfer uses the Node producer described
 [above](#actual-server-to-browser-transfer). Ordinary SSR uses normal fetch and
-does not commit XDA-carried events. Optional explicit browser replay is governed
+requests commitment for supplied personalization by default. Optional explicit browser replay is governed
 by [Runtime](../runtime/README.md#xda-preflight-and-profile-finalization).
 
 Only actual server-to-browser transfers retain the Node producer; ordinary SSR
-uses normal fetch and does not commit XDA-carried events. Optional explicit browser
+uses normal fetch with `preflight: false` by default. Optional explicit browser
 consumption owns hybrid replay. Necessary state application stays internal to that
 complete operation. Route, transport locale, replay limits, scope/cache/consent/lifetime
 and serialization remain governed by the
@@ -408,11 +418,12 @@ fetch and never uses handoff as content input.
 
 For settings that occur at more than one scope, later scope wins:
 
-| Value                            | Precedence                                                                                                    |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `locale` for an experience fetch | constructor fallback → `forRequest()` context → `fetchExperience()` options                                   |
-| `metadata`                       | constructor defaults → `forRequest({ resolveOptions })` → method `resolveOptions`; objects are shallow-merged |
-| `debug`                          | constructor default → request `resolveOptions` → method `resolveOptions`                                      |
+| Value                            | Precedence                                                                                                        |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `locale` for an experience fetch | constructor fallback → `forRequest()` context → `fetchExperience()` options                                       |
+| XDA `personalization.preflight`  | ordinary default `false` → `forRequest({ preflight })` → explicit per-call boolean; handoff producer fixes `true` |
+| `metadata`                       | constructor defaults → `forRequest({ resolveOptions })` → method `resolveOptions`; objects are shallow-merged     |
+| `debug`                          | constructor default → request `resolveOptions` → method `resolveOptions`                                          |
 
 `false` remains meaningful for `debug`: the SDK uses nullish fallback rather than truthiness.
 The resolver `config` is required on each fetch or resolve call and is never

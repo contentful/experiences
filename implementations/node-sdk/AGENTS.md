@@ -21,8 +21,9 @@ supported product usage or a cross-fetch guarantee.
   Retry use ordinary event-free fetch, with no builders, hooks or replay.
   Reuse plans for repeated presentations. Profiles remain SDK-managed; add no
   manual input, cookies or sessions.
-- XDA preflight leaves this SSR intent uncommitted. This is a tolerated service bug
-  awaiting upstream force-commit support; add no SDK workaround or current force flag.
+- Ordinary Node XDA fetches default supplied personalization to `preflight: false`,
+  committing admitted SSR intent. Per-call values override `forRequest({ preflight })`;
+  `true` explicitly evaluates without committing. Add no compensating events.
   This app has no aggregate commit path or actual server-to-browser
   transfer and uses no handoff producer. Direct event APIs remain callable without
   becoming prerequisites or compensation. See

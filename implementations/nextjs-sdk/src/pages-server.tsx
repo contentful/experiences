@@ -112,6 +112,7 @@ export const getReferenceServerSideProps: GetServerSideProps<PagesReferenceProps
       ...(browser.web.preview ? { preview: browser.web.preview } : {}),
     },
     request: {
+      mode: serverOnly ? 'ssr' : 'hybrid',
       ...(action
         ? {}
         : {
@@ -128,7 +129,7 @@ export const getReferenceServerSideProps: GetServerSideProps<PagesReferenceProps
       },
 
       composeRequest: async (request, primary) => {
-        comparisons = await loadComparisons(request, primary, url);
+        comparisons = await loadComparisons(request, primary, url, !serverOnly);
         if (serverOnly)
           html = renderToStaticMarkup(
             <ServerPresentations

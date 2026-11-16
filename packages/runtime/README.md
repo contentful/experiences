@@ -256,14 +256,22 @@ callers own safe serialization and response-size policy.
 ## XDA preflight and profile finalization
 
 The generated dev.13 client exposes optional `personalization.preflight`.
-Client and the runtime leaves validate and forward it without selecting a default.
-Earlier service checks observed noncommitting Personalization API
-preflight; backend defaults and override behavior have not been reverified with
-dev.13. Treat newly returned IDs as provisional until profile finalization is
-verified; local Node/Web adoption, hydration, storage and queue admission do not
-prove commitment. Profile-only XDA uses
-Personalization API GET internally and may return 404 for an uncommitted ID, even when the
-SDK-to-XDA request is POST.
+Under the upstream contract, `true` previews events and profile changes without
+committing them; `false` commits them. XDA defaults an omitted value to `true`.
+Ordinary SDK and free-function fetches explicitly default supplied personalization
+to `preflight: false`, for by-ID and both destination forms. An explicit per-call
+boolean overrides that ordinary default; fetches without personalization do not
+add it. Node's `forRequest({ preflight })` supplies an XDA-only request default,
+with per-call `personalization.preflight` taking precedence. It does not change
+direct event methods.
+
+A preview-generated profile ID can be reused by a subsequent Personalization API
+POST carrying events, through XDA or a direct event call. It remains provisional
+until commitment: profile-only XDA uses Personalization API GET internally and
+may return 404 for an uncommitted ID, even when the SDK-to-XDA request is POST.
+Local Node/Web adoption, hydration, storage and queue admission do not prove
+commitment. This contract is distinct from editor `isPreview`, CPA fetching and
+Preview Sessions; those policies remain unchanged.
 
 The active content flow is:
 
@@ -283,31 +291,29 @@ and validates before XDA. Client accepts raw built events and owns serialization
 Normal fetch requires no handoff. Direct event APIs remain callable, but are
 neither an initial rendering prerequisite nor compensation for XDA noncommit.
 
-Earlier service checks observed uncommitted SSR/CSR XDA-carried events. The
-generated `personalization.preflight` option provides a request contract, not
-evidence that the deployed service commits events or finalizes profiles. Do not
-introduce Node aggregate commitment, a Web handoff producer,
-standalone Personalization API preparation, or a new API family to compensate.
+Ordinary SSR/CSR event-bearing fetches request commitment through XDA with
+`preflight: false`; an explicit `true` opts into evaluation without commitment.
+Do not introduce Node aggregate commitment, a Web handoff producer, standalone
+Personalization API preparation, or a new API family to compensate.
 
 For an actual hybrid server-to-browser transfer, preflight is intentional:
-Node evaluates content and supplies the events for browser commitment. Node's
+Node fixes `fetchExperienceForHandoff` to `preflight: true` and rejects an explicit
+per-call `false`, regardless of the request default. It evaluates content and
+supplies the events for browser commitment with `preflight: false`. Node's
 replay path is exercised only in that backend role; ordinary Node SSR has no
 replay requirement. The existing Node + Web and Next references provide those
 hybrid producer/consumer paths. Content display remains independent of replay
 admission and successful delivery.
 
-The intended ordinary SSR/CSR flow commits through XDA, without a replay workflow
-in SSR integrations. Hybrid server evaluation should retain preflight followed by
-browser commitment; browser-local navigation/actions remain ordinary Web fetches.
-The generated `personalization.preflight` option is forwarded, but this adaptation
-adds no default or automatic mode detection. Choosing Node alone does not identify
-SSR versus hybrid use. Integration policy must follow verified deployed behavior.
+Ordinary SSR uses no replay workflow. Hybrid server evaluation retains preflight
+followed by browser commitment; browser-local navigation/actions remain ordinary
+Web fetches. Choosing Node alone does not identify SSR versus hybrid use. Next's
+`request.mode` selects `'ssr'` or `'hybrid'` (default), while Web needs no mode setting.
 
-**Verification and release gates:** Reference integrations can be assessed under
-the previously observed noncommit limitation. Verification of the corrected
-service requires
-all tracked XDA issues affecting the supported integrations to be resolved,
-including preflight defaults and override behavior.
+**Verification and release gates:** The upstream contract above does not replace
+live-service verification. All tracked XDA issues affecting the supported
+integrations must be resolved, and deployed preflight defaults and override
+behavior must be verified.
 It must demonstrate full supported-event acceptance, real commitment and profile
 finalization through the appropriate SSR/CSR and hybrid paths. The SDK will not
 release until those issues are resolved and that verification passes against the
@@ -390,8 +396,9 @@ visitor work cannot publish after reset, consent withdrawal, supersession or des
 
 Optimization PR #549 at `f76f1ff04df1b466c98fc6ce5db6b569f9212438`
 remains the pinned ownership, consent, queues and lifetime reference. XDA content
-evaluation and its current noncommit service behavior require the differences
-above; full commit parity is not established. Actual Personalization API delivery
+evaluation and the split between ordinary commitment and hybrid preflight require
+the differences above; full commit parity still requires live-service verification.
+Actual Personalization API delivery
 retains generic retry ambiguity and no durable/exactly-once guarantee.
 
 The default Web page provider includes `title`, `hash`, `width` and `height`.

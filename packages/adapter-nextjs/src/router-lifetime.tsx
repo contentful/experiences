@@ -138,7 +138,9 @@ export function RequestPresentation({
   const initialPagePayload =
     matchingResult?.initialPagePayload ?? (result ? undefined : props.initialPagePayload);
   const events = matchingResult?.experience.personalization?.events;
-  const pageFree = events !== undefined && !events.some((event) => event.type === 'page');
+  const pageFree =
+    matchingResult?.initialPageOwner === 'server' ||
+    (events !== undefined && !events.some((event) => event.type === 'page'));
   const builder = props.buildPagePayload ?? configuredBuilder;
   const buildPagePayload = useCallback<NonNullable<ExperiencesRootProps['buildPagePayload']>>(
     (context) => {

@@ -129,7 +129,8 @@ describe('React Router mapping', () => {
           ],
         },
       }),
-      { config }
+      { config },
+      expect.objectContaining({ isCurrent: expect.any(Function) })
     );
     expect(getPagePayload).toHaveBeenCalledExactlyOnceWith({
       isInitialEmission: true,
@@ -176,7 +177,8 @@ describe('React Router mapping', () => {
           ],
         },
       }),
-      { config }
+      { config },
+      expect.objectContaining({ isCurrent: expect.any(Function) })
     );
     expect(getPagePayload).toHaveBeenCalledTimes(2);
     expect(getPagePayload).toHaveBeenLastCalledWith(

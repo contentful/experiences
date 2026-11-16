@@ -1,7 +1,9 @@
-import type {
-  RequestRuntime,
-  FetchExperienceOptions,
-  FetchResolveOptions,
+import {
+  parseExperiencesHandoffEnvelope,
+  type ExperiencesHandoff,
+  type RequestRuntime,
+  type FetchExperienceOptions,
+  type FetchResolveOptions,
 } from '@contentful/experiences-node';
 import { createPageContext } from './request-context.js';
 import {
@@ -21,6 +23,10 @@ export async function resolveRequestPolicy(
 ) {
   const policy = { ...options.request, ...overrides };
   if (!policy.experience) throw new TypeError('Request components require request.experience.');
+  const mode =
+    policy.mode === undefined ? 'hybrid' : await resolveServerValue(policy.mode, context);
+  if (mode !== 'ssr' && mode !== 'hybrid')
+    throw new TypeError('request.mode must be ssr or hybrid.');
   const descriptor = await resolveServerValue(policy.experience, context);
   if (
     descriptor.personalization?.events !== undefined &&
@@ -64,7 +70,7 @@ export async function resolveRequestPolicy(
         }
       : {}),
   };
-  return { policy, descriptor, resolveOptions, result };
+  return { policy, mode, descriptor, resolveOptions, result };
 }
 
 /** One primary fetch. Any additional fetches and their identity effects belong to composeRequest. */
@@ -74,7 +80,7 @@ export async function loadPrimaryExperience(
   context: ServerRequestContext,
   options: ServerConfig
 ): Promise<ServerRequestResult> {
-  const { policy, descriptor, resolveOptions, result } = resolved;
+  const { policy, mode, descriptor, resolveOptions, result } = resolved;
   let fetchOptions: FetchExperienceOptions = descriptor;
   let initialPagePayload: ServerRequestResult['initialPagePayload'];
   if (descriptor.personalization?.events === undefined && !request.isPreview) {
@@ -104,18 +110,35 @@ export async function loadPrimaryExperience(
   }
   let output: Pick<ServerRequestResult, 'plan' | 'error' | 'handoff'>;
   try {
-    output = !request.isPreview
-      ? await request.fetchExperienceForHandoff(fetchOptions, resolveOptions, {
-          routeKey: context.routeKey,
-        })
-      : { plan: await request.fetchExperience(fetchOptions, resolveOptions) };
+    output =
+      !request.isPreview && mode === 'hybrid'
+        ? await request.fetchExperienceForHandoff(fetchOptions, resolveOptions, {
+            routeKey: context.routeKey,
+          })
+        : { plan: await request.fetchExperience(fetchOptions, resolveOptions) };
   } catch (error) {
     if (!isContentError(error)) throw error;
     output = { error };
   }
+  if (!request.isPreview && mode === 'ssr') {
+    const personalization = output.plan?.personalization;
+    const profileId = personalization?.profile.id ?? request.profile?.id;
+    const handoff = parseExperiencesHandoffEnvelope(
+      {
+        spaceId: options.spaceId,
+        environmentId: options.environmentId,
+        cache: { scope: 'private-request' },
+        ...(profileId ? { profileId } : {}),
+        ...(personalization ? { state: personalization } : {}),
+      },
+      options
+    ) as ExperiencesHandoff;
+    output = { ...output, handoff };
+  }
   const primary = {
     ...result,
     ...output,
+    ...(!request.isPreview && mode === 'ssr' ? { initialPageOwner: 'server' as const } : {}),
     ...(initialPagePayload ? { initialPagePayload } : {}),
     ...(output.error !== undefined ? { contentError: 'Experience content unavailable.' } : {}),
   };

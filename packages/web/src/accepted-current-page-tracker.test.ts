@@ -32,6 +32,17 @@ describe('AcceptedCurrentPageTracker', () => {
     });
   });
 
+  it.each([true, false])('settles pending fetch admission (admitted=%s)', async (admitted) => {
+    const tracker = new AcceptedCurrentPageTracker();
+    const finish = tracker.prepare('/page');
+    const emit = vi.fn(async () => ({ accepted: true }));
+    const waiting = tracker.emitIfNeeded('/page', emit);
+    expect(emit).not.toHaveBeenCalled();
+    finish(admitted);
+    await expect(waiting).resolves.toEqual({ accepted: !admitted });
+    expect(emit).toHaveBeenCalledTimes(admitted ? 0 : 1);
+  });
+
   it('cannot let a stale same-route completion accept or release a new attempt after reset', async () => {
     const tracker = new AcceptedCurrentPageTracker();
     const old = deferred<{ accepted: boolean }>();
