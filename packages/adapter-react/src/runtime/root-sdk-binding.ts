@@ -8,22 +8,18 @@ import {
 
 export type OnStatesReady = (states: WebExperiencesRuntime['states']) => void | (() => void);
 
-export interface ExperiencesRootSdkBinding<
-  TSdk extends WebExperiencesRuntime = ContentfulExperiences,
-> {
+export interface RootSdkBinding<TSdk extends WebExperiencesRuntime = ContentfulExperiences> {
   readonly cleanup?: () => void;
   readonly ownsInstance: boolean;
   readonly sdk: TSdk;
 }
 
-export interface CreateInjectedExperiencesRootSdkBindingOptions<
-  TSdk extends WebExperiencesRuntime,
-> {
+export interface CreateInjectedRootSdkBindingOptions<TSdk extends WebExperiencesRuntime> {
   readonly sdk: TSdk;
   readonly onStatesReady?: OnStatesReady;
 }
 
-export interface CreateOwnedExperiencesRootSdkBindingOptions<
+export interface CreateOwnedRootSdkBindingOptions<
   TSdk extends WebExperiencesRuntime = ContentfulExperiences,
 > {
   readonly config: Config;
@@ -31,23 +27,21 @@ export interface CreateOwnedExperiencesRootSdkBindingOptions<
   readonly onStatesReady?: OnStatesReady;
 }
 
-export function createExperiencesRootSdkBinding<TSdk extends WebExperiencesRuntime>(
+export function createRootSdkBinding<TSdk extends WebExperiencesRuntime>(
   options:
-    | CreateInjectedExperiencesRootSdkBindingOptions<TSdk>
-    | (CreateOwnedExperiencesRootSdkBindingOptions<TSdk> & {
+    | CreateInjectedRootSdkBindingOptions<TSdk>
+    | (CreateOwnedRootSdkBindingOptions<TSdk> & {
         readonly createSdk: (config: Config) => TSdk;
       })
-): ExperiencesRootSdkBinding<TSdk>;
+): RootSdkBinding<TSdk>;
 // eslint-disable-next-line no-redeclare -- TypeScript overload, not a runtime redeclaration.
-export function createExperiencesRootSdkBinding(
-  options: CreateOwnedExperiencesRootSdkBindingOptions
-): ExperiencesRootSdkBinding;
+export function createRootSdkBinding(options: CreateOwnedRootSdkBindingOptions): RootSdkBinding;
 // eslint-disable-next-line no-redeclare -- TypeScript overload implementation.
-export function createExperiencesRootSdkBinding(
+export function createRootSdkBinding(
   options:
-    | CreateInjectedExperiencesRootSdkBindingOptions<WebExperiencesRuntime>
-    | CreateOwnedExperiencesRootSdkBindingOptions<WebExperiencesRuntime>
-): ExperiencesRootSdkBinding<WebExperiencesRuntime> {
+    | CreateInjectedRootSdkBindingOptions<WebExperiencesRuntime>
+    | CreateOwnedRootSdkBindingOptions<WebExperiencesRuntime>
+): RootSdkBinding<WebExperiencesRuntime> {
   const ownsInstance = !('sdk' in options);
   const sdk =
     'sdk' in options
@@ -63,8 +57,8 @@ export function createExperiencesRootSdkBinding(
 }
 
 /** Dispose app subscriptions first, then request the runtime's final lifetime transition. */
-export function disposeExperiencesRootSdkBinding(
-  binding: ExperiencesRootSdkBinding<WebExperiencesRuntime> | undefined
+export function disposeRootSdkBinding(
+  binding: RootSdkBinding<WebExperiencesRuntime> | undefined
 ): void {
   try {
     binding?.cleanup?.();

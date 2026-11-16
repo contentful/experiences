@@ -3,7 +3,7 @@ import type {
   FetchExperienceOptions,
 } from '@contentful/experiences-node';
 
-export interface NextjsExperiencesCacheKeyInput {
+export interface CacheKeyInput {
   readonly spaceId: string;
   readonly environmentId: string;
   readonly experienceId: string;
@@ -43,7 +43,7 @@ const ordered = (
 };
 
 /** The application owns completeness of the approved public XDA dimensions. */
-export function createExperiencesCacheKey(input: NextjsExperiencesCacheKeyInput): string {
+export function createCacheKey(input: CacheKeyInput): string {
   const parameters =
     input.parameters === undefined
       ? undefined
@@ -70,21 +70,21 @@ export function createPublicPermutationCacheMetadata({
   cacheVersion = 'v1',
   tags,
   ...input
-}: NextjsExperiencesCacheKeyInput & {
+}: CacheKeyInput & {
   readonly permutationKey: string;
   readonly cacheVersion?: string;
   readonly tags?: readonly string[];
 }): Extract<ExperiencesCacheMetadata, { scope: 'public-permutation' }> {
-  validateNextjsPublicPermutationCacheTags(tags);
+  validatePublicPermutationCacheTags(tags);
   return {
     scope: 'public-permutation',
-    key: `${cacheVersion}:${encodeURIComponent(permutationKey)}:${createExperiencesCacheKey(input)}`,
+    key: `${cacheVersion}:${encodeURIComponent(permutationKey)}:${createCacheKey(input)}`,
     ...(tags === undefined ? {} : { tags: [...tags] }),
   };
 }
 
 /** Next's tag limits; this module stays safe to import from Edge middleware. */
-export function validateNextjsPublicPermutationCacheTags(
+export function validatePublicPermutationCacheTags(
   tags: unknown
 ): asserts tags is readonly string[] | undefined {
   if (

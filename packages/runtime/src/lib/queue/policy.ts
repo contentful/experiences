@@ -1,5 +1,5 @@
 import { toPositiveInt } from '../number/index.js';
-import { resolveQueueFlushPolicy, type QueueFlushPolicy } from './flushPolicy.js';
+import { resolveQueueFlushPolicy, type QueueFlushPolicy } from './flush-policy.js';
 
 /**
  * Default maximum number of offline Personalization events admitted.

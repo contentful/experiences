@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-  useExperiencesContext,
+  useRuntimeContext,
   type ManagedExperienceResult,
 } from '@contentful/experiences-react/client';
 import { experienceConfig } from './experience-config';
@@ -12,7 +12,7 @@ export type ContentResult = Pick<ManagedExperienceResult, 'data' | 'error'>;
 // Only later comparison IDs fetch here, without visitor events. React owns this
 // loop's cancellation; the SDK owns the primary request and preview updates.
 export function useComparisonContent(ids: readonly string[], ready: boolean) {
-  const { sdk, isLive } = useExperiencesContext();
+  const { sdk, isLive } = useRuntimeContext();
   const [content, setContent] = useState<Record<string, ContentResult>>({});
   useEffect(() => {
     if (!isLive || !ready || !ids.length) return;

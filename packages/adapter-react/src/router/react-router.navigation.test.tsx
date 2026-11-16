@@ -5,7 +5,7 @@ import { act } from 'react';
 import { expect, it, vi } from 'vitest';
 import { createHashRouter, createMemoryRouter, Outlet, RouterProvider } from 'react-router-dom';
 import { sourceSdk } from '../test/managed-experience.js';
-import { createReactTestRoot } from '../test/react-root.js';
+import { createDomTestRoot } from '../test/dom-root.js';
 import {
   bindReactRouterExperiences,
   type AutoPageEmissionContext,
@@ -18,7 +18,7 @@ it.each(['memory', 'hash', 'hash with document base'] as const)(
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     // React Router's Node Request needs a Node signal rather than jsdom's signal.
     vi.stubGlobal('AbortController', transferableAbortController);
-    const view = createReactTestRoot();
+    const view = createDomTestRoot();
     const source = sourceSdk();
     const getPagePayload = vi.fn(
       (_context: AutoPageEmissionContext<ReactRouterAutoPageContext>) => undefined

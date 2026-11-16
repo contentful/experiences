@@ -8,7 +8,7 @@ import {
   type DestinationRedirectResult,
   type ExperienceRequestExtensions,
   type ExperienceParameters,
-  type PersonalizationOptions,
+  type PersonalizationOptions as BuiltPersonalizationOptions,
 } from '@contentful/experiences-client';
 import { resolveExperience as resolveCoreExperience } from '@contentful/experiences-sdk-core';
 import type {
@@ -19,9 +19,9 @@ import type {
 } from '@contentful/experiences-sdk-core';
 import EventBuilder from './event-builder.js';
 import {
-  fetchRuntimePreviewSessionPayload,
-  type RuntimePreviewConfig,
-  type RuntimePreviewSessionOptions,
+  fetchPreviewSessionPayload,
+  type PreviewConfig,
+  type PreviewSessionOptions,
 } from './live-preview.js';
 import type {
   EventBuilderConfig,
@@ -34,23 +34,20 @@ import type {
   Json,
 } from '@contentful/optimization-api-client/api-schemas';
 import { resolveFlagChange } from './resolve-flag-change.js';
+import { createDeliveryClient, type DeliveryClientOptions } from './create-delivery-client.js';
 import {
-  createRuntimeDeliveryClient,
-  type DeliveryClientOptions,
-} from './create-runtime-delivery-client.js';
-import {
-  createRuntimeOptimizationClient,
+  createOptimizationClient,
   type ApiClient,
   type OptimizationConfig,
 } from './create-optimization-client.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 import {
-  createRuntimeEventMethods,
-  type RuntimeEventBindings,
+  createEventMethods,
+  type EventBindings,
   type DirectEventBindings,
-  type RuntimeEventDispatch,
-  type RuntimeEventMethods,
-} from './runtime-event-methods.js';
+  type EventDispatch,
+  type EventMethods,
+} from './event-methods.js';
 
 export type ResolveOptions = {
   config: ResolverConfig;
@@ -78,8 +75,8 @@ export type EventBuilderOptions = Omit<EventBuilderConfig, 'channel' | 'library'
 };
 
 /** Caller-built events are validated against XDA after owner interception. */
-export type FetchPersonalizationOptions = Omit<PersonalizationOptions, 'events'> & {
-  events?: (NonNullable<PersonalizationOptions['events']>[number] | PersonalizationEvent)[];
+export type FetchPersonalizationOptions = Omit<BuiltPersonalizationOptions, 'events'> & {
+  events?: (NonNullable<BuiltPersonalizationOptions['events']>[number] | PersonalizationEvent)[];
 };
 
 type FetchEventArguments =
@@ -87,11 +84,11 @@ type FetchEventArguments =
   | ({ type: 'page' } & PageViewBuilderArgs)
   | ({ type: 'track' } & TrackBuilderArgs);
 type BuiltFetchEvent = NonNullable<FetchPersonalizationOptions['events']>[number];
-type BuiltFetchPersonalization = Omit<PersonalizationOptions, 'events'> & {
+type BuiltFetchPersonalization = Omit<BuiltPersonalizationOptions, 'events'> & {
   events?: BuiltFetchEvent[];
 };
 
-export type RuntimePersonalizationOptions = Omit<PersonalizationOptions, 'events'> & {
+export type PersonalizationOptions = Omit<BuiltPersonalizationOptions, 'events'> & {
   /** Event builder arguments or already-built XDA events; no page is added implicitly. */
   events?: (FetchEventArguments | BuiltFetchEvent)[];
 };
@@ -100,19 +97,19 @@ export type FetchExperienceOptions = {
   experienceId: string;
   locale?: string;
   parameters?: ExperienceParameters;
-  personalization?: RuntimePersonalizationOptions;
+  personalization?: PersonalizationOptions;
   extensions?: ExperienceRequestExtensions;
   preview?: boolean;
 };
 
 /** @internal Leaf owners build admitted intent before interception and XDA validation. */
-export type BuiltRuntimeFetchExperienceOptions = Omit<FetchExperienceOptions, 'personalization'> & {
-  personalization?: PersonalizationOptions;
+export type BuiltFetchExperienceOptions = Omit<FetchExperienceOptions, 'personalization'> & {
+  personalization?: BuiltPersonalizationOptions;
 };
 
 /** @internal Use the owner's existing builder; retain caller-built messages unchanged. */
 export function buildFetchPersonalization(
-  input: RuntimePersonalizationOptions | undefined,
+  input: PersonalizationOptions | undefined,
   builder: Pick<EventBuilder, 'buildIdentify' | 'buildPageView' | 'buildTrack'>
 ): BuiltFetchPersonalization | undefined {
   if (input === undefined) return undefined;
@@ -139,13 +136,13 @@ export function buildFetchPersonalization(
 export type FetchByDestinationNodeOptions = {
   destinationId: string;
   nodeId: string;
-  personalization?: RuntimePersonalizationOptions;
+  personalization?: PersonalizationOptions;
 };
 
 export type FetchByDestinationPathOptions = {
   destinationId: string;
   path: string;
-  personalization?: RuntimePersonalizationOptions;
+  personalization?: PersonalizationOptions;
 };
 
 /** Structural contract implemented by the shared runtime. */
@@ -180,7 +177,7 @@ export type Config = {
   /** Configuration for the runtime-owned Content Delivery API client. */
   delivery: DeliveryClientOptions;
   /** Optional configuration for the runtime-owned Content Preview API client. */
-  preview?: RuntimePreviewConfig;
+  preview?: PreviewConfig;
   /** Overrides for the runtime-owned Personalization and Analytics event transport. */
   optimization?: OptimizationConfig;
   resolveDefaults?: ResolveDefaults;
@@ -208,7 +205,7 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
     const library = { ...DEFAULT_EVENT_CONTEXT_LIBRARY, ...config.eventBuilder.library };
     const userAgentHeaders = createUserAgentHeaders(library, config.eventBuilder.app);
     const identity = { spaceId: config.spaceId, environmentId: config.environmentId };
-    this.#deliveryClient = createRuntimeDeliveryClient(
+    this.#deliveryClient = createDeliveryClient(
       config.delivery,
       identity,
       undefined,
@@ -222,14 +219,14 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
         createClient: _createClient,
         ...transport
       } = config.preview;
-      this.#previewClient = createRuntimeDeliveryClient(
+      this.#previewClient = createDeliveryClient(
         transport,
         identity,
         PREVIEW_HOST,
         userAgentHeaders
       );
     }
-    this.api = createRuntimeOptimizationClient({
+    this.api = createOptimizationClient({
       spaceId: config.spaceId,
       environmentId: config.environmentId,
       locale: config.locale,
@@ -260,17 +257,15 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
   }
 
   protected createEventMethods(
-    ...args:
-      | [bindings: DirectEventBindings]
-      | [bindings: RuntimeEventBindings, dispatch: RuntimeEventDispatch]
-  ): RuntimeEventMethods {
+    ...args: [bindings: DirectEventBindings] | [bindings: EventBindings, dispatch: EventDispatch]
+  ): EventMethods {
     if (args.length === 1) {
-      return createRuntimeEventMethods(this.api, this.eventBuilder, {
+      return createEventMethods(this.api, this.eventBuilder, {
         getLocale: () => this.locale,
         ...args[0],
       });
     }
-    return createRuntimeEventMethods(
+    return createEventMethods(
       this.api,
       this.eventBuilder,
       { getLocale: () => this.locale, ...args[0] },
@@ -299,13 +294,11 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
   }
 
   /** Fetch the current session payload through the runtime-owned Preview transport. */
-  protected fetchPreviewSessionPayload(
-    session: RuntimePreviewSessionOptions
-  ): Promise<ExperiencePayload> {
+  protected fetchPreviewSessionPayload(session: PreviewSessionOptions): Promise<ExperiencePayload> {
     if (this.#previewClient === undefined) {
       throw new Error('Preview Session requires preview client configuration');
     }
-    return fetchRuntimePreviewSessionPayload(
+    return fetchPreviewSessionPayload(
       {
         spaceId: this.spaceId,
         environmentId: this.environmentId,

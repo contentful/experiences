@@ -34,7 +34,7 @@ Only the actual server-to-browser transfer uses Node
 argument is the route descriptor only. It returns a full handoff plus optional
 plan/error, retaining raw final Client events unchanged, including query arrays,
 before content work. Producer event hooks run sequentially, matching Optimization;
-ordinary fetch event chains remain concurrent. Normal SDK builder XPAPI validation
+ordinary fetch event chains remain concurrent. Normal SDK builder Personalization API validation
 and Client XDA validation suffice; no server replay-compatibility check precedes XDA.
 Manually built/raw transmission remains consumer-owned compatibility risk. Existing
 receiving replay validation may refuse events while available content remains usable.
@@ -347,8 +347,8 @@ navigation, Identify and custom track use ordinary Web fetch without a new serve
 
 ## Current live behavior and limits
 
-XDA always forces XPAPI `preflight: true`: new IDs are provisional and previewed
-changes remain uncommitted. A profile-only XDA request internally uses XPAPI GET,
+XDA always forces Personalization API `preflight: true`: new IDs are provisional and previewed
+changes remain uncommitted. A profile-only XDA request internally uses Personalization API GET,
 returning 404 for an uncommitted ID even if SDK-to-XDA uses POST. Adoption,
 state hydration, LocalStorage,
 cookies, admission, `identityReady`, flush resolution and SDK success do not prove

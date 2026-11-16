@@ -1,4 +1,4 @@
-export { getPageProperties, getUserAgent } from './browser-event-context.js';
+export { getPageProperties, getUserAgent } from './event-context.js';
 export { getPreviewSessionBinding } from './preview-session-binding.js';
 export { ContentfulExperiences } from './contentful-experiences.js';
 export type {
@@ -55,24 +55,24 @@ export type {
   HoverBuilderArgs,
   IdentifyBuilderArgs,
   PageViewBuilderArgs,
-  RuntimeEventMethods,
+  EventMethods,
   OptimizationConfig,
   DeliveryClientOptions,
   FetchByDestinationNodeOptions,
   FetchByDestinationPathOptions,
   FetchExperienceOptions,
   FetchPersonalizationOptions,
-  RuntimePersonalizationOptions as PersonalizationOptions,
+  PersonalizationOptions,
   FetchResolveOptions,
   ResolveDefaults,
   ResolveOptions,
-  RuntimePreviewConfig,
-  RuntimePreviewSessionOptions,
+  PreviewConfig,
+  PreviewSessionOptions,
   PreviewSessionBinding,
-  RuntimePreviewClient,
-  RuntimePreviewClientOptions,
-  RuntimePreviewClientFactory,
-  RuntimePreviewStatus,
+  PreviewClient,
+  PreviewClientOptions,
+  PreviewClientFactory,
+  PreviewStatus,
   TrackBuilderArgs,
   UniversalEventBuilderArgs,
   ViewBuilderArgs,

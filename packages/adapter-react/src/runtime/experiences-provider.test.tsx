@@ -27,22 +27,15 @@ import {
 } from '@contentful/experiences-web';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 import { EventBuilder } from '@contentful/experiences-runtime';
-import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
+import { createDomTestRoot, type DomTestRoot } from '../test/dom-root.js';
 import { profileFixture } from '../test/profile.js';
 import { minimalSourceMap } from '../test/source-map.js';
-import {
-  useExperiences,
-  useExperiencesContext,
-  type ExperiencesContextValue,
-} from './experiences-context.js';
+import { useExperiences, useRuntimeContext, type RuntimeContextValue } from './context.js';
 import { observable } from '../test/managed-experience.js';
 import { usePreviewState } from './use-experiences-state.js';
-import {
-  useExperienceRequestContext,
-  type ExperienceRequestContextValue,
-} from './experience-request-context.js';
+import { useRequestContext, type RequestContextValue } from './request-context.js';
 import type { OnExperienceNodeRoot } from '../tracking/root-binding-types.js';
-import { createReactExperiences } from '../experience/create-react-experiences.js';
+import { createExperiences } from '../experience/create-experiences.js';
 import {
   ExperiencesProvider,
   ExperiencesRoot,
@@ -128,14 +121,14 @@ type LiveSdk = ReturnType<typeof liveSdk>;
 const inject = (sdk: LiveSdk): ContentfulExperiences => sdk as unknown as ContentfulExperiences;
 
 describe('React runtime ownership and activation', () => {
-  let view: ReactTestRoot;
+  let view: DomTestRoot;
   let runtime: LiveSdk;
-  let captures: ExperiencesContextValue[];
+  let captures: RuntimeContextValue[];
   let browser: ContentfulExperiences | undefined;
   beforeEach(() => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     window.history.replaceState(null, '', '/initial');
-    view = createReactTestRoot();
+    view = createDomTestRoot();
     captures = [];
     signals.consent.value = undefined;
     runtime = liveSdk();
@@ -152,7 +145,7 @@ describe('React runtime ownership and activation', () => {
     vi.unstubAllGlobals();
   });
   function Probe() {
-    const context = useExperiencesContext();
+    const context = useRuntimeContext();
     captures.push(context);
     return <output>{context.sdk.states.profile.current?.id}</output>;
   }
@@ -255,9 +248,9 @@ describe('React runtime ownership and activation', () => {
   it.each(['owned', 'injected'] as const)(
     'uses the static payload in ordinary XDA navigation and reset (%s)',
     async (owner) => {
-      let requests!: ExperienceRequestContextValue;
+      let requests!: RequestContextValue;
       function RequestProbe() {
-        requests = useExperienceRequestContext()!;
+        requests = useRequestContext()!;
         return <Probe />;
       }
       const tree = (
@@ -301,9 +294,9 @@ describe('React runtime ownership and activation', () => {
   it.each([undefined, { properties: { source: 'builder' } }])(
     'gives the explicit builder precedence over static page arguments (result=%j)',
     async (payload) => {
-      let requests!: ExperienceRequestContextValue;
+      let requests!: RequestContextValue;
       function RequestProbe() {
-        requests = useExperienceRequestContext()!;
+        requests = useRequestContext()!;
         return null;
       }
       const buildPagePayload = vi.fn(() => payload);
@@ -687,9 +680,9 @@ describe('React runtime ownership and activation', () => {
   ] as const)(
     'drops the pre-reset handoff and accepts a fresh handoff (replay: %s, key: %s)',
     async (withReplay, handoffKey) => {
-      let requests!: ExperienceRequestContextValue;
+      let requests!: RequestContextValue;
       function Requests() {
-        requests = useExperienceRequestContext()!;
+        requests = useRequestContext()!;
         return <Probe />;
       }
       const suppliedHandoff = {
@@ -1102,7 +1095,7 @@ describe('React runtime ownership and activation', () => {
           probe: (props: HTMLAttributes<HTMLElement>) => <article {...props}>Manual view</article>,
         },
       };
-      const { ExperienceRenderer, ExperiencesProvider } = createReactExperiences({
+      const { ExperienceRenderer, ExperiencesProvider } = createExperiences({
         config: registry,
       });
       const plan = await resolveExperience(

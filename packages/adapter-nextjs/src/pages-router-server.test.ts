@@ -7,8 +7,8 @@ import type {
   FetchResolveOptions,
 } from '@contentful/experiences-node';
 import * as server from './server-request.js';
-import { bindNextjsPagesRouterServerExperiences } from './pages-router-server.js';
-import type { NextjsPreviewConfig } from './preview.js';
+import { bindPagesRouterServerExperiences } from './pages-router-server.js';
+import type { PreviewConfig } from './preview.js';
 
 const scope = { spaceId: 'space', environmentId: 'master' };
 const plan: PortableRenderPlan = {
@@ -56,11 +56,11 @@ function setup(extraHeaders: Record<string, string | undefined> = {}) {
     })),
     destroy: vi.fn(),
   };
-  vi.spyOn(server, 'configureNextjsServerExperiences').mockReturnValue(
-    scope as ReturnType<typeof server.configureNextjsServerExperiences>
+  vi.spyOn(server, 'configureServerExperiences').mockReturnValue(
+    scope as ReturnType<typeof server.configureServerExperiences>
   );
   const bind = vi
-    .spyOn(server, 'bindNextjsExperiencesRequest')
+    .spyOn(server, 'bindExperiencesRequest')
     .mockReturnValue(request as unknown as RequestRuntime);
   const descriptor = {
     experienceId: 'home',
@@ -72,7 +72,7 @@ function setup(extraHeaders: Record<string, string | undefined> = {}) {
     experience: descriptor,
     resolveOptions: { metadata: { host: true }, debug: false },
   };
-  const factory = bindNextjsPagesRouterServerExperiences({
+  const factory = bindPagesRouterServerExperiences({
     ...scope,
     delivery: { accessToken: 'test' },
     config: { components: {} },
@@ -113,8 +113,8 @@ describe('Pages native server response helper', () => {
     const { context, request, bind } = setup({ 'x-nextjs-data': '1' });
     context.req.url = '/_next/data/build/page.json?preview_session_id=session';
     request.isPreview = true;
-    const createClient = vi.fn<NonNullable<NextjsPreviewConfig['createClient']>>();
-    const factory = bindNextjsPagesRouterServerExperiences({
+    const createClient = vi.fn<NonNullable<PreviewConfig['createClient']>>();
+    const factory = bindPagesRouterServerExperiences({
       ...scope,
       delivery: { accessToken: 'test' },
       config: { components: {} },
@@ -231,7 +231,7 @@ describe('Pages native server response helper', () => {
   it('uses the configured locale and resolves server consent with the native context', async () => {
     const { context, bind } = setup();
     const consent = vi.fn(() => ({ events: true, persistence: true }));
-    const factory = bindNextjsPagesRouterServerExperiences({
+    const factory = bindPagesRouterServerExperiences({
       ...scope,
       delivery: { accessToken: 'server-secret' },
       config: { components: {} },

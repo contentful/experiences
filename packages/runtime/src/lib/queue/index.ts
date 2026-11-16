@@ -1,3 +1,3 @@
-export * from './flushPolicy.js';
-export * from './QueueFlushRuntime.js';
-export * from './queuePolicy.js';
+export * from './flush-policy.js';
+export * from './flush-runtime.js';
+export * from './policy.js';

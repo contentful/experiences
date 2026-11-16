@@ -1,18 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server.js';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
-import type { MaybePromise, RuntimePreviewSessionOptions } from '@contentful/experiences-node';
-import {
-  createNextjsExperiencesContextHandler,
-  type NextjsPreviewResolver,
-} from './request-handler.js';
-import { configureNextjsServerExperiences } from './server-request.js';
+import type { MaybePromise, PreviewSessionOptions } from '@contentful/experiences-node';
+import { createExperiencesContextHandler, type PreviewResolver } from './request-handler.js';
+import { configureServerExperiences } from './server-request.js';
 import {
   NEXTJS_EXPERIENCES_REQUEST_HEADER_PREFIX,
   NEXTJS_EXPERIENCES_REQUEST_URL_HEADER,
 } from './request-context.js';
 
 const sdk = () =>
-  configureNextjsServerExperiences({
+  configureServerExperiences({
     spaceId: 'space',
     environmentId: 'master',
     delivery: { accessToken: 'test' },
@@ -52,7 +49,7 @@ describe('Next context middleware', () => {
       response.cookies.set('host', 'one');
       response.headers.set('vary', 'RSC, Next-Router-State-Tree');
       const cookieOptions = { path: '/app', domain: 'example.com', secure: true, httpOnly: true };
-      const result = await createNextjsExperiencesContextHandler({
+      const result = await createExperiencesContextHandler({
         sdk: runtime,
         consent: { persistence },
         anonymousIdCookieName: 'browser-id',
@@ -108,7 +105,7 @@ describe('Next context middleware', () => {
       return request;
     });
     await expect(
-      createNextjsExperiencesContextHandler({
+      createExperiencesContextHandler({
         sdk: runtime,
         consent: true,
         profile: { id: 'id' },
@@ -129,7 +126,7 @@ describe('Next context middleware', () => {
         },
       }
     );
-    const result = await createNextjsExperiencesContextHandler()(request);
+    const result = await createExperiencesContextHandler()(request);
     expect(forwarded(result, NEXTJS_EXPERIENCES_REQUEST_URL_HEADER)).toBe(
       'https://example.com/page?q=hello+world&q=last'
     );
@@ -139,7 +136,7 @@ describe('Next context middleware', () => {
   });
 
   it('preserves the actual origin for paths with leading duplicate slashes', async () => {
-    const result = await createNextjsExperiencesContextHandler()(
+    const result = await createExperiencesContextHandler()(
       new NextRequest('https://example.com//page?q=hello%20world&_rsc=x#hash')
     );
     expect(forwarded(result, NEXTJS_EXPERIENCES_REQUEST_URL_HEADER)).toBe(
@@ -167,7 +164,7 @@ describe('Next context middleware', () => {
       expect(cookies.get('ctfl-opt-aid')).toBeUndefined();
       return { persistence: true };
     });
-    const result = await createNextjsExperiencesContextHandler({ sdk: runtime, consent })(
+    const result = await createExperiencesContextHandler({ sdk: runtime, consent })(
       request,
       response
     );
@@ -192,7 +189,7 @@ describe('Next context middleware', () => {
     const consent = vi.fn(() => true);
     const preview = vi.fn(() => undefined);
     expect(
-      await createNextjsExperiencesContextHandler({ sdk: runtime, consent, preview })(
+      await createExperiencesContextHandler({ sdk: runtime, consent, preview })(
         new NextRequest('https://example.com'),
         response
       )
@@ -207,7 +204,7 @@ describe('Next context middleware', () => {
     const runtime = sdk();
     const bind = vi.spyOn(runtime, 'forRequest');
     const preview = { sessionId: 'session' };
-    const result = await createNextjsExperiencesContextHandler({
+    const result = await createExperiencesContextHandler({
       sdk: runtime,
       consent: true,
       preview: async ({ request }) => {
@@ -227,7 +224,7 @@ describe('Next context middleware', () => {
     const response = NextResponse.next();
     const before = response.headers.get('x-middleware-next');
     await expect(
-      createNextjsExperiencesContextHandler({
+      createExperiencesContextHandler({
         sdk: runtime,
         consent: false,
         preview: () => {
@@ -246,8 +243,8 @@ it.each([false, true])(
   async (isPreview) => {
     const runtime = sdk();
     const bind = vi.spyOn(runtime, 'forRequest');
-    const preview = vi.fn<NextjsPreviewResolver>().mockResolvedValue(undefined);
-    await createNextjsExperiencesContextHandler({
+    const preview = vi.fn<PreviewResolver>().mockResolvedValue(undefined);
+    await createExperiencesContextHandler({
       sdk: runtime,
       consent: false,
       isPreview,
@@ -260,7 +257,7 @@ it.each([false, true])(
 );
 
 it('types preview as an application resolver returning an initializer or absence', () => {
-  expectTypeOf<NextjsPreviewResolver>().returns.toEqualTypeOf<
-    MaybePromise<RuntimePreviewSessionOptions | undefined>
+  expectTypeOf<PreviewResolver>().returns.toEqualTypeOf<
+    MaybePromise<PreviewSessionOptions | undefined>
   >();
 });

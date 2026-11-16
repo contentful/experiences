@@ -4,7 +4,7 @@ import {
   useConsentState,
   usePersistenceConsentState,
   useExperiencesActions,
-  useExperiencesContext,
+  useRuntimeContext,
   usePreviewState,
   useProfileState,
   type ManagedExperienceResult,
@@ -33,7 +33,7 @@ export function Utilities({
   const events = useConsentState();
   const persistence = usePersistenceConsentState();
   const { setConsent, resetUser } = useExperiencesActions();
-  const { error, isLive, sdk } = useExperiencesContext();
+  const { error, isLive, sdk } = useRuntimeContext();
   const preview = usePreviewState();
   const isPreview = isLive && sdk.isPreview;
   const { routeKey, navigate, serverOnly } = useReference();

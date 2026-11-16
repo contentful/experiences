@@ -31,7 +31,7 @@ supported product usage or a cross-fetch guarantee.
   optional plan/error for optional browser consumption independently of display.
   Producer hooks run sequentially; ordinary fetch chains remain concurrent. Retain
   raw final Client events/query arrays unchanged, without server replay-compatibility
-  validation before XDA. SDK builder XPAPI and Client XDA validation suffice for
+  validation before XDA. SDK builder Personalization API and Client XDA validation suffice for
   normal inputs; raw transmission is consumer-owned risk. Receiving validation and
   admission remain, and refusal leaves available content usable. Later comparison IDs and same-ID Retry use ordinary event-free fetch; handoff
   is never content input. Preserve source maps, plan reuse and diagnostic privacy.

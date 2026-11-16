@@ -1,12 +1,12 @@
 import type { Config } from '@contentful/experiences-web';
 import type {
-  NextjsBrowserConfig,
-  NextjsRequestResult,
+  BrowserConfig,
+  RequestResult,
 } from '@contentful/experiences-nextjs/app-router/client';
 
 export interface BrowserEnvironment {
   readonly web: Pick<Config, 'spaceId' | 'environmentId' | 'locale'> &
-    Pick<NextjsBrowserConfig, 'delivery' | 'preview'>;
+    Pick<BrowserConfig, 'delivery' | 'preview'>;
   readonly experienceIds: string[];
   readonly livePreview?: {
     readonly experienceId: string;
@@ -15,7 +15,7 @@ export interface BrowserEnvironment {
   };
 }
 
-export type ContentSeed = NextjsRequestResult;
+export type ContentSeed = RequestResult;
 
 export function routeIds(pathname: string, ids: readonly string[]) {
   const display = pathname.endsWith('/page-two') ? ids.slice(-1) : [...ids];

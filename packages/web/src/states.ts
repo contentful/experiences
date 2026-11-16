@@ -4,7 +4,7 @@ import type {
   EventProfile,
   PersonalizationRequestState,
   OptimizationEventStreamEvent,
-  RuntimePreviewStatus,
+  PreviewStatus,
 } from '@contentful/experiences-runtime';
 import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import type { Observable } from './signals/index.js';
@@ -18,7 +18,7 @@ export interface PreviewState {
   readonly sessionId?: string;
   readonly data: ExperiencePayload | undefined;
   readonly error: Error | undefined;
-  readonly status: RuntimePreviewStatus | undefined;
+  readonly status: PreviewStatus | undefined;
   readonly revision: number;
 }
 

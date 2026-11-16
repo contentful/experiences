@@ -2,10 +2,10 @@
 
 import { createLivePreviewClient } from '@contentful/experiences-live-preview';
 import {
-  bindNextjsAppRouterClientExperiences,
-  type NextjsRequestExperienceProps,
+  bindAppRouterClientExperiences,
+  type RequestExperienceProps,
 } from '@contentful/experiences-nextjs/app-router/client';
-import { bindNextjsPagesRouterExperiences } from '@contentful/experiences-nextjs/pages-router';
+import { bindPagesRouterExperiences } from '@contentful/experiences-nextjs/pages-router';
 import { browserRegistry } from './browser-registry';
 
 const preview = {
@@ -13,11 +13,11 @@ const preview = {
   createClient: createLivePreviewClient,
 };
 
-const app = bindNextjsAppRouterClientExperiences({ config: browserRegistry, preview }).request;
+const app = bindAppRouterClientExperiences({ config: browserRegistry, preview }).request;
 const { Experience: AppRequestExperience } = app;
 export const AppExperiencesRoot = app.ExperiencesAnalyticsRoot;
 export const ClientRequestRoot = app.ExperiencesRoot;
-export const { ExperiencesRoot, Experience } = bindNextjsPagesRouterExperiences({
+export const { ExperiencesRoot, Experience } = bindPagesRouterExperiences({
   config: browserRegistry,
   preview,
 }).request;
@@ -34,6 +34,6 @@ export const singleExperienceFallbacks = {
   ),
 };
 
-export function ClientRequestExperience(props: NextjsRequestExperienceProps) {
+export function ClientRequestExperience(props: RequestExperienceProps) {
   return <AppRequestExperience {...singleExperienceFallbacks} {...props} />;
 }

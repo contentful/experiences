@@ -1,4 +1,4 @@
-import type { NextjsBrowserConfig } from './browser-config.js';
+import type { BrowserConfig } from './browser-config.js';
 import type {
   BoundManagedExperienceProps,
   ExperiencesProviderProps,
@@ -11,12 +11,12 @@ import type {
   Config,
 } from '@contentful/experiences-web';
 
-import type { NextjsPreviewConfig, NextjsPreviewContext } from './preview.js';
+import type { PreviewConfig, PreviewContext } from './preview.js';
 
 type RuntimeIdentity = 'spaceId' | 'environmentId' | 'delivery';
 
 /** Detached request data shared by the router root and content presentation. */
-export interface NextjsRequestResult {
+export interface RequestResult {
   readonly requestId: string;
   readonly routeKey: string;
   readonly experience: FetchExperienceOptions;
@@ -25,32 +25,32 @@ export interface NextjsRequestResult {
   readonly handoff?: ExperiencesHandoff;
   readonly initialPagePayload?: ExperiencesRootProps['initialPagePayload'];
   /** Configuration only; the browser derives session and identity from its route and descriptor. */
-  readonly preview?: NextjsPreviewContext;
+  readonly preview?: PreviewContext;
 }
 
-export type BoundNextjsExperiencesRootProps = Omit<ExperiencesProviderProps, 'sdk'> &
+export type BoundRootProps = Omit<ExperiencesProviderProps, 'sdk'> &
   Partial<Pick<ExperiencesRootProps, RuntimeIdentity | 'defaults' | 'locale' | 'isPreview'>> & {
     readonly sdk?: ExperiencesProviderProps['sdk'];
-    readonly preview?: NextjsPreviewConfig;
+    readonly preview?: PreviewConfig;
   };
 
-export type BoundNextjsRequestRootProps = Omit<
-  BoundNextjsExperiencesRootProps,
+export type BoundRequestRootProps = Omit<
+  BoundRootProps,
   'handoff' | 'handoffKey' | 'snapshot' | 'routeKey' | 'initialPagePayload'
-> & { readonly result?: NextjsRequestResult };
+> & { readonly result?: RequestResult };
 
-export type NextjsRequestExperienceProps = Omit<
+export type RequestExperienceProps = Omit<
   Extract<BoundManagedExperienceProps, { experienceId: string }>,
   keyof FetchExperienceOptions | 'initialPlan' | 'initialError' | 'resolveOptions'
-> & { readonly result?: NextjsRequestResult };
+> & { readonly result?: RequestResult };
 
 /** Plain browser configuration plus server-inherited scope/locale and one whole result. */
-export type NextjsDefaultRequestRootProps = Omit<
-  BoundNextjsRequestRootProps,
+export type DefaultRequestRootProps = Omit<
+  BoundRequestRootProps,
   RuntimeIdentity | 'defaults' | 'isPreview' | 'preview'
 > &
   Pick<ExperiencesRootProps, 'spaceId' | 'environmentId' | 'locale'> & {
-    readonly browser: NextjsBrowserConfig;
+    readonly browser: BrowserConfig;
     readonly defaults?: Pick<NonNullable<Config['defaults']>, 'consent' | 'persistenceConsent'>;
     readonly cookie?: Config['cookie'];
   };

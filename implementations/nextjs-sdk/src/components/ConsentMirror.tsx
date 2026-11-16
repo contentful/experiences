@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useExperiencesContext } from '@contentful/experiences-nextjs/client';
+import { useRuntimeContext } from '@contentful/experiences-nextjs/client';
 import { consentCookies } from '../reference';
 
 // These app cookies let the next server request see the browser's separate
 // decisions. The SDK remains the consent and identity-persistence owner.
 export function ConsentMirror() {
-  const { sdk, isLive } = useExperiencesContext();
+  const { sdk, isLive } = useRuntimeContext();
   useEffect(() => {
     if (!isLive) return;
     const mirror = (name: string, value: boolean | undefined) => {

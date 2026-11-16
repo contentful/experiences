@@ -3,7 +3,7 @@ import { renderToString } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { ContentfulExperiences } from '@contentful/experiences-web';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
-import { createReactExperiences } from './create-react-experiences.js';
+import { createExperiences } from './create-experiences.js';
 
 vi.mock('@contentful/experiences-web', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@contentful/experiences-web')>()),
@@ -12,13 +12,13 @@ vi.mock('@contentful/experiences-web', async (importOriginal) => ({
   }),
 }));
 
-describe('createReactExperiences', () => {
+describe('createExperiences', () => {
   it('purely binds the registry and forwards renderer props without a runtime provider', async () => {
     function Component(props: HTMLAttributes<HTMLElement>) {
       return <article {...props}>Bound registry</article>;
     }
     const config = { components: { probe: Component } };
-    const { ExperienceRenderer, Experience } = createReactExperiences({ config });
+    const { ExperienceRenderer, Experience } = createExperiences({ config });
     expect(ContentfulExperiences).not.toHaveBeenCalled();
     const plan = await resolveExperience(
       {

@@ -1,4 +1,4 @@
-import type { NextjsPreviewContext } from './preview.js';
+import type { PreviewContext } from './preview.js';
 import type { Config } from '@contentful/experiences-web';
 
 /** Literal Delivery configuration; tokenless hosts explicitly designate a trusted proxy. */
@@ -19,9 +19,9 @@ type FlushPolicy = NonNullable<QueuePolicy['flush']>;
  * Explicit browser-visible data, copied by the server's strict JSON projection.
  * Scope and locale come from the server binding. Functions require a custom client root.
  */
-export interface NextjsBrowserConfig {
+export interface BrowserConfig {
   readonly delivery: BrowserDeliveryConfig;
-  readonly preview?: BrowserDeliveryConfig & NextjsPreviewContext;
+  readonly preview?: BrowserDeliveryConfig & PreviewContext;
   readonly isPreview?: boolean;
   readonly optimization?: Pick<
     NonNullable<Config['optimization']>,

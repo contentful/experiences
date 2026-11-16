@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server.js';
-import { createNextjsPublicPermutationCacheMiddleware } from './cache-middleware.js';
-import { createNextjsExperiencesContextHandler } from './request-handler.js';
+import { createPublicPermutationCacheMiddleware } from './cache-middleware.js';
+import { createExperiencesContextHandler } from './request-handler.js';
 
 const cache = {
   scope: 'public-permutation' as const,
@@ -30,8 +30,8 @@ it.each(['cache-only', 'context-first', 'cache-first'] as const)(
     });
     response.headers.set('vary', 'RSC');
     response.cookies.set('host', 'value');
-    const middleware = createNextjsPublicPermutationCacheMiddleware({ resolveCache: () => cache });
-    const handler = createNextjsExperiencesContextHandler();
+    const middleware = createPublicPermutationCacheMiddleware({ resolveCache: () => cache });
+    const handler = createExperiencesContextHandler();
     if (order === 'context-first') expect(await handler(request, response)).toBe(response);
     expect(await middleware(request, response)).toBe(response);
     if (order === 'cache-first') expect(await handler(request, response)).toBe(response);
@@ -54,7 +54,7 @@ it.each([false, true])(
   async (existing) => {
     const request = new NextRequest('https://example.com/home');
     const response = existing ? NextResponse.next() : undefined;
-    const middleware = createNextjsPublicPermutationCacheMiddleware({
+    const middleware = createPublicPermutationCacheMiddleware({
       resolveCache: () => undefined,
     });
     const result = await middleware(request, response);
@@ -67,7 +67,7 @@ it.each([false, true])(
 it('uses the pinned custom rewrite convention and preserves terminal responses', async () => {
   const request = new NextRequest('https://example.com/home');
   const resolveCache = vi.fn(() => cache);
-  const middleware = createNextjsPublicPermutationCacheMiddleware({
+  const middleware = createPublicPermutationCacheMiddleware({
     resolveCache,
     rewrite: ({ pathname, encodedCacheKey }) => `/public/${encodedCacheKey}${pathname}`,
   });
@@ -89,12 +89,10 @@ it('uses the pinned custom rewrite convention and preserves terminal responses',
 it('rejects invalid public metadata at the routing boundary', async () => {
   const request = new NextRequest('https://example.com/home');
   await expect(
-    createNextjsPublicPermutationCacheMiddleware({ resolveCache: () => ({ ...cache, key: '' }) })(
-      request
-    )
+    createPublicPermutationCacheMiddleware({ resolveCache: () => ({ ...cache, key: '' }) })(request)
   ).rejects.toThrow('key');
   await expect(
-    createNextjsPublicPermutationCacheMiddleware({
+    createPublicPermutationCacheMiddleware({
       resolveCache: () => ({ ...cache, tags: ['bad,tag'] }),
     })(request)
   ).rejects.toThrow('tags');

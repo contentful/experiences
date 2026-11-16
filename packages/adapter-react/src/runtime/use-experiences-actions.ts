@@ -2,8 +2,8 @@
 
 import { useMemo } from 'react';
 import type { WebExperiencesRuntime } from '@contentful/experiences-web';
-import { useExperiences } from './experiences-context.js';
-import { useExperienceRequestContext } from './experience-request-context.js';
+import { useExperiences } from './context.js';
+import { useRequestContext } from './request-context.js';
 
 /** SDK actions safe to destructure, retaining their original signatures/results. */
 export interface UseExperiencesActionsResult {
@@ -23,7 +23,7 @@ export interface UseExperiencesActionsResult {
 /** Bind the current runtime; actions do not initialize pages or refresh content. */
 export function useExperiencesActions(): UseExperiencesActionsResult {
   const sdk = useExperiences();
-  const requests = useExperienceRequestContext();
+  const requests = useRequestContext();
 
   return useMemo<UseExperiencesActionsResult>(
     () => ({

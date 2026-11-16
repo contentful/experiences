@@ -20,7 +20,7 @@ Normal fetch requires no handoff; no Web producer or Node aggregate commit remai
 Usable server replay survives content failure and browser admission is independent
 of SSR display. Direct event APIs are callable, not prerequisites or compensation.
 
-XDA always invokes XPAPI preflight and does not commit. SSR/CSR noncommit is a
+XDA always invokes Personalization API preflight and does not commit. SSR/CSR noncommit is a
 tolerated service bug awaiting upstream force-commit support, with no current flag
 or SDK workaround. Content Retry uses ordinary fetch of the same ID without events,
 builders, event hooks or replay; accepted incoming replay delivery retry is queue-owned.
@@ -77,9 +77,9 @@ page; navigation builds page intent without repeating initial identify. Page Two
 CUSTOM TRACK action is nonpage, while navigation to Page Two still builds a page.
 
 Follow the [Runtime aggregate contract](../packages/runtime/README.md#shared-handoff-primitives).
-Do not add standalone XPAPI preparation, separate supplied-data producers or public
+Do not add standalone Personalization API preparation, separate supplied-data producers or public
 state-only hydration. Hydration/storage/admission do not prove commit; preserve
-XPAPI retry ambiguity and existing browser transport limits.
+Personalization API retry ambiguity and existing browser transport limits.
 See [XDA preflight and profile finalization](../packages/runtime/README.md#xda-preflight-and-profile-finalization)
 and the [Node personalization contract](../packages/node/README.md#personalization).
 

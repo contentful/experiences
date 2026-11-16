@@ -172,11 +172,11 @@ a handoff. A batch may omit the page event; pages are never synthesized.
 Web admits an already prepared batch whole, because it is replayed as previewed.
 See the root [paired replay guide](./README.md#paired-server-to-browser-replay).
 
-XDA invokes XPAPI with `preflight: true` and commits neither events nor profile
+XDA invokes Personalization API with `preflight: true` and commits neither events nor profile
 changes. Ordinary SSR/CSR event-bearing fetches remain uncommitted pending
 upstream force-commit support; no override or SDK commit workaround exists.
 Only actual hybrid browser replay commits the supplied batch. Newly returned
-profile IDs remain provisional until an actual XPAPI commit. See
+profile IDs remain provisional until an actual Personalization API commit. See
 [XDA preflight and profile finalization](./packages/runtime/README.md#xda-preflight-and-profile-finalization)
 for the known service limitations and required verification before release.
 

@@ -1,24 +1,24 @@
 const WEB_LOCK_KEY = '__ctfl_experiences_web_lock__';
 
-interface WebLockState {
+interface LockState {
   owner: string | undefined;
 }
 
-type WebGlobal = typeof globalThis & {
-  __ctfl_experiences_web_lock__?: WebLockState;
+type GlobalWithLock = typeof globalThis & {
+  __ctfl_experiences_web_lock__?: LockState;
 };
 
 let nextOwnerId = 0;
 
-function getWebLock(): WebLockState {
-  const webGlobal = globalThis as WebGlobal;
+function getLock(): LockState {
+  const webGlobal = globalThis as GlobalWithLock;
   webGlobal[WEB_LOCK_KEY] ??= { owner: undefined };
   return webGlobal[WEB_LOCK_KEY];
 }
 
 /** One live Experiences Web SDK per JavaScript runtime. */
-export function acquireWebSingleton(): string {
-  const lock = getWebLock();
+export function acquireSingleton(): string {
+  const lock = getLock();
   if (lock.owner) {
     throw new Error(
       `Experiences Web SDK already initialized (${lock.owner}). Only one Web SDK instance is supported per runtime.`
@@ -31,7 +31,7 @@ export function acquireWebSingleton(): string {
 }
 
 /** A stale owner cannot release a replacement Web SDK instance. */
-export function releaseWebSingleton(owner: string): void {
-  const lock = getWebLock();
+export function releaseSingleton(owner: string): void {
+  const lock = getLock();
   if (lock.owner === owner) lock.owner = undefined;
 }

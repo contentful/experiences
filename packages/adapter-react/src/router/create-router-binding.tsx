@@ -2,15 +2,15 @@
 
 import type { CurrentPageOptions } from '@contentful/experiences-web';
 import {
-  createReactExperiences,
-  type CreateReactExperiencesOptions,
-} from '../experience/create-react-experiences.js';
+  createExperiences,
+  type CreateExperiencesOptions,
+} from '../experience/create-experiences.js';
 import {
   buildAutoPagePayload,
   buildRouterPagePayload,
   type AutoPagePayloadOptions,
-  type RouterExperiencesProviderProps,
-  type RouterExperiencesRootProps,
+  type RouterProviderProps,
+  type RouterRootProps,
 } from './page-payload.js';
 
 export interface RouterPageContext {
@@ -23,10 +23,10 @@ export interface RouterPageContext {
 
 /** Router hooks supply context; the existing owner sequence constructs and admits events. */
 export function createRouterBinding<TRouteContext extends RouterPageContext>(
-  options: CreateReactExperiencesOptions,
+  options: CreateExperiencesOptions,
   useRouteContext: () => TRouteContext
 ) {
-  const bound = createReactExperiences(options);
+  const bound = createExperiences(options);
 
   function usePageInputs(payloadOptions: AutoPagePayloadOptions<TRouteContext>) {
     const context = useRouteContext();
@@ -45,7 +45,7 @@ export function createRouterBinding<TRouteContext extends RouterPageContext>(
     pagePayload,
     getPagePayload,
     ...props
-  }: RouterExperiencesRootProps<TRouteContext>) {
+  }: RouterRootProps<TRouteContext>) {
     const inputs = usePageInputs({ pagePayload, getPagePayload });
     return <bound.ExperiencesRoot {...props} {...inputs} />;
   }
@@ -54,7 +54,7 @@ export function createRouterBinding<TRouteContext extends RouterPageContext>(
     pagePayload,
     getPagePayload,
     ...props
-  }: RouterExperiencesProviderProps<TRouteContext>) {
+  }: RouterProviderProps<TRouteContext>) {
     const inputs = usePageInputs({ pagePayload, getPagePayload });
     return <bound.ExperiencesProvider {...props} {...inputs} />;
   }

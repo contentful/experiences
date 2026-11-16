@@ -1,13 +1,13 @@
 import {
-  bindNextjsExperiencesRequest,
-  createNextjsPageContext,
-  serializeNextjsPlan,
+  bindExperiencesRequest,
+  createPageContext,
+  serializePlan,
   type RequestRuntime,
-  type NextjsCookieReader,
+  type CookieReader,
   type PortableRenderPlan,
 } from '@contentful/experiences-nextjs/server';
 import type { FetchExperienceOptions } from '@contentful/experiences-node';
-import type { NextjsRequestResult } from '@contentful/experiences-nextjs/app-router/client';
+import type { RequestResult } from '@contentful/experiences-nextjs/app-router/client';
 
 import { getServer } from './config';
 import {
@@ -28,7 +28,7 @@ export interface ServerContent {
 
 export function contentSeeds(
   contents: readonly ServerContent[],
-  result: NextjsRequestResult
+  result: RequestResult
 ): ContentSeed[] {
   return contents.map(({ experienceId, plan, error }) => {
     if (experienceId === result.experience.experienceId) return result;
@@ -36,12 +36,12 @@ export function contentSeeds(
       requestId: result.requestId,
       routeKey: result.routeKey,
       experience: { experienceId, personalization: { events: [] } },
-      ...(plan ? { plan: serializeNextjsPlan(plan) } : {}),
+      ...(plan ? { plan: serializePlan(plan) } : {}),
       ...(error ? { contentError: 'Experience content unavailable.' } : {}),
     };
   });
 }
-export function readConsent(cookies: NextjsCookieReader) {
+export function readConsent(cookies: CookieReader) {
   const value = (name: string) => {
     const cookie = cookies.get(name);
     return typeof cookie === 'string' ? cookie : cookie?.value;
@@ -60,12 +60,12 @@ export function serverPreview(url: URL) {
 export function createContentRequest(
   url: URL,
   headers: Headers,
-  cookies: NextjsCookieReader,
+  cookies: CookieReader,
   profile?: RequestRuntime['profile']
 ) {
   const { sdk, config } = getServer();
   const preview = serverPreview(url);
-  return bindNextjsExperiencesRequest(sdk, {
+  return bindExperiencesRequest(sdk, {
     request: { url: url.toString(), headers },
     cookies,
     profile,
@@ -73,7 +73,7 @@ export function createContentRequest(
     locale: config.locale,
     preview,
     isPreview: Boolean(preview),
-    page: createNextjsPageContext({
+    page: createPageContext({
       path: url.pathname,
       origin: config.origin,
       searchParams: url.searchParams,

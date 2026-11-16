@@ -44,7 +44,7 @@ supported product usage or a cross-fetch guarantee.
   modes exclusive.
   Presentation notifications run after commit and can report errors alongside usable
   data. Loading/error fallbacks accept nodes or full-result functions; custom
-  children retain the full result. Check `useExperiencesContext().isLive` before
+  children retain the full result. Check `useRuntimeContext().isLive` before
   concrete SDK operations. `initialPagePayload` supplies static `PageViewBuilderArgs`;
   explicit `buildPagePayload` takes precedence. Preserve event-free content Retry.
 - Keep one primary `useManagedExperience` result as the content owner and render

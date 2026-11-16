@@ -1,21 +1,18 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { RequestRuntime } from '@contentful/experiences-node';
-import { applyNextjsPrivateResponseCache } from './cache.js';
-import { persistNextjsAnonymousId } from './cookies.js';
-import {
-  bindNextjsExperiencesRequest,
-  configureNextjsServerExperiences,
-} from './server-request.js';
+import { applyPrivateResponseCache } from './cache.js';
+import { persistAnonymousId } from './cookies.js';
+import { bindExperiencesRequest, configureServerExperiences } from './server-request.js';
 
 describe('one explicit Node facade', () => {
   it('binds once and returns the actual facade without decorating methods', () => {
-    const sdk = configureNextjsServerExperiences({
+    const sdk = configureServerExperiences({
       spaceId: 'space',
       environmentId: 'master',
       delivery: { accessToken: 'test' },
     });
     const forRequest = vi.spyOn(sdk, 'forRequest');
-    const request = bindNextjsExperiencesRequest(sdk, {
+    const request = bindExperiencesRequest(sdk, {
       consent: { events: false, persistence: true },
       locale: 'de',
       request: {
@@ -53,8 +50,8 @@ describe('one explicit Node facade', () => {
         'set-cookie': 'other=1',
       }),
     };
-    applyNextjsPrivateResponseCache(response);
-    persistNextjsAnonymousId(response, request);
+    applyPrivateResponseCache(response);
+    persistAnonymousId(response, request);
     expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(response.headers.get('vary')).toBe('RSC, Next-Router-State-Tree');
     expect(response.headers.getSetCookie()).toHaveLength(2);
@@ -62,7 +59,7 @@ describe('one explicit Node facade', () => {
   });
 
   it('treats explicitly empty cookies and effective headers as authoritative', () => {
-    const sdk = configureNextjsServerExperiences({
+    const sdk = configureServerExperiences({
       spaceId: 'space',
       environmentId: 'master',
       delivery: { accessToken: 'test' },
@@ -76,7 +73,7 @@ describe('one explicit Node facade', () => {
       { cookies: { get: () => undefined } },
       { headers: new globalThis.Headers() },
     ]) {
-      const request = bindNextjsExperiencesRequest(sdk, {
+      const request = bindExperiencesRequest(sdk, {
         consent: { persistence: true },
         request: incoming,
         ...extra,
@@ -84,7 +81,7 @@ describe('one explicit Node facade', () => {
       expect(request.profile).toBeUndefined();
       request.destroy();
     }
-    const request = bindNextjsExperiencesRequest(sdk, {
+    const request = bindExperiencesRequest(sdk, {
       consent: false,
       request: incoming,
       profile: { id: 'explicit' },
@@ -94,20 +91,20 @@ describe('one explicit Node facade', () => {
   });
 
   it('requires consent before binding and forwards preview policy unchanged', () => {
-    const sdk = configureNextjsServerExperiences({
+    const sdk = configureServerExperiences({
       spaceId: 'space',
       environmentId: 'master',
       delivery: { accessToken: 'test' },
     });
     const forRequest = vi.spyOn(sdk, 'forRequest');
-    expect(() => bindNextjsExperiencesRequest(sdk, { consent: undefined! })).toThrow('consent');
+    expect(() => bindExperiencesRequest(sdk, { consent: undefined! })).toThrow('consent');
     expect(forRequest).not.toHaveBeenCalled();
     const preview = { sessionId: 'session' };
-    const request = bindNextjsExperiencesRequest(sdk, { consent: true, preview });
+    const request = bindExperiencesRequest(sdk, { consent: true, preview });
     expect(request.isPreview).toBe(true);
     const response = { headers: new globalThis.Headers() };
-    applyNextjsPrivateResponseCache(response);
-    persistNextjsAnonymousId(response, request);
+    applyPrivateResponseCache(response);
+    persistAnonymousId(response, request);
     expect(response.headers.has('set-cookie')).toBe(false);
     expect(forRequest.mock.calls[0]![0]?.preview).toBe(preview);
     request.destroy();
@@ -115,7 +112,7 @@ describe('one explicit Node facade', () => {
 });
 
 it('does not read cookie identity without persistence consent or during preview', () => {
-  const sdk = configureNextjsServerExperiences({
+  const sdk = configureServerExperiences({
     spaceId: 'space',
     environmentId: 'master',
     delivery: { accessToken: 'test' },
@@ -133,7 +130,7 @@ it('does not read cookie identity without persistence consent or during preview'
     },
   ]) {
     for (const profile of [undefined, { id: 'app-approved' }]) {
-      const request = bindNextjsExperiencesRequest(sdk, { ...context, cookies: { get }, profile });
+      const request = bindExperiencesRequest(sdk, { ...context, cookies: { get }, profile });
       expect(request.profile).toEqual(request.isPreview ? undefined : profile);
       request.destroy();
     }

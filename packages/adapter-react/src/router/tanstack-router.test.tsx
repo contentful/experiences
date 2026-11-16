@@ -3,7 +3,7 @@
 import { act, type HTMLAttributes } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { sourceSdk } from '../test/managed-experience.js';
-import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
+import { createDomTestRoot, type DomTestRoot } from '../test/dom-root.js';
 import {
   bindTanStackRouterExperiences,
   type AutoPageEmissionContext,
@@ -42,7 +42,7 @@ interface TestRouterState {
 }
 
 describe('TanStack Router mapping', () => {
-  let view: ReactTestRoot;
+  let view: DomTestRoot;
   let source: ReturnType<typeof sourceSdk>;
   let location: TestLocation;
   let matches: object[];
@@ -53,7 +53,7 @@ describe('TanStack Router mapping', () => {
   beforeEach(() => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     window.history.replaceState(null, '', '/window-only?source=browser#wrong');
-    view = createReactTestRoot();
+    view = createDomTestRoot();
     source = sourceSdk();
     trackCurrentPage = vi.fn().mockResolvedValue({ accepted: true });
     Object.assign(source.sdk, { trackCurrentPage });

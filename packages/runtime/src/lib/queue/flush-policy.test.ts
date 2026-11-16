@@ -4,7 +4,7 @@ import {
   computeQueueFlushRetryDelayMs,
   createQueueFlushFailureWindow,
   resolveQueueFlushPolicy,
-} from './flushPolicy.js';
+} from './flush-policy.js';
 
 describe('queue flush policy utils', () => {
   describe('resolveQueueFlushPolicy', () => {

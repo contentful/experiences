@@ -140,7 +140,7 @@ limit in code. Reference implementations fetch multiple IDs only to compare
 rendering scenarios; their loops are not a supported product pattern and provide
 no multi-Experience or cross-fetch guarantee.
 
-XDA forces XPAPI `preflight: true`, without an override, committing neither events
+XDA forces Personalization API `preflight: true`, without an override, committing neither events
 nor profile creation/changes. Returned new IDs are provisional; SDK adoption,
 LocalStorage and cookies do not finalize them. This CSR reference uses ordinary Web
 fetch and creates no handoff or compensating commit. XDA noncommit remains a tolerated
@@ -304,7 +304,7 @@ direct browser delivery using the SDK's default live endpoints and
 `delivery: { accessToken: window.ENVIRONMENT.CDA_TOKEN }`, with the injected space,
 environment and locale. There is no delivery proxy, alternate endpoint selector,
 or server-side SDK. Browser HTTP CORS preflight is separate from the Experience
-Delivery API's forced XPAPI preflight for event-bearing requests and the supported
+Delivery API's forced Personalization API preflight for event-bearing requests and the supported
 Personalization API preflight. This app evaluates events through ordinary Web XDA fetch; those events remain
 uncommitted pending upstream service support. It has no Node server handoff.
 

@@ -2,8 +2,8 @@
 
 import { completeProfile as profileFixture } from './test-fixtures/profile.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { RuntimeEventMethods } from '@contentful/experiences-runtime';
-import { getPageProperties } from './browser-event-context.js';
+import type { EventMethods } from '@contentful/experiences-runtime';
+import { getPageProperties } from './event-context.js';
 import { ContentfulExperiences as NodeExperiences } from '../../node/src/contentful-experiences.js';
 import { ContentfulExperiences as WebExperiences } from './contentful-experiences.js';
 import { clearIdentityCookies, seedConsent } from './test-fixtures/consent.js';
@@ -84,7 +84,7 @@ function web(options: Partial<ConstructorParameters<typeof WebExperiences>[0]> =
   return sdk;
 }
 
-function allEvents(runtime: Omit<RuntimeEventMethods, 'profile'>) {
+function allEvents(runtime: Omit<EventMethods, 'profile'>) {
   return Promise.all([
     runtime.identify({ userId: 'editor' }),
     runtime.page(),

@@ -1,19 +1,19 @@
 import { ContentfulViewDeliveryClient } from '@contentful/experiences-client';
 
-type RuntimeDeliveryClientBaseOptions = Omit<
+type DeliveryClientBaseOptions = Omit<
   ContentfulViewDeliveryClient.Options,
   'token' | 'baseUrl' | 'spaceId' | 'environmentId'
 >;
 
 /** Identity the runtime already owns (`Config.spaceId`/`environmentId`),
  * threaded in separately so callers don't repeat it in `delivery`/`preview` config. */
-export type RuntimeDeliveryClientIdentity = {
+export type DeliveryClientIdentity = {
   spaceId: string;
   environmentId: string;
 };
 
 /** Configuration for a Delivery or Preview client owned by a runtime. */
-export type DeliveryClientOptions = RuntimeDeliveryClientBaseOptions &
+export type DeliveryClientOptions = DeliveryClientBaseOptions &
   (
     | {
         /** Bearer token or token supplier used for direct Delivery/Preview API access. */
@@ -32,9 +32,9 @@ export type DeliveryClientOptions = RuntimeDeliveryClientBaseOptions &
  * Constructs a runtime-owned client, disabling generated auth for a tokenless proxy.
  * `defaultHeaders` sit beneath any caller-configured `headers`.
  */
-export function createRuntimeDeliveryClient(
+export function createDeliveryClient(
   options: DeliveryClientOptions,
-  identity: RuntimeDeliveryClientIdentity,
+  identity: DeliveryClientIdentity,
   defaultHost?: NonNullable<ContentfulViewDeliveryClient.Options['baseUrl']>,
   defaultHeaders?: Record<string, string>
 ): ContentfulViewDeliveryClient {

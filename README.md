@@ -202,9 +202,9 @@ Preview credentials on the root in a client module:
 ```tsx
 'use client';
 
-import { createReactExperiences, usePreviewState } from '@contentful/experiences-react/client';
+import { createExperiences, usePreviewState } from '@contentful/experiences-react/client';
 
-const { ExperiencesRoot, Experience } = createReactExperiences({ config: browserRegistry });
+const { ExperiencesRoot, Experience } = createExperiences({ config: browserRegistry });
 
 function PreviewStatus() {
   const preview = usePreviewState();
@@ -402,9 +402,9 @@ Client preserves the supported event shape, including `context.gdpr` and
 `context.gdpr.isConsentGiven`, overwriting any caller-supplied flag, before running
 interceptors. Hooks may explicitly transform valid metadata; final validation and current-consent
 admission still apply, with caller input unchanged. Reusing an event in another
-fetch is another preflight evaluation, not an XPAPI commit. See
+fetch is another preflight evaluation, not an Personalization API commit. See
 [XDA preflight and profile finalization](./packages/runtime/README.md#xda-preflight-and-profile-finalization).
-Actual XPAPI commits and retries retain their delivery ambiguity.
+Actual Personalization API commits and retries retain their delivery ambiguity.
 
 On reset, invalidate stale application render work and remove or replace old
 attributed content synchronously in the same transition, before awaiting the new
@@ -418,7 +418,7 @@ Safe serialization and preflight limitations are described below.
 
 For an actual hybrid transfer, evaluate events through the Node XDA producer
 shown above. Optionally consume the returned full aggregate through the browser owner.
-XDA supplies the content evaluation, while XPAPI commits the finalized events.
+XDA supplies the content evaluation, while Personalization API commits the finalized events.
 
 The application supplies a route key made from the visible pathname and search
 string. It must begin with `/`. A handoff with profile, changes, continuation identity,
@@ -512,7 +512,7 @@ new XDA IDs remain provisional until backend finalization is verified.
 The generated `personalization.preflight` option is forwarded without a default;
 its deployed behavior requires verification. Independent profile-only reads with
 an already-concrete profile remain viable. Neither handoff recipe promises exactly-once delivery for
-actual XPAPI commits. See
+actual Personalization API commits. See
 [XDA preflight and profile finalization](./packages/runtime/README.md#xda-preflight-and-profile-finalization).
 
 ---
@@ -533,7 +533,7 @@ Preview Session changes remain in the preview instance; per-call CPA preview
 fetches do not replace live visitor flags.
 Supplied changes replace the browser snapshot: `[]` clears flags; omitted changes
 retain them unless profile identity changes. Treating XDA changes as a complete
-snapshot follows XPAPI/Optimization behavior and remains an assumption pending
+snapshot follows Personalization API/Optimization behavior and remains an assumption pending
 live-backend verification. To read a particular plan explicitly, use the pure
 helper re-exported by every framework adapter:
 

@@ -1,19 +1,19 @@
 import { ExperienceFetchError, type RequestRuntime } from '@contentful/experiences-node';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  resolveNextjsRequestPolicy as resolvePolicy,
-  loadNextjsPrimaryExperience as loadPrimary,
+  resolveRequestPolicy as resolvePolicy,
+  loadPrimaryExperience as loadPrimary,
 } from './request-policy.js';
-import type { NextjsServerExperiencesConfig, NextjsServerRequestContext } from './server-config.js';
+import type { ServerConfig, ServerRequestContext } from './server-config.js';
 
-const config: NextjsServerExperiencesConfig = {
+const config: ServerConfig = {
   spaceId: 'space',
   environmentId: 'master',
   delivery: { accessToken: 'server' },
   config: { components: {} },
   request: { experience: { experienceId: 'home' } },
 };
-const context: NextjsServerRequestContext = {
+const context: ServerRequestContext = {
   request: {
     url: 'https://example.com/page?q=a+b&tag=first&tag=last',
     headers: new globalThis.Headers(),

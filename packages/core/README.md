@@ -43,7 +43,7 @@ flag records nor selects values or emits exposures. Use the adapter-exported
 `getFlag` read. Web also adopts returned XDA changes into browser flag state
 through its existing state-interceptor path; supplied arrays replace that
 snapshot, including `[]` to clear it. Omission retains flags unless profile
-identity changes. This snapshot interpretation follows XPAPI/Optimization and
+identity changes. This snapshot interpretation follows Personalization API/Optimization and
 remains an assumption pending live-backend verification; Core preserves the raw
 response. See the [custom flag guide](../../README.md#custom-flags).
 

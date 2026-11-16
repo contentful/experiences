@@ -244,7 +244,7 @@ fresh presentation while retaining the root and sidebar. URL/title/active links 
 focus follow direct navigation and back/forward.
 
 Ordinary SSR/CSR XDA events currently remain uncommitted because the service forces
-preflight. That is tolerated absent blocking errors, without synthetic XPAPI
+preflight. That is tolerated absent blocking errors, without synthetic Personalization API
 compensation. A provisional profile ID and content success do not prove commitment.
 Only actual supplied server transfers use optional explicit replay; this CSR reference
 creates none. Insights acceptance is observed per request, not assumed from an ID.
@@ -333,7 +333,7 @@ content remains independent of event submission, identity finalization and socke
 The ID-only profile/Insights HTTP 400 mismatch is a current service limitation.
 See [Runtime's canonical record](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
 View/hover/click notifications show measurement/admission, not delivery. Complete
-XPAPI profiles produced HTTP 200; fresh XDA ID-only profiles were rejected for
+Personalization API profiles produced HTTP 200; fresh XDA ID-only profiles were rejected for
 missing profile fields. No profile fields or compensating commits are fabricated.
 
 The stable `onStatesReady` callback attaches the optional sidebar's retained

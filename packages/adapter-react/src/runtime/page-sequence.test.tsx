@@ -10,17 +10,11 @@ import {
   type ExperiencesHandoff,
 } from '@contentful/experiences-web';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
-import { ExperiencesContext } from './experiences-context.js';
-import {
-  useExperienceRequestContext,
-  type ExperienceRequestContextValue,
-} from './experience-request-context.js';
-import { createReactTestRoot, type ReactTestRoot } from '../test/react-root.js';
+import { RuntimeContext } from './context.js';
+import { useRequestContext, type RequestContextValue } from './request-context.js';
+import { createDomTestRoot, type DomTestRoot } from '../test/dom-root.js';
 import { profileFixture } from '../test/profile.js';
-import {
-  ExperiencesPageSequence,
-  type BeforeInitialPageOptions,
-} from './experiences-page-sequence.js';
+import { PageSequence, type BeforeInitialPageOptions } from './page-sequence.js';
 
 const plan: PortableRenderPlan = { nodes: [], metadata: {}, debug: false, diagnostics: [] };
 const config = { components: {} };
@@ -35,13 +29,13 @@ function deferred<T>() {
 }
 
 describe('React route request and page coordination', () => {
-  let view: ReactTestRoot;
+  let view: DomTestRoot;
   let runtime: ContentfulExperiences;
   let consent: typeof signals.consent;
-  let requests: ExperienceRequestContextValue;
+  let requests: RequestContextValue;
   beforeEach(() => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-    view = createReactTestRoot();
+    view = createDomTestRoot();
     consent = signals.consent;
     consent.value = false;
     signals.personalizationRequestState.value = { status: 'idle' };
@@ -65,7 +59,7 @@ describe('React route request and page coordination', () => {
     vi.unstubAllGlobals();
   });
   function Probe({ fetch = false }: { fetch?: boolean }) {
-    requests = useExperienceRequestContext()!;
+    requests = useRequestContext()!;
     useEffect(() => {
       if (fetch)
         void requests
@@ -92,10 +86,10 @@ describe('React route request and page coordination', () => {
     pageMode?: 'analytics';
   } = {}) {
     const tree = (
-      <ExperiencesContext.Provider
+      <RuntimeContext.Provider
         value={{ sdk: runtime, isLive: true, isContentReady: true, error: undefined }}
       >
-        <ExperiencesPageSequence
+        <PageSequence
           routeKey={routeKey}
           pageMode={pageMode}
           handoff={handoff}
@@ -105,8 +99,8 @@ describe('React route request and page coordination', () => {
           onReset={onReset}
         >
           <Probe fetch={fetch} />
-        </ExperiencesPageSequence>
-      </ExperiencesContext.Provider>
+        </PageSequence>
+      </RuntimeContext.Provider>
     );
     await act(async () => view.render(strict ? <StrictMode>{tree}</StrictMode> : tree));
   }

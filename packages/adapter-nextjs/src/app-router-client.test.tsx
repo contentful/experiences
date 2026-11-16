@@ -19,12 +19,12 @@ import {
   type States,
 } from '@contentful/experiences-web';
 import {
-  bindNextjsAppRouterClientExperiences,
-  NextjsAppRouterRequestRoot,
-  NextjsAppRouterRequestAnalyticsRoot,
-  useNextAppAutoPageInputs,
+  bindAppRouterClientExperiences,
+  AppRouterRequestRoot,
+  AppRouterRequestAnalyticsRoot,
+  useAppAutoPageInputs,
 } from './app-router-client.js';
-import { NextjsRequestPresentation } from './router-lifetime.js';
+import { RequestPresentation } from './router-lifetime.js';
 
 const navigation = vi.hoisted(() => ({
   pathname: '/page',
@@ -33,7 +33,7 @@ const navigation = vi.hoisted(() => ({
 }));
 vi.mock('./router-lifetime.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./router-lifetime.js')>();
-  return { ...actual, NextjsRequestPresentation: vi.fn(actual.NextjsRequestPresentation) };
+  return { ...actual, RequestPresentation: vi.fn(actual.RequestPresentation) };
 });
 vi.mock('next/navigation.js', () => ({
   usePathname: () => navigation.pathname,
@@ -61,9 +61,9 @@ describe('App committed route inputs', () => {
   let container: HTMLDivElement;
   let root: Root;
   let liveSdk: ContentfulExperiences | undefined;
-  let inputs: ReturnType<typeof useNextAppAutoPageInputs>;
+  let inputs: ReturnType<typeof useAppAutoPageInputs>;
   function Probe() {
-    inputs = useNextAppAutoPageInputs();
+    inputs = useAppAutoPageInputs();
     return null;
   }
   beforeEach(() => {
@@ -154,7 +154,7 @@ describe('App committed route inputs', () => {
       window.localStorage.setItem(PERSISTENCE_CONSENT_CACHE_KEY, 'accepted');
       const consentDefaults = (value: boolean | undefined) =>
         value === undefined ? undefined : { consent: value, persistenceConsent: value };
-      const bound = bindNextjsAppRouterClientExperiences({
+      const bound = bindAppRouterClientExperiences({
         config: { components: {} },
         spaceId: 'space',
         environmentId: 'master',
@@ -204,7 +204,7 @@ describe('App committed route inputs', () => {
       reset = useExperiencesActions().resetUser;
       return null;
     }
-    const bound = bindNextjsAppRouterClientExperiences({ config: { components: {} } });
+    const bound = bindAppRouterClientExperiences({ config: { components: {} } });
     const handoff = {
       spaceId: 'space',
       environmentId: 'master',
@@ -259,7 +259,7 @@ describe('App committed route inputs', () => {
       current = useExperiences();
       return null;
     }
-    const bound = bindNextjsAppRouterClientExperiences({ config: { components: {} } });
+    const bound = bindAppRouterClientExperiences({ config: { components: {} } });
     const { Experience } = bound.request;
     const result = {
       requestId: 'default',
@@ -269,7 +269,7 @@ describe('App committed route inputs', () => {
     };
     await act(async () =>
       root.render(
-        <NextjsAppRouterRequestRoot
+        <AppRouterRequestRoot
           spaceId="space"
           environmentId="master"
           locale="en-US"
@@ -282,7 +282,7 @@ describe('App committed route inputs', () => {
           <Experience>
             {(state) => <output>{String(state.data?.metadata.label)}</output>}
           </Experience>
-        </NextjsAppRouterRequestRoot>
+        </AppRouterRequestRoot>
       )
     );
     const sdk = current! as ContentfulExperiences;
@@ -313,7 +313,7 @@ describe('App committed route inputs', () => {
     const fetchExperience = vi
       .spyOn(sdk, 'fetchExperience')
       .mockRejectedValue(new Error('Unexpected Web content fetch'));
-    const bound = bindNextjsAppRouterClientExperiences({ config: { components: {} } });
+    const bound = bindAppRouterClientExperiences({ config: { components: {} } });
     const builder = new EventBuilder({
       channel: 'web',
       library: { name: 'test', version: '1.0.0' },
@@ -398,7 +398,7 @@ describe('App committed route inputs', () => {
       fetchExperience,
       subscribeToPreview: () => ({ unsubscribe() {} }),
     } as unknown as ContentfulExperiences;
-    const bound = bindNextjsAppRouterClientExperiences({ config: { components: {} } });
+    const bound = bindAppRouterClientExperiences({ config: { components: {} } });
     const initial = {
       requestId: 'initial',
       routeKey: '/page?q=hello+world',
@@ -450,8 +450,8 @@ describe('App committed route inputs', () => {
   it.each(['bound', 'standalone'] as const)(
     'keeps an empty %s request root inactive',
     async (kind) => {
-      const bound = bindNextjsAppRouterClientExperiences({ config: { components: {} } });
-      const Owner = kind === 'bound' ? bound.request.ExperiencesRoot : NextjsAppRouterRequestRoot;
+      const bound = bindAppRouterClientExperiences({ config: { components: {} } });
+      const Owner = kind === 'bound' ? bound.request.ExperiencesRoot : AppRouterRequestRoot;
       await act(async () =>
         root.render(
           <Owner
@@ -473,7 +473,7 @@ describe('App committed route inputs', () => {
   it.each([false, true])(
     'requires a request result outside request roots (plain preview root=%s)',
     (preview) => {
-      const bound = bindNextjsAppRouterClientExperiences({
+      const bound = bindAppRouterClientExperiences({
         config: { components: {} },
         spaceId: 'space',
         environmentId: 'master',
@@ -493,7 +493,7 @@ describe('App committed route inputs', () => {
     const configured = vi.fn(() => ({ properties: { path: '/configured' } }));
     const override = vi.fn(() => ({ properties: { path: '/override' } }));
     const beforeInitialPage = { run: vi.fn() };
-    const bound = bindNextjsAppRouterClientExperiences({
+    const bound = bindAppRouterClientExperiences({
       config: { components: {} },
       buildPagePayload: configured,
       beforeInitialPage,
@@ -507,7 +507,7 @@ describe('App committed route inputs', () => {
         />
       )
     );
-    const presentation = vi.mocked(NextjsRequestPresentation).mock.calls.at(-1)![0];
+    const presentation = vi.mocked(RequestPresentation).mock.calls.at(-1)![0];
     expect(presentation.Root({}).props).toMatchObject({ beforeInitialPage });
     expect(presentation).toMatchObject({
       routeKey: '/page?q=hello+world',
@@ -530,7 +530,7 @@ describe('App committed route inputs', () => {
       hydrateAndTrackCurrentPage,
       subscribeToPreview: () => ({ unsubscribe() {} }),
     } as unknown as ContentfulExperiences;
-    const bound = bindNextjsAppRouterClientExperiences({ config: { components: {} } });
+    const bound = bindAppRouterClientExperiences({ config: { components: {} } });
     const { ExperiencesRoot, Experience } = bound;
     const tree = () => (
       <ExperiencesRoot
@@ -589,7 +589,7 @@ describe('App committed route inputs', () => {
     } as unknown as ContentfulExperiences;
     await act(async () =>
       root.render(
-        <NextjsAppRouterRequestAnalyticsRoot
+        <AppRouterRequestAnalyticsRoot
           browser={{ delivery: { host: 'https://trusted-proxy.example' } }}
           spaceId="space"
           environmentId="master"
@@ -601,7 +601,7 @@ describe('App committed route inputs', () => {
           }}
         >
           <p>Server content</p>
-        </NextjsAppRouterRequestAnalyticsRoot>
+        </AppRouterRequestAnalyticsRoot>
       )
     );
     const publish = async (experienceId: string, revision: number) =>
@@ -623,7 +623,7 @@ describe('App committed route inputs', () => {
   });
   it('preserves a bound static page payload on an explicit managed root', async () => {
     const initialPagePayload = { properties: { title: 'Configured page' } };
-    const { ExperiencesRoot } = bindNextjsAppRouterClientExperiences({
+    const { ExperiencesRoot } = bindAppRouterClientExperiences({
       config: { components: {} },
       spaceId: 'space',
       environmentId: 'master',
@@ -632,7 +632,7 @@ describe('App committed route inputs', () => {
       preview: { enabled: false, createClient: vi.fn() },
     });
     await act(async () => root.render(<ExperiencesRoot />));
-    expect(vi.mocked(NextjsRequestPresentation).mock.calls.at(-1)![0].initialPagePayload).toBe(
+    expect(vi.mocked(RequestPresentation).mock.calls.at(-1)![0].initialPagePayload).toBe(
       initialPagePayload
     );
   });

@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
-import {
-  ExperienceSourceController,
-  type ExperienceSourceOptions,
-} from './experience-source-controller.js';
+import { SourceController, type ExperienceSourceOptions } from './source-controller.js';
 import { deferred, plan, previewState, sourceSdk } from '../test/managed-experience.js';
 
 const config = { components: {} };
@@ -21,11 +18,11 @@ const settle = async () => {
   await Promise.resolve();
 };
 
-describe('ExperienceSourceController', () => {
+describe('SourceController', () => {
   it('adopts error seeds by identity and does not reapply them after retry or a genuine descriptor change', async () => {
     const source = sourceSdk();
     const initialError = new Error('initial failure');
-    const controller = new ExperienceSourceController(undefined, initialError);
+    const controller = new SourceController(undefined, initialError);
     const input = options(source, { initialError });
     controller.updateOptions(input);
     controller.updateOptions(input);
@@ -61,7 +58,7 @@ describe('ExperienceSourceController', () => {
 
   it('ignores equivalent descriptors after success and failure', async () => {
     const source = sourceSdk();
-    const controller = new ExperienceSourceController();
+    const controller = new SourceController();
     const request = { experienceId: 'home', parameters: { a: 1, b: { y: 2, x: 3 } } };
     const resolve = { config, metadata: { at: new Date(0) } };
     controller.updateOptions(options(source, { request, resolve }));
@@ -94,7 +91,7 @@ describe('ExperienceSourceController', () => {
     'retains opaque metadata references and refetches on replacement (%#)',
     async (createOpaque) => {
       const source = sourceSdk();
-      const controller = new ExperienceSourceController();
+      const controller = new SourceController();
       const opaque = createOpaque();
       controller.updateOptions(options(source, { resolve: { config, metadata: { opaque } } }));
       await settle();
@@ -112,7 +109,7 @@ describe('ExperienceSourceController', () => {
     const source = sourceSdk();
     const first = deferred<PortableRenderPlan>();
     const second = deferred<PortableRenderPlan>();
-    const controller = new ExperienceSourceController(plan('seed'));
+    const controller = new SourceController(plan('seed'));
     const request = {
       experienceId: 'home',
       personalization: {
@@ -146,7 +143,7 @@ describe('ExperienceSourceController', () => {
       const source = sourceSdk();
       const pending = deferred<PortableRenderPlan>();
       source.fetchExperience.mockReturnValueOnce(pending.promise);
-      const controller = new ExperienceSourceController();
+      const controller = new SourceController();
       const fetchExperience = vi.fn().mockResolvedValue(plan('new'));
       const context = { revision: {}, fetchExperience };
       const first = options(source, {
@@ -175,7 +172,7 @@ describe('ExperienceSourceController', () => {
   it('delegates to the root coordinator with refresh semantics', async () => {
     const source = sourceSdk();
     const fetchExperience = vi.fn().mockResolvedValue(plan());
-    const controller = new ExperienceSourceController();
+    const controller = new SourceController();
     const request = {
       experienceId: 'home',
       personalization: { profileId: 'id', events: [{ type: 'page' as const }] },
@@ -205,7 +202,7 @@ describe('ExperienceSourceController', () => {
         error: new Error('other source'),
       })
     );
-    const controller = new ExperienceSourceController();
+    const controller = new SourceController();
     const data = plan('ordinary snapshot');
     source.fetchExperience.mockResolvedValue(data);
     controller.updateOptions(options(source));
@@ -217,7 +214,7 @@ describe('ExperienceSourceController', () => {
     const source = sourceSdk();
     const empty = { ...plan(), nodes: [] };
     source.fetchExperience.mockResolvedValue(empty);
-    const controller = new ExperienceSourceController();
+    const controller = new SourceController();
     controller.updateOptions(options(source));
     await settle();
     expect(controller.getSnapshot()).toEqual({ status: 'success', data: empty, error: undefined });

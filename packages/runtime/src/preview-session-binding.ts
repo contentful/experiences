@@ -1,6 +1,6 @@
-import type { RuntimePreviewSessionOptions } from './live-preview.js';
+import type { PreviewSessionOptions } from './live-preview.js';
 
-export type PreviewSessionBinding = RuntimePreviewSessionOptions & { experienceId: string };
+export type PreviewSessionBinding = PreviewSessionOptions & { experienceId: string };
 
 /** An explicit value overrides the standard query parameter; a blank value disables it. */
 export function resolvePreviewSessionId(

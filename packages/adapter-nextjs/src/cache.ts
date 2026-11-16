@@ -4,11 +4,11 @@ import {
   type RequestContext,
   type FetchExperienceOptions,
 } from '@contentful/experiences-node';
-import type { NextjsResponseLike } from './cookies.js';
-import { validateNextjsPublicPermutationCacheTags } from './cache-key.js';
+import type { ResponseLike } from './cookies.js';
+import { validatePublicPermutationCacheTags } from './cache-key.js';
 
 /** Install only in host-assembled private Delivery/CPA configuration. */
-export function createNextjsPrivateFetch(
+export function createPrivateFetch(
   fetchImplementation: typeof globalThis.fetch = globalThis.fetch
 ): typeof globalThis.fetch {
   return (input, init) => {
@@ -33,12 +33,12 @@ export function createNextjsPrivateFetch(
   };
 }
 
-export function applyNextjsPrivateResponseCache(response: NextjsResponseLike): void {
+export function applyPrivateResponseCache(response: ResponseLike): void {
   response.headers.set('cache-control', 'private, no-store');
 }
 
 /** Validation only; the application owns the complete key and actual public cache. */
-export function assertNextjsPublicRequestPolicy(options: {
+export function assertPublicRequestPolicy(options: {
   readonly cache: Exclude<ExperiencesCacheMetadata, { scope: 'private-request' }>;
   readonly context?: RequestContext;
   readonly fetchOptions?: FetchExperienceOptions;
@@ -47,7 +47,7 @@ export function assertNextjsPublicRequestPolicy(options: {
   if (cache.scope !== 'static' && cache.scope !== 'public-permutation')
     throw new TypeError('Explicit public/static cache policy required');
   assertExperiencesCacheSafety({ spaceId: '', environmentId: '', cache });
-  if (cache.scope === 'public-permutation') validateNextjsPublicPermutationCacheTags(cache.tags);
+  if (cache.scope === 'public-permutation') validatePublicPermutationCacheTags(cache.tags);
   if (
     context?.profile !== undefined ||
     context?.isPreview ||

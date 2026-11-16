@@ -4,7 +4,7 @@ import {
   type QueueFlushFailureContext,
   type QueueFlushRecoveredContext,
   type ResolvedQueueFlushPolicy,
-} from './flushPolicy.js';
+} from './flush-policy.js';
 
 /**
  * Callback names for queue flush policy hooks.
@@ -14,11 +14,11 @@ import {
 export type QueueFlushCallbackName = 'onCircuitOpen' | 'onFlushFailure' | 'onFlushRecovered';
 
 /**
- * Construction options for {@link QueueFlushRuntime}.
+ * Construction options for {@link FlushRuntime}.
  *
  * @internal
  */
-interface QueueFlushRuntimeOptions {
+interface FlushRuntimeOptions {
   onCallbackError?: (callbackName: QueueFlushCallbackName, error: unknown) => void;
   onRetry: () => void;
   policy: ResolvedQueueFlushPolicy;
@@ -29,17 +29,17 @@ interface QueueFlushRuntimeOptions {
  *
  * @internal
  */
-export class QueueFlushRuntime {
+export class FlushRuntime {
   private circuitOpenUntil = 0;
   private flushFailureCount = 0;
   private flushInFlight = false;
   private nextFlushAllowedAt = 0;
-  private readonly onCallbackError?: QueueFlushRuntimeOptions['onCallbackError'];
-  private readonly onRetry: QueueFlushRuntimeOptions['onRetry'];
-  private readonly policy: QueueFlushRuntimeOptions['policy'];
+  private readonly onCallbackError?: FlushRuntimeOptions['onCallbackError'];
+  private readonly onRetry: FlushRuntimeOptions['onRetry'];
+  private readonly policy: FlushRuntimeOptions['policy'];
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-  constructor(options: QueueFlushRuntimeOptions) {
+  constructor(options: FlushRuntimeOptions) {
     const { onCallbackError, onRetry, policy } = options;
 
     this.policy = policy;

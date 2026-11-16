@@ -6,16 +6,16 @@ import type { AllowedEventType, BlockedEvent, ConsentState } from './consent.js'
 import EventBuilder from './event-builder.js';
 import type { EventInterceptors } from './event-interceptors.js';
 import {
-  createRuntimeEventMethods,
+  createEventMethods,
   EventProfileRequiredError,
   EventProfileSchema,
   type EventOptimizationData,
   type EventProfile,
   type PersonalizationRequestOptions,
-  type RuntimeEventDispatch,
-  type RuntimeEventBindings,
+  type EventDispatch,
+  type EventBindings,
   type EventApi,
-} from './runtime-event-methods.js';
+} from './event-methods.js';
 
 const interaction = {
   entityId: 'experience-1',
@@ -56,14 +56,14 @@ function optimizationData(profileId: string): EventOptimizationData {
 
 function createFixture(
   options: {
-    profile?: ReturnType<RuntimeEventBindings['getProfile']>;
+    profile?: ReturnType<EventBindings['getProfile']>;
     eventInterceptors?: EventInterceptors;
     consent?: ConsentState;
     allowedEventTypes?: readonly AllowedEventType[];
     onEventBlocked?: (event: BlockedEvent) => void;
     reportBlockedEvent?: (event: BlockedEvent) => void;
     sendResult?: boolean;
-    dispatch?: RuntimeEventDispatch;
+    dispatch?: EventDispatch;
     requireProfile?: boolean;
     analyticsOptions?: AnalyticsApiClientRequestOptions;
     personalizationOptions?: PersonalizationRequestOptions;
@@ -85,7 +85,7 @@ function createFixture(
   const setProfile = vi.fn((nextProfile: EventProfile) => {
     profile = nextProfile;
   });
-  const bindings: RuntimeEventBindings = {
+  const bindings: EventBindings = {
     getProfile: () => profile,
     getEventContext: () => ({ locale: 'de-DE' }),
     getLocale: () => 'en-US',
@@ -97,7 +97,7 @@ function createFixture(
   };
   const methods =
     options.dispatch === undefined
-      ? createRuntimeEventMethods(api, eventBuilder, {
+      ? createEventMethods(api, eventBuilder, {
           ...bindings,
           setProfile,
           eventInterceptors: options.eventInterceptors,
@@ -105,7 +105,7 @@ function createFixture(
           isActive: options.isActive,
           onEventBlocked: options.onEventBlocked,
         })
-      : createRuntimeEventMethods(
+      : createEventMethods(
           api,
           eventBuilder,
           { ...bindings, reportBlockedEvent: options.reportBlockedEvent },
@@ -123,7 +123,7 @@ function createFixture(
   };
 }
 
-describe('RuntimeEventMethods', () => {
+describe('EventMethods', () => {
   it('drops a direct request disposed during its async hook before transport', async () => {
     let active = true;
     const run = vi.fn<EventInterceptors['run']>(async (event) => {
@@ -364,7 +364,7 @@ describe('RuntimeEventMethods', () => {
   });
 
   it('keeps the current profile when queued Personalization work is accepted without response data', async () => {
-    const dispatch: RuntimeEventDispatch = {
+    const dispatch: EventDispatch = {
       personalization: vi.fn().mockResolvedValue({ accepted: true }),
       analytics: vi.fn().mockResolvedValue(true),
     };
@@ -541,7 +541,7 @@ describe('RuntimeEventMethods', () => {
   });
 
   it('supports a runtime-owned dispatch strategy without using the direct transports', async () => {
-    const dispatch: RuntimeEventDispatch = {
+    const dispatch: EventDispatch = {
       personalization: vi.fn().mockResolvedValue({
         accepted: true,
         data: optimizationData('profile-from-dispatch'),
@@ -683,7 +683,7 @@ describe('RuntimeEventMethods', () => {
       const reportBlockedEvent = vi.fn(() => {
         throw error;
       });
-      const dispatch: RuntimeEventDispatch = {
+      const dispatch: EventDispatch = {
         personalization: vi.fn(),
         analytics: vi.fn(),
       };

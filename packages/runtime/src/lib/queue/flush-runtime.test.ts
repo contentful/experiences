@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { QueueFlushFailureContext, QueueFlushRecoveredContext } from './flushPolicy.js';
-import { resolveQueueFlushPolicy } from './flushPolicy.js';
-import { QueueFlushRuntime } from './QueueFlushRuntime.js';
+import type { QueueFlushFailureContext, QueueFlushRecoveredContext } from './flush-policy.js';
+import { resolveQueueFlushPolicy } from './flush-policy.js';
+import { FlushRuntime } from './flush-runtime.js';
 
-describe('QueueFlushRuntime', () => {
+describe('FlushRuntime', () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -15,7 +15,7 @@ describe('QueueFlushRuntime', () => {
   });
 
   it('skips flush while in flight and allows force bypass', () => {
-    const runtime = new QueueFlushRuntime({
+    const runtime = new FlushRuntime({
       policy: resolveQueueFlushPolicy(undefined),
       onRetry: vi.fn(),
     });
@@ -33,7 +33,7 @@ describe('QueueFlushRuntime', () => {
     const onRetry = vi.fn<() => void>();
     const onFlushFailure = vi.fn<(context: QueueFlushFailureContext) => void>();
     const onCircuitOpen = vi.fn<(context: QueueFlushFailureContext) => void>();
-    const runtime = new QueueFlushRuntime({
+    const runtime = new FlushRuntime({
       policy: resolveQueueFlushPolicy({
         baseBackoffMs: 10,
         maxBackoffMs: 10,
@@ -79,7 +79,7 @@ describe('QueueFlushRuntime', () => {
   it('clears pending backoff and emits recovery callback after success', async () => {
     const onRetry = vi.fn<() => void>();
     const onFlushRecovered = vi.fn<(context: QueueFlushRecoveredContext) => void>();
-    const runtime = new QueueFlushRuntime({
+    const runtime = new FlushRuntime({
       policy: resolveQueueFlushPolicy({
         baseBackoffMs: 10,
         maxBackoffMs: 10,
@@ -103,7 +103,7 @@ describe('QueueFlushRuntime', () => {
   it('reports callback failures via onCallbackError', () => {
     const callbackError = new Error('callback-failed');
     const onCallbackError = vi.fn<(callbackName: string, error: unknown) => void>();
-    const runtime = new QueueFlushRuntime({
+    const runtime = new FlushRuntime({
       policy: resolveQueueFlushPolicy({
         onFlushFailure: () => {
           throw callbackError;

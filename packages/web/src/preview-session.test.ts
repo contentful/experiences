@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, expect, it, vi } from 'vitest';
-import type { RuntimePreviewConfig, RuntimePreviewClient } from '@contentful/experiences-runtime';
-import { WebPreview } from './web-preview.js';
+import type { PreviewConfig, PreviewClient } from '@contentful/experiences-runtime';
+import { PreviewSession } from './preview-session.js';
 import { deferred } from './test-fixtures/dom.js';
 
 const config = {
@@ -11,7 +11,7 @@ const config = {
   preview: { accessToken: 'preview' },
   eventBuilder: { channel: 'web' as const },
 };
-const owners: WebPreview[] = [];
+const owners: PreviewSession[] = [];
 afterEach(() => {
   owners.splice(0).forEach((owner) => owner.destroy());
   vi.unstubAllGlobals();
@@ -20,8 +20,8 @@ function fixture(sessionId = 'session') {
   let update = () => {};
   const stop = vi.fn(),
     stopStatus = vi.fn();
-  let result: ReturnType<RuntimePreviewClient['getResult']> = { data: undefined, error: undefined };
-  const client: RuntimePreviewClient = {
+  let result: ReturnType<PreviewClient['getResult']> = { data: undefined, error: undefined };
+  const client: PreviewClient = {
     getResult: () => result,
     subscribe: vi.fn((next: () => void) => {
       update = next;
@@ -33,8 +33,8 @@ function fixture(sessionId = 'session') {
     },
   };
   const createClient = vi.fn(() => client);
-  const create = (accessToken: RuntimePreviewConfig['accessToken'] = 'preview') => {
-    const owner = new WebPreview(
+  const create = (accessToken: PreviewConfig['accessToken'] = 'preview') => {
+    const owner = new PreviewSession(
       { ...config, preview: { accessToken, createClient } },
       { sessionId }
     );

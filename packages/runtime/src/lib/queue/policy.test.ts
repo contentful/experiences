@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_QUEUE_FLUSH_POLICY } from './flushPolicy.js';
-import { OFFLINE_QUEUE_MAX_EVENTS, resolveQueuePolicy } from './queuePolicy.js';
+import { DEFAULT_QUEUE_FLUSH_POLICY } from './flush-policy.js';
+import { OFFLINE_QUEUE_MAX_EVENTS, resolveQueuePolicy } from './policy.js';
 
 describe('resolveQueuePolicy', () => {
   it('defaults offline capacity to 100 and resolves the flush policy', () => {

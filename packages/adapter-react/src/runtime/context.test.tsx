@@ -6,17 +6,17 @@ import {
   type WebExperiencesRuntime,
 } from '@contentful/experiences-web';
 import {
-  ExperiencesContext,
+  RuntimeContext,
   useExperiences,
-  useExperiencesContext,
-  type ExperiencesContextValue,
-} from './experiences-context.js';
+  useRuntimeContext,
+  type RuntimeContextValue,
+} from './context.js';
 
 describe('Experiences context access', () => {
   it('narrows only live context to the concrete SDK and retains common runtime actions', () => {
     const sdk = createWebSnapshotRuntime();
     function Probe() {
-      const context = useExperiencesContext();
+      const context = useRuntimeContext();
       if (context.isLive) {
         expectTypeOf(context.sdk).toEqualTypeOf<ContentfulExperiences>();
         expectTypeOf(context.sdk.fetchExperience).toEqualTypeOf<
@@ -40,15 +40,15 @@ describe('Experiences context access', () => {
       return null;
     }
     renderToString(
-      <ExperiencesContext.Provider
+      <RuntimeContext.Provider
         value={{ sdk, isLive: false, error: new Error('setup failed'), isContentReady: true }}
       >
         <Probe />
-      </ExperiencesContext.Provider>
+      </RuntimeContext.Provider>
     );
   });
   it.each([
-    ['context', useExperiencesContext],
+    ['context', useRuntimeContext],
     ['SDK', useExperiences],
   ] as const)('requires a provider for %s access', (_name, useAccess) => {
     function Missing() {
@@ -61,21 +61,21 @@ describe('Experiences context access', () => {
   });
 
   it('returns the supplied context and its SDK without wrapping either', () => {
-    const value: ExperiencesContextValue = {
+    const value: RuntimeContextValue = {
       sdk: {} as WebExperiencesRuntime,
       error: new Error('activation failed'),
       isLive: false,
       isContentReady: true,
     };
     function Probe() {
-      expect(useExperiencesContext()).toBe(value);
+      expect(useRuntimeContext()).toBe(value);
       expect(useExperiences()).toBe(value.sdk);
       return null;
     }
     renderToString(
-      <ExperiencesContext.Provider value={value}>
+      <RuntimeContext.Provider value={value}>
         <Probe />
-      </ExperiencesContext.Provider>
+      </RuntimeContext.Provider>
     );
   });
 });

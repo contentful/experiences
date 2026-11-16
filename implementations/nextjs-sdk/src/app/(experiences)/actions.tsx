@@ -1,7 +1,7 @@
 'use server';
 
 import { cookies, headers } from 'next/headers';
-import { persistNextjsAnonymousId } from '@contentful/experiences-nextjs/server';
+import { persistAnonymousId } from '@contentful/experiences-nextjs/server';
 import type { FetchExperienceOptions } from '@contentful/experiences-node';
 import { getServer } from '../../config';
 import { createContentRequest, loadReferenceContent } from '../../server-reference';
@@ -24,7 +24,7 @@ export async function updateServerContent(
     // Next rerenders the current route after a cookie mutation. Avoid repeating
     // content work when the evaluated identity has not changed.
     if (request.canPersistProfile ? request.profile?.id !== currentId : currentId !== undefined)
-      persistNextjsAnonymousId({ headers: new Headers(), cookies: cookieStore }, request, {
+      persistAnonymousId({ headers: new Headers(), cookies: cookieStore }, request, {
         cookieOptions: { httpOnly: false, secure: url.protocol === 'https:' },
       });
     return <ServerPresentations all={all} routeKey={routeKey} ids={config.experienceIds} />;

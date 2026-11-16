@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NotFoundError } from '@contentful/experiences-client';
 import {
-  assertRuntimePreviewRequest,
-  createRuntimePreviewClient,
-  fetchRuntimePreviewSessionPayload,
+  assertPreviewRequest,
+  createPreviewClient,
+  fetchPreviewSessionPayload,
 } from './live-preview.js';
 
 describe('Runtime Live Preview wrapper', () => {
@@ -11,7 +11,7 @@ describe('Runtime Live Preview wrapper', () => {
     const payload = { sys: { id: 'edited', type: 'Experience' }, nodes: [] };
     const fetch = vi.fn().mockResolvedValue(globalThis.Response.json(payload));
     await expect(
-      fetchRuntimePreviewSessionPayload(
+      fetchPreviewSessionPayload(
         {
           spaceId: 'space/id',
           environmentId: 'master',
@@ -35,7 +35,7 @@ describe('Runtime Live Preview wrapper', () => {
     async (response, error) => {
       const fetch = vi.fn().mockResolvedValue(response);
       await expect(
-        fetchRuntimePreviewSessionPayload(
+        fetchPreviewSessionPayload(
           {
             spaceId: 'space',
             environmentId: 'master',
@@ -67,7 +67,7 @@ describe('Runtime Live Preview wrapper', () => {
       sessionHost: 'wss://preview.test',
       resourceResolution: 'resource',
     };
-    await expect(createRuntimePreviewClient(session, config)).resolves.toBe(client);
+    await expect(createPreviewClient(session, config)).resolves.toBe(client);
     expect(createClient).toHaveBeenCalledExactlyOnceWith({
       ...session,
       spaceId: 'space',
@@ -78,15 +78,15 @@ describe('Runtime Live Preview wrapper', () => {
     expect(accessToken).toHaveBeenCalledOnce();
     expect(host).not.toHaveBeenCalled();
     await expect(
-      createRuntimePreviewClient(session, { ...config, preview: { host, createClient } })
+      createPreviewClient(session, { ...config, preview: { host, createClient } })
     ).rejects.toThrow(/accessToken/);
   });
 
   it('rejects explicit session-owned request options', () => {
     for (const override of [{ locale: 'en-US' }, { parameters: {} }, { extensions: {} }]) {
-      expect(() =>
-        assertRuntimePreviewRequest({ experienceId: 'experience', ...override })
-      ).toThrow(/server-owned/);
+      expect(() => assertPreviewRequest({ experienceId: 'experience', ...override })).toThrow(
+        /server-owned/
+      );
     }
   });
 });

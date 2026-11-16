@@ -6,12 +6,12 @@ import {
   type OptimizationData,
 } from '@contentful/optimization-api-client/api-schemas';
 import { createScopedLogger } from '@contentful/optimization-api-client/logger';
-import type { PersonalizationRequestState } from './experience-request-state.js';
+import type { PersonalizationRequestState } from './personalization-request-state.js';
 import type { EventEmissionResult } from './event-emission-result.js';
 import type { EventInterceptors } from './event-interceptors.js';
 import {
   OFFLINE_QUEUE_MAX_EVENTS,
-  QueueFlushRuntime,
+  FlushRuntime,
   type ResolvedQueueFlushPolicy,
 } from './lib/queue/index.js';
 
@@ -63,7 +63,7 @@ export class PersonalizationDelivery {
   readonly #publishEvent: PersonalizationDeliveryOptions['publishEvent'];
   readonly #admitEvent: PersonalizationDeliveryOptions['admitEvent'];
   readonly #maxEvents: number;
-  readonly #flushRuntime: QueueFlushRuntime;
+  readonly #flushRuntime: FlushRuntime;
   readonly #queue: QueuedBatch[] = [];
   #token: object | undefined = {};
   #activeFlush: Promise<void> | undefined;
@@ -83,7 +83,7 @@ export class PersonalizationDelivery {
     this.#publishEvent = options.publishEvent;
     this.#admitEvent = options.admitEvent;
     this.#maxEvents = options.maxEvents ?? OFFLINE_QUEUE_MAX_EVENTS;
-    this.#flushRuntime = new QueueFlushRuntime({
+    this.#flushRuntime = new FlushRuntime({
       policy: options.flushPolicy,
       onRetry: () => {
         void this.flush();

@@ -15,7 +15,7 @@ flow does not commit XDA-carried events. `GET /health` makes no API calls.
 user agent from request context. No direct `request.identify()` / `request.page()`
 is required before rendering. Ordinary `request.fetchExperience` builds admitted
 type-tagged arguments once, also accepting raw built XDA events. XDA evaluates with
-XPAPI preflight and returns a selected plan and locally adopted profile ID.
+Personalization API preflight and returns a selected plan and locally adopted profile ID.
 This Node-only app creates no handoff and performs no aggregate commit.
 
 The lightweight best-effort loop compares distinct configured Experiences only.
@@ -68,10 +68,10 @@ See [Runtime preview limits](../../packages/runtime/README.md#shared-limitations
 
 ## Personalization contract and validation limits
 
-Event-bearing XDA always invokes XPAPI with `preflight: true`, without an override,
+Event-bearing XDA always invokes Personalization API with `preflight: true`, without an override,
 and commits neither events nor profile creation/changes. New IDs are provisional;
 an existing concrete ID can remain concrete while previewed changes stay uncommitted.
-Profile-only XDA internally uses XPAPI GET, returning 404 for an uncommitted ID even
+Profile-only XDA internally uses Personalization API GET, returning 404 for an uncommitted ID even
 when the SDK-to-XDA request is POST. SDK local adoption is not finalization. See
 [XDA preflight and profile finalization](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
 
