@@ -1,3 +1,4 @@
+import { createPreviewInitializer, getPreviewBinding } from '/dist/preview.js';
 import { createRoutes, pageContext } from '/dist/shared.js';
 import { createControlPanel } from './control-panel.js';
 import { renderExperience } from './experiences.js';
@@ -11,8 +12,11 @@ let controls;
 let trackingLog;
 let disposed = false;
 let manualElements = [];
+let previewSubscriptions = [];
 let routes;
 let environment;
+let previewBinding;
+const resolveOptions = { config: { components: {}, experienceTemplates: {} } };
 let generation = 0;
 let pageGeneration = 0;
 let pagePending = false;
@@ -25,6 +29,7 @@ window.addEventListener('pagehide', (event) => {
   if (event.persisted) return;
   disposed = true;
   generation += 1;
+  releasePreviewSubscriptions();
   pageGeneration += 1;
   document.removeEventListener('click', onDocumentClick);
   window.removeEventListener('popstate', onPopState);
@@ -40,7 +45,8 @@ async function activate() {
   try {
     const bootstrap = JSON.parse(document.getElementById('experience-bootstrap').textContent);
     environment = bootstrap.environment;
-    const { handoff } = bootstrap;
+    const { handoff, preview } = bootstrap;
+    previewBinding = preview?.binding;
     routes = createRoutes(environment.EXPERIENCE_IDS);
     // Consumer integration: one Web runtime discovers existing SSR attribution
     // and later DOM changes. Tracking uses SDK consent and current identity.
@@ -49,6 +55,11 @@ async function activate() {
       environmentId: environment.ENVIRONMENT_ID,
       locale: environment.LOCALE,
       delivery: { accessToken: environment.CDA_TOKEN },
+      preview: environment.LIVE_PREVIEW
+        ? { accessToken: environment.LIVE_PREVIEW.accessToken, host: environment.LIVE_PREVIEW.host }
+        : undefined,
+      livePreview: createPreviewInitializer(previewBinding),
+      ...(preview && !previewBinding ? { isPreview: true } : {}),
       cookie: { path: '/', sameSite: 'lax', secure: location.protocol === 'https:', expires: 365 },
     });
     // Maintainer: optional browser-attempt diagnostics; never synthesize Node's
@@ -66,10 +77,28 @@ async function activate() {
       sdk.tracking.enableElement('views', element, { data });
       manualElements.push(element);
     }
-    status.textContent = 'Adopting server profile…';
+    status.textContent = sdk.isPreview
+      ? 'Connecting preview; server content retained…'
+      : 'Adopting server profile…';
     // The server already committed its page and selected content. State-only
     // hydration neither gates tracking nor replaces HTML and sends no browser page.
-    await sdk.hydrateHandoffState(handoff, { routeKey: location.pathname + location.search });
+    if (sdk.isPreview) {
+      // Retain the server presentations; attach only for new preview plans.
+      // Serialized plans establish content/error state without a startup fetch.
+      const destinations = new Map();
+      for (const section of ['auto', 'manual']) {
+        for (const target of appMain.querySelectorAll(
+          `[data-experiences="${section}"] [data-experience-presentation]`
+        )) {
+          const experienceId = target.dataset.experiencePresentation;
+          if (!destinations.has(experienceId)) destinations.set(experienceId, []);
+          destinations.get(experienceId).push({ section, target });
+        }
+      }
+      await loadExperiences(destinations, false, undefined, () => !disposed, preview.initialPlans);
+    } else {
+      await sdk.hydrateHandoffState(handoff, { routeKey: location.pathname + location.search });
+    }
     if (disposed) return;
 
     controls.activate();
@@ -77,8 +106,9 @@ async function activate() {
     wireRouteAction();
     document.addEventListener('click', onDocumentClick);
     window.addEventListener('popstate', onPopState);
-    status.textContent = 'Browser active. Server-rendered content retained.';
+    if (!sdk.isPreview) status.textContent = 'Browser active. Server-rendered content retained.';
   } catch {
+    releasePreviewSubscriptions();
     controls?.dispose();
     trackingLog?.dispose();
     if (disposed) return;
@@ -95,6 +125,11 @@ void activate();
 
 function routeUrl(path) {
   const url = new URL(path, location.origin);
+  const current = new URL(location.href);
+  for (const key of ['preview_session_id', 'preview_experience_id']) {
+    if (!url.searchParams.has(key) && current.searchParams.has(key))
+      url.searchParams.set(key, current.searchParams.get(key));
+  }
   if (new URL(location.href).searchParams.get('userId') === 'charles') {
     url.searchParams.set('userId', 'charles');
   } else url.searchParams.delete('userId');
@@ -104,7 +139,8 @@ function routeUrl(path) {
 function updateNavigation() {
   for (const link of document.querySelectorAll('#app-nav a')) {
     const path = new URL(link.href).pathname;
-    link.href = routeUrl(path);
+    link.dataset.routeHref ??= link.getAttribute('href');
+    link.href = routeUrl(link.dataset.routeHref);
     const active = path === location.pathname;
     link.classList.toggle('active', active);
     if (active) link.setAttribute('aria-current', 'page');
@@ -205,7 +241,16 @@ function createDestinations(route) {
 // Reference app: content actions invalidate renders independently of page ownership.
 // Identify/Retry join a pending navigation page; they do not add another page.
 async function renderRoute({ sendPage = false, reset = false, focus = false } = {}) {
+  const nextBinding = getPreviewBinding(environment, location.href);
+  const nextIsPreview = Boolean(
+    nextBinding || new URL(location.href).searchParams.get('preview_session_id')?.trim()
+  );
+  if (nextIsPreview !== sdk.isPreview) {
+    location.reload();
+    return;
+  }
   const current = ++generation;
+  releasePreviewSubscriptions();
   const isCurrent = () => !disposed && generation === current;
   const route = routes[location.pathname];
   const page = pageContext(new URL(location.href), document.referrer);
@@ -233,12 +278,20 @@ async function renderRoute({ sendPage = false, reset = false, focus = false } = 
   appMain.setAttribute('aria-busy', 'true');
   status.textContent = 'Updating content…';
   try {
-    await initializeVisitor(sendPage, page);
-    if (!isCurrent()) return;
-    if (!sdk.states.profile.current?.id) throw new Error('Visitor profile is not available.');
+    if (sdk.isPreview) {
+      if (nextBinding && JSON.stringify(nextBinding) !== JSON.stringify(previewBinding)) {
+        await sdk.replaceLivePreview(createPreviewInitializer(nextBinding));
+        if (!isCurrent()) return;
+        previewBinding = nextBinding;
+      }
+    } else {
+      await initializeVisitor(sendPage, page);
+      if (!isCurrent()) return;
+      if (!sdk.states.profile.current?.id) throw new Error('Visitor profile is not available.');
+    }
     const failed = await loadExperiences(destinations, identifyRequested, page, isCurrent);
     if (!isCurrent()) return;
-    if (failed) {
+    if (failed && !sdk.isPreview) {
       errorPanel.hidden = false;
       showStatus(errorPanel, 'Some Experience content is unavailable.', {
         error: true,
@@ -246,23 +299,33 @@ async function renderRoute({ sendPage = false, reset = false, focus = false } = 
       });
     }
     appMain.removeAttribute('aria-busy');
-    status.textContent = failed
-      ? 'Some content could not be loaded.'
-      : 'Browser active. Content updated.';
+    if (!sdk.isPreview)
+      status.textContent = failed
+        ? 'Some content could not be loaded.'
+        : 'Browser active. Content updated.';
   } catch {
     if (!isCurrent()) return;
     appMain.removeAttribute('aria-busy');
     errorPanel.hidden = false;
     showStatus(
       errorPanel,
-      'A visitor profile could not be established. Check your connection and retry.',
+      sdk.isPreview
+        ? 'Preview content could not be loaded. Check the session and retry.'
+        : 'A visitor profile could not be established. Check your connection and retry.',
       { error: true, retry: true }
     );
     for (const targets of destinations.values())
       targets.forEach(({ target }) =>
-        showStatus(target, 'Content is unavailable until visitor initialization succeeds.')
+        showStatus(
+          target,
+          sdk.isPreview
+            ? 'Preview content is unavailable. Retry content to try again.'
+            : 'Content is unavailable until visitor initialization succeeds.'
+        )
       );
-    status.textContent = 'Visitor initialization failed. Retry content to try again.';
+    status.textContent = sdk.isPreview
+      ? 'Preview initialization failed. Retry content to try again.'
+      : 'Visitor initialization failed. Retry content to try again.';
   }
 }
 
@@ -294,53 +357,56 @@ function initializeVisitor(sendPage, page) {
   return pendingPage;
 }
 
-async function loadExperiences(destinations, identifyRequested, page, isCurrent) {
-  const identify = identifyRequested
-    ? sdk.eventBuilder.buildIdentify({
-        userId: 'charles',
-        traits: { identified: true },
-        page,
-        locale: environment.LOCALE,
-        userAgent: window.navigator.userAgent,
-      })
-    : undefined;
-  let failed = false;
+async function loadExperiences(destinations, identifyRequested, page, isCurrent, initialPlans) {
+  const identify =
+    !sdk.isPreview && identifyRequested
+      ? sdk.eventBuilder.buildIdentify({
+          userId: 'charles',
+          traits: { identified: true },
+          page,
+          locale: environment.LOCALE,
+          userAgent: window.navigator.userAgent,
+        })
+      : undefined;
+  const failures = new Set();
+  const rendered = new Set();
   for (const [experienceId, targets] of destinations) {
     if (!isCurrent()) return;
     try {
-      const plan = await sdk.fetchExperience(
-        {
-          experienceId,
-          extensions: { sourceMap: {} },
-          // XDA workaround: profile-only requests can select baseline. Reuse one
-          // identify for the cycle, but never independently submit it or the page.
-          ...(identify ? { personalization: { events: [identify] } } : {}),
-        },
-        { config: { components: {}, experienceTemplates: {} } }
-      );
+      const plan =
+        initialPlans === undefined
+          ? await sdk.fetchExperience(
+              {
+                experienceId,
+                ...(previewBinding?.experienceId === experienceId
+                  ? {}
+                  : { extensions: { sourceMap: {} } }),
+                // XDA workaround: profile-only requests can select baseline. Reuse one
+                // identify for the cycle, but never independently submit it or the page.
+                ...(identify ? { personalization: { events: [identify] } } : {}),
+              },
+              resolveOptions
+            )
+          : initialPlans[experienceId];
+      if (!plan) throw new Error('Initial preview content is unavailable.');
       if (!isCurrent()) return;
-      const manualRoots = [];
-      const rendered = targets.map(({ section }) =>
-        renderExperience(plan, experienceId, section, {
-          onManualRoot: (element, data) => manualRoots.push({ element, data }),
-        })
-      );
-      targets.forEach(({ target }, index) => target.replaceChildren(rendered[index]));
-      for (const { element, data } of manualRoots) {
-        sdk.tracking.enableElement('views', element, { data });
-        manualElements.push(element);
-      }
+      if (initialPlans === undefined) renderPresentations(plan, experienceId, targets);
+      rendered.add(experienceId);
+      if (sdk.isPreview && (plan.diagnostics?.length || plan.deliveryDiagnostics?.length))
+        failures.add(experienceId);
     } catch (error) {
       if (!isCurrent()) return;
-      failed = true;
+      failures.add(experienceId);
       const message =
         error?.statusCode === 404
           ? 'This Experience was not found.'
           : 'This Experience could not be loaded or rendered.';
-      targets.forEach(({ target }) => showStatus(target, message, { error: true }));
+      if (initialPlans === undefined)
+        targets.forEach(({ target }) => showStatus(target, message, { error: true }));
     }
   }
-  return failed;
+  if (sdk.isPreview && isCurrent()) bindPreview(destinations, isCurrent, failures, rendered);
+  return failures.size > 0;
 }
 
 function wireRouteAction() {
@@ -375,4 +441,82 @@ function wireRouteAction() {
   };
   button.addEventListener('click', onClick);
   disposeRouteAction = () => button.removeEventListener('click', onClick);
+}
+
+function renderPresentations(plan, experienceId, targets) {
+  const manualRoots = [];
+  const rendered = targets.map(({ section }) =>
+    renderExperience(plan, experienceId, section, {
+      onManualRoot: (element, data) => manualRoots.push({ element, data }),
+    })
+  );
+  const removed = manualElements.filter((element) =>
+    targets.some(({ target }) => target.contains(element))
+  );
+  manualElements = manualElements.filter((element) => !removed.includes(element));
+  targets.forEach(({ target }, index) => target.replaceChildren(rendered[index]));
+  void Promise.resolve().then(() =>
+    removed.forEach((element) => sdk.tracking.clearElement('views', element))
+  );
+  for (const { element, data } of manualRoots) {
+    sdk.tracking.enableElement('views', element, { data });
+    manualElements.push(element);
+  }
+}
+
+function releasePreviewSubscriptions() {
+  previewSubscriptions.forEach((subscription) => subscription.unsubscribe());
+  previewSubscriptions = [];
+}
+
+function bindPreview(destinations, isCurrent, failures, rendered) {
+  // Fetch/render first: the source buffers its latest payload while HTTP is pending.
+  // The SDK resolves updates and guards stale work; the app owns presentations/errors.
+  for (const [experienceId, targets] of destinations) {
+    const subscription = sdk.subscribeToPreview(experienceId, resolveOptions, ({ data, error }) => {
+      if (!isCurrent()) return;
+      try {
+        if (data) {
+          renderPresentations(data, experienceId, targets);
+          rendered.add(experienceId);
+          if (data.diagnostics?.length || data.deliveryDiagnostics?.length)
+            failures.add(experienceId);
+          else failures.delete(experienceId);
+        }
+        if (error) failures.add(experienceId);
+      } catch {
+        failures.add(experienceId);
+      }
+      if (failures.has(experienceId) && !rendered.has(experienceId))
+        targets.forEach(({ target }) =>
+          showStatus(target, 'Preview content is unavailable.', { error: true })
+        );
+      updatePreviewFeedback(failures);
+    });
+    if (!isCurrent()) {
+      subscription.unsubscribe();
+      return;
+    }
+    previewSubscriptions.push(subscription);
+  }
+  const subscription = sdk.states.preview.subscribe(() => {
+    if (isCurrent()) updatePreviewFeedback(failures);
+  });
+  if (!isCurrent()) subscription.unsubscribe();
+  else previewSubscriptions.push(subscription);
+}
+
+function updatePreviewFeedback(failures) {
+  const panel = document.getElementById('content-error');
+  panel.hidden = failures.size === 0;
+  if (failures.size)
+    showStatus(panel, 'Preview content could not be updated. Retry content to try again.', {
+      error: true,
+      retry: true,
+    });
+  status.textContent = failures.size
+    ? 'Preview content update failed. Usable content retained.'
+    : sdk.states.preview.current?.status === 'live'
+      ? 'Preview connected. Content available.'
+      : 'Preview mode active. Content available.';
 }

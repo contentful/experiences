@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { completeProfile as profileFixture } from './test-fixtures/profile.js';
 import { ContentfulExperiences as RuntimeContentfulExperiences } from '@contentful/experiences-runtime';
 import {
   ExperienceApiClient as PersonalizationApiClient,
@@ -19,7 +20,7 @@ function createRuntime(config: Partial<Config> = {}) {
     spaceId: 'space',
     environmentId: 'environment',
     delivery: { accessToken: 'delivery-token' },
-    defaults: { profile: { id: 'visitor' }, consent: false },
+    defaults: { profile: profileFixture('visitor'), consent: false },
     ...config,
   });
   runtimes.add(runtime);
@@ -57,7 +58,7 @@ const byPath: [string, 'fetchByDestinationPath', DestinationFetch, object] = [
 beforeEach(() => {
   seedConsent({ events: false, persistence: false });
   vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile').mockResolvedValue({
-    profile: { id: 'visitor' },
+    profile: profileFixture('visitor'),
   } as never);
   vi.spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents').mockResolvedValue(true);
 });
@@ -100,16 +101,16 @@ describe.each([byNode, byPath])('Web Destination fetch %s', (_label, method, fet
     );
   });
 
-  it('stores the profile id XDA returns', async () => {
+  it('stores the complete profile XDA returns', async () => {
     const runtime = createRuntime();
     vi.spyOn(RuntimeContentfulExperiences.prototype, method).mockResolvedValue({
       nodes: [],
-      personalization: { profileId: 'returned' },
+      personalization: { profile: profileFixture('returned') },
     } as never);
 
     await fetchIt(runtime);
 
-    expect(runtime.states.profile.current).toEqual({ id: 'returned' });
+    expect(runtime.states.profile.current).toEqual(profileFixture('returned'));
   });
 
   it('returns a redirect unchanged and leaves the profile alone', async () => {
@@ -119,7 +120,7 @@ describe.each([byNode, byPath])('Web Destination fetch %s', (_label, method, fet
     } as never);
 
     await expect(fetchIt(runtime)).resolves.toEqual({ redirect: { path: '/elsewhere' } });
-    expect(runtime.states.profile.current).toEqual({ id: 'visitor' });
+    expect(runtime.states.profile.current).toEqual(profileFixture('visitor'));
   });
 
   it('drops caller-built events that consent does not admit and reports them', async () => {
@@ -158,7 +159,7 @@ describe.each([byNode, byPath])('Web Destination fetch %s', (_label, method, fet
 
     const request = fetchIt(runtime);
     runtime.reset();
-    pending.resolve({ nodes: [], personalization: { profileId: 'stale' } });
+    pending.resolve({ nodes: [], personalization: { profile: profileFixture('stale') } });
     await request;
 
     expect(runtime.states.profile.current).toBeUndefined();

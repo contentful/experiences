@@ -16,18 +16,20 @@
 - Preserve `.env`; initial authorized values may come from the Node reference's
   local file. Runtime reads only this app's file. Inject only the explicit public
   allowlist with HTML-safe JSON. CDA_TOKEN is intentionally browser-visible;
-  management/preview tokens and unrelated environment settings must never be
+  management credentials, server-only preview tokens and unrelated environment settings must never be
   copied, logged, served or built into assets.
 - Keep Node HTTP/dotenv and a public-only file server with proper missing-asset
   errors, extensionless SPA fallback, loopback binding and API-free `/health`.
   Delivery goes directly from browser to default live services; no proxy or
   simulated upstream. CORS OPTIONS is not Experience API noncommitting preflight.
 - Copy only the installed Web UMD/map; bundle Rich Text and the public pure tracking
-  helper separately. Refresh setup after SDK changes to avoid stale installed UMDs.
+  helper separately; optional preview uses a separately bundled installed ESM artifact. Refresh setup after SDK changes to avoid stale installed UMDs.
   `public/dist` is generated; the vendored theme is authored local source with
   pinned provenance. No adjacent Optimization checkout/package runtime dependency.
-- No Live Updates, Live Preview, preview controls/assets, mocks, fixtures,
-  simulated responses, E2E tests, or E2E infrastructure. Validate using local
+- Runtime-backed Preview Sessions use conditional `livePreview`, normal fetch/render,
+  then `subscribeToPreview` for updates and `states.preview` for status. No
+  application-owned preview clients, socket/retry code, Live Updates, mocks,
+  fixtures, simulated responses, E2E tests, or E2E infrastructure. Validate using local
   build/lint/typecheck, real artifacts and direct live browser inspection.
 - Retain stable selectors and applicable Optimization `data-testid` conventions.
   Preserve the event-attempt labels and real plan attribution. SDK
@@ -63,3 +65,10 @@ element, { data })` after DOM insertion, following Optimization. Use each card's
   subscription across routes. Count notifications, including repeated XDA messages,
   and group only actual view/hover interval IDs. Keep event text safe and dispose
   caller-owned subscription/age timer before destroying the SDK.
+
+- Optional preview uses the README configuration and explicitly allowlisted browser
+  settings. Build and host read app-local `LIVE_PREVIEW_ENABLED`; disabled
+  deployments exclude the optional package. Branch visitor work on
+  `sdk.isPreview`; release content subscriptions on route replacement/final exit,
+  retaining them for BFCache. Use `replaceLivePreview` for binding changes within
+  preview and reload the document when entering or leaving preview.

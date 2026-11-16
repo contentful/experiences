@@ -1,3 +1,4 @@
+import { createPreviewInitializer, getPreviewBinding } from '/dist/preview.js';
 import { createControlPanel } from './control-panel.js';
 import { renderExperience } from './experiences.js';
 import { createTrackingLog } from './tracking.js';
@@ -9,11 +10,16 @@ const env = window.ENVIRONMENT;
 // Consumer integration: keep one SDK for this browser app's lifetime; it owns profile,
 // consent, persistence and delivery. UMD and window.ENVIRONMENT are this app's
 // loading/configuration choices; the delivery token must be safe to expose publicly.
+let previewBinding = getPreviewBinding(env, location.href);
 const sdk = new window.ContentfulExperiences({
   spaceId: env.SPACE_ID,
   environmentId: env.ENVIRONMENT_ID,
   locale: env.LOCALE,
   delivery: { accessToken: env.CDA_TOKEN },
+  preview: env.LIVE_PREVIEW
+    ? { accessToken: env.LIVE_PREVIEW.accessToken, host: env.LIVE_PREVIEW.host }
+    : undefined,
+  livePreview: createPreviewInitializer(previewBinding),
 });
 const experienceIds = env.EXPERIENCE_IDS;
 // Reference app: these routes and Experience selections form the demonstration.
@@ -43,6 +49,7 @@ let pageGeneration = 0;
 let disposed = false;
 let pendingPage = Promise.resolve();
 let manualElements = [];
+let previewSubscriptions = [];
 
 // Reference app: a fixed URL identity makes personalization easy to verify.
 // Consumers supply identity from their own application; this is not authentication.
@@ -57,13 +64,21 @@ const controls = createControlPanel(sdk, {
     const url = new URL(location.href);
     url.searchParams.delete('userId');
     history.replaceState(null, '', url.pathname + url.search);
-    sdk.reset();
-    void renderRoute({ sendPage: true });
+    if (sdk.isPreview) void renderRoute({ reset: true });
+    else {
+      sdk.reset();
+      void renderRoute({ sendPage: true });
+    }
   },
 });
 
 function routeUrl(path) {
   const url = new URL(path, location.origin);
+  const current = new URL(location.href);
+  for (const key of ['preview_session_id', 'preview_experience_id']) {
+    if (!url.searchParams.has(key) && current.searchParams.has(key))
+      url.searchParams.set(key, current.searchParams.get(key));
+  }
   if (new URL(location.href).searchParams.get('userId') === 'charles') {
     url.searchParams.set('userId', 'charles');
   } else {
@@ -87,8 +102,17 @@ function showStatus(target, text, { error = false, retry = false, initialize = f
 }
 
 // Reference app: keep route orchestration separate from shell, visitor and content work.
-async function renderRoute({ sendPage = false, focus = false } = {}) {
+async function renderRoute({ sendPage = false, focus = false, reset = false } = {}) {
+  const nextBinding = getPreviewBinding(env, location.href);
+  const nextIsPreview = Boolean(
+    nextBinding || new URL(location.href).searchParams.get('preview_session_id')?.trim()
+  );
+  if (nextIsPreview !== sdk.isPreview) {
+    location.reload();
+    return;
+  }
   const current = ++generation;
+  releasePreviewSubscriptions();
   const isCurrent = () => !disposed && current === generation;
   const path = location.pathname;
   const route = routes[path];
@@ -97,6 +121,7 @@ async function renderRoute({ sendPage = false, focus = false } = {}) {
   manualElements = [];
 
   renderRouteShell(path, route);
+  if (reset) sdk.reset();
   // Consumer integration, manual observation only: release explicit registrations.
   // Let DOM removal finish measured intervals before clearing their overrides.
   await Promise.resolve();
@@ -109,15 +134,23 @@ async function renderRoute({ sendPage = false, focus = false } = {}) {
   appMain.setAttribute('aria-busy', 'true');
 
   try {
-    // Identify joins any initial page; it does not send a separate identify call.
-    await initializeVisitor(sendPage);
-    if (!isCurrent()) return;
-    if (!sdk.states.profile.current?.id) throw new Error('Visitor profile is not available.');
+    if (sdk.isPreview) {
+      if (nextBinding && JSON.stringify(nextBinding) !== JSON.stringify(previewBinding)) {
+        await sdk.replaceLivePreview(createPreviewInitializer(nextBinding));
+        if (!isCurrent()) return;
+        previewBinding = nextBinding;
+      }
+    } else {
+      // Identify joins any initial page; it does not send a separate identify call.
+      await initializeVisitor(sendPage);
+      if (!isCurrent()) return;
+      if (!sdk.states.profile.current?.id) throw new Error('Visitor profile is not available.');
+    }
 
     const failed = await loadExperiences(destinations, identifyRequested, isCurrent);
     if (!isCurrent()) return;
     appMain.removeAttribute('aria-busy');
-    if (failed) {
+    if (failed && !sdk.isPreview) {
       errorPanel.hidden = false;
       showStatus(errorPanel, 'Some Experience content is unavailable.', {
         error: true,
@@ -130,12 +163,19 @@ async function renderRoute({ sendPage = false, focus = false } = {}) {
     errorPanel.hidden = false;
     showStatus(
       errorPanel,
-      'A visitor profile could not be established. Check your connection and retry.',
+      sdk.isPreview
+        ? 'Preview content could not be loaded. Check the session and retry.'
+        : 'A visitor profile could not be established. Check your connection and retry.',
       { error: true, retry: true, initialize: true }
     );
     for (const targets of destinations.values()) {
       targets.forEach(({ target }) =>
-        showStatus(target, 'Content is unavailable until visitor initialization succeeds.')
+        showStatus(
+          target,
+          sdk.isPreview
+            ? 'Preview content is unavailable. Retry content to try again.'
+            : 'Content is unavailable until visitor initialization succeeds.'
+        )
       );
     }
   }
@@ -144,7 +184,8 @@ async function renderRoute({ sendPage = false, focus = false } = {}) {
 function renderRouteShell(path, route) {
   for (const link of appNav.querySelectorAll('a')) {
     const linkPath = new URL(link.href).pathname;
-    link.href = routeUrl(linkPath);
+    link.dataset.routeHref ??= link.getAttribute('href');
+    link.href = routeUrl(link.dataset.routeHref);
     const active = linkPath === path;
     link.classList.toggle('active', active);
     if (active) link.setAttribute('aria-current', 'page');
@@ -167,8 +208,7 @@ function renderRouteShell(path, route) {
 }
 
 function wireRouteControls(path, focus) {
-  for (const link of appMain.querySelectorAll('a[href]'))
-    link.href = routeUrl(new URL(link.href).pathname);
+  for (const link of appMain.querySelectorAll('a[href]')) link.href = routeUrl(link.href);
   controls.wire();
   if (path === '/page-two') {
     // Reference app: this button demonstrates a custom event independently of XDA.
@@ -230,10 +270,12 @@ function initializeVisitor(sendPage) {
 }
 
 async function loadExperiences(destinations, identifyRequested, isCurrent) {
-  const identifyEvent = identifyRequested
-    ? sdk.eventBuilder.buildIdentify({ userId: 'charles', traits: { identified: true } })
-    : undefined;
-  let failed = false;
+  const identifyEvent =
+    !sdk.isPreview && identifyRequested
+      ? sdk.eventBuilder.buildIdentify({ userId: 'charles', traits: { identified: true } })
+      : undefined;
+  const failures = new Set();
+  const rendered = new Set();
   for (const [experienceId, targets] of destinations) {
     if (!isCurrent()) return;
     try {
@@ -249,9 +291,12 @@ async function loadExperiences(destinations, identifyRequested, isCurrent) {
       );
       if (!isCurrent()) return;
       renderPresentations(plan, experienceId, targets);
+      rendered.add(experienceId);
+      if (sdk.isPreview && (plan.diagnostics?.length || plan.deliveryDiagnostics?.length))
+        failures.add(experienceId);
     } catch (error) {
       if (!isCurrent()) return;
-      failed = true;
+      failures.add(experienceId);
       // The UMD may minify constructor names; Delivery exposes a stable statusCode.
       const message =
         error?.statusCode === 404
@@ -260,7 +305,8 @@ async function loadExperiences(destinations, identifyRequested, isCurrent) {
       targets.forEach(({ target }) => showStatus(target, message, { error: true }));
     }
   }
-  return failed;
+  if (sdk.isPreview && isCurrent()) bindPreview(destinations, isCurrent, failures, rendered);
+  return failures.size > 0;
 }
 
 function renderPresentations(plan, experienceId, targets) {
@@ -271,7 +317,14 @@ function renderPresentations(plan, experienceId, targets) {
       onManualRoot: (element, data) => manualRoots.push({ element, data }),
     })
   );
+  const removed = manualElements.filter((element) =>
+    targets.some(({ target }) => target.contains(element))
+  );
+  manualElements = manualElements.filter((element) => !removed.includes(element));
   targets.forEach(({ target }, index) => target.replaceChildren(rendered[index]));
+  void Promise.resolve().then(() =>
+    removed.forEach((element) => sdk.tracking.clearElement('views', element))
+  );
   // Consumer integration: register after insertion, as in Optimization's
   // manually observed section. SDK observers own consent, dwell and duration.
   for (const { element, data } of manualRoots) {
@@ -307,6 +360,7 @@ window.addEventListener('pagehide', (event) => {
   if (event.persisted) return;
   disposed = true;
   generation += 1;
+  releasePreviewSubscriptions();
   trackingLog.dispose();
   controls.dispose();
   // The SDK owns its hide/unload flush; destroying here would cancel pending final
@@ -314,3 +368,55 @@ window.addEventListener('pagehide', (event) => {
   // it when replacing the owner inside a still-live document instead.
 });
 void renderRoute({ sendPage: true });
+
+function releasePreviewSubscriptions() {
+  previewSubscriptions.forEach((subscription) => subscription.unsubscribe());
+  previewSubscriptions = [];
+}
+
+function bindPreview(destinations, isCurrent, failures, rendered) {
+  // Fetch/render first: the source buffers its latest payload while HTTP is pending.
+  // The SDK resolves updates and guards stale work; the app owns presentations/errors.
+  for (const [experienceId, targets] of destinations) {
+    const subscription = sdk.subscribeToPreview(experienceId, resolveOptions, ({ data, error }) => {
+      if (!isCurrent()) return;
+      try {
+        if (data) {
+          renderPresentations(data, experienceId, targets);
+          rendered.add(experienceId);
+          if (data.diagnostics?.length || data.deliveryDiagnostics?.length)
+            failures.add(experienceId);
+          else failures.delete(experienceId);
+        }
+        if (error) failures.add(experienceId);
+      } catch {
+        failures.add(experienceId);
+      }
+      if (failures.has(experienceId) && !rendered.has(experienceId))
+        targets.forEach(({ target }) =>
+          showStatus(target, 'Preview content is unavailable.', { error: true })
+        );
+      updatePreviewFeedback(failures);
+    });
+    if (!isCurrent()) {
+      subscription.unsubscribe();
+      return;
+    }
+    previewSubscriptions.push(subscription);
+  }
+  const subscription = sdk.states.preview.subscribe(() => {
+    if (isCurrent()) updatePreviewFeedback(failures);
+  });
+  if (!isCurrent()) subscription.unsubscribe();
+  else previewSubscriptions.push(subscription);
+}
+
+function updatePreviewFeedback(failures) {
+  const panel = document.getElementById('content-error');
+  panel.hidden = failures.size === 0;
+  if (failures.size)
+    showStatus(panel, 'Preview content could not be updated. Retry content to try again.', {
+      error: true,
+      retry: true,
+    });
+}

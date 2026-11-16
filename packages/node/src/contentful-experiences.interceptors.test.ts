@@ -116,7 +116,7 @@ describe('Node event interceptors', () => {
       });
       const fetch = vi.spyOn(sdk, 'fetchExperience').mockResolvedValue({
         nodes: [],
-        personalization: { profileId: 'stale' },
+        personalization: { profile: completeProfile('stale') },
       } as never);
       const request = sdk.forRequest({ consent: true, profile: { id: 'initial' } });
       const pending =

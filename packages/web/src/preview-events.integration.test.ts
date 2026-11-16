@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { completeProfile as profileFixture } from './test-fixtures/profile.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RuntimeEventMethods } from '@contentful/experiences-runtime';
 import { getPageProperties } from './browser-event-context.js';
@@ -191,7 +192,7 @@ describe('Session preview event isolation', () => {
 
   it('omits embedded events/profile on the wire and ignores a returned profile in both runtimes', async () => {
     const fetch = http();
-    const sdk = web({ defaults: { profile: { id: 'browser' } } });
+    const sdk = web({ defaults: { profile: profileFixture('browser') } });
     const request = node().forRequest({
       isPreview: true,
       consent: true,
@@ -210,8 +211,8 @@ describe('Session preview event isolation', () => {
       request.fetchExperience(input, resolver),
       sdk.fetchExperience(input, resolver),
     ]);
-    expect(plans.map((plan) => plan.personalization?.profileId)).toEqual(
-      Array(2).fill(visitor.data.profile.id)
+    expect(plans.map((plan) => plan.personalization?.profile)).toEqual(
+      Array(2).fill(visitor.data.profile)
     );
     expect(fetch).toHaveBeenCalledTimes(2);
     for (const [, options] of fetch.mock.calls) {
@@ -232,7 +233,7 @@ describe('Session preview event isolation', () => {
     const fetch = http();
     const beacon = vi.fn(() => true);
     vi.stubGlobal('navigator', { ...window.navigator, onLine: true, sendBeacon: beacon });
-    const sdk = web({ defaults: { profile: { id: 'existing' } } });
+    const sdk = web({ defaults: { profile: profileFixture('existing') } });
     const element = document.createElement('button');
     for (const [key, value] of Object.entries(getTrackingAttributes({ roots: [{ key: 'hero' }] })))
       element.setAttribute(key, value);

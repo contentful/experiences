@@ -1,5 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { createRequestHandoffFromData } from './index.js';
+import { createRequestHandoffFromData, type EventProfile } from './index.js';
+
+function completeProfile(id: string): EventProfile {
+  return {
+    id,
+    stableId: id,
+    random: 0.5,
+    audiences: [],
+    traits: {},
+    location: {},
+    session: {
+      isReturningVisitor: false,
+      landingPage: { path: '/', query: {}, referrer: '', search: '', url: 'https://example.com/' },
+      count: 1,
+      activeSessionLength: 0,
+      averageSessionLength: 0,
+    },
+  };
+}
 
 const scope = { spaceId: 'space', environmentId: 'environment' };
 const changes = [
@@ -12,13 +30,13 @@ const changes = [
 ];
 
 describe('createRequestHandoffFromData', () => {
-  it('packages an ID-only profile in a private state-only handoff', () => {
+  it('packages an ID-only profile as private continuation identity', () => {
     expect(
       createRequestHandoffFromData({ ...scope, data: { profile: { id: 'visitor' } } })
     ).toEqual({
       ...scope,
       cache: { scope: 'private-request' },
-      state: { profile: { id: 'visitor' } },
+      profileId: 'visitor',
     });
   });
 
@@ -56,8 +74,17 @@ describe('createRequestHandoffFromData', () => {
   );
 
   it('packages profile and changes together', () => {
-    const data = { profile: { id: 'visitor' }, changes };
+    const data = { profile: completeProfile('visitor'), changes };
     expect(createRequestHandoffFromData({ ...scope, data }).state).toEqual(data);
+  });
+
+  it('retains flag state with ID-only continuation identity', () => {
+    const handoff = createRequestHandoffFromData({
+      ...scope,
+      data: { profile: { id: 'visitor' }, changes },
+    });
+    expect(handoff.profileId).toBe('visitor');
+    expect(handoff.state).toEqual({ changes });
   });
 
   it('rejects malformed flag data through the shared schema', () => {

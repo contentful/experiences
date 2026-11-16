@@ -1,3 +1,4 @@
+import { completeProfile as profileFixture } from './test-fixtures/profile.js';
 import { describe, expect, it, vi } from 'vitest';
 import { resolveStatefulDefaults } from './stateful-defaults.js';
 
@@ -20,7 +21,7 @@ describe('resolveStatefulDefaults', () => {
   });
 
   it('reads persisted profile lazily only when permitted and no explicit profile exists', () => {
-    const profile = { id: 'stored' };
+    const profile = profileFixture('stored');
     const loadProfile = vi.fn(() => profile);
     for (const persistenceConsent of [undefined, false]) {
       expect(
@@ -28,7 +29,7 @@ describe('resolveStatefulDefaults', () => {
           .profile
       ).toBeUndefined();
     }
-    const configured = { profile: { id: 'configured' }, persistenceConsent: true };
+    const configured = { profile: profileFixture('configured'), persistenceConsent: true };
     expect(resolveStatefulDefaults(configured, { profile: loadProfile }).defaults.profile).toBe(
       configured.profile
     );

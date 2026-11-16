@@ -299,7 +299,7 @@ describe('Web ContentfulExperiences', () => {
   });
 
   it('persists the profile and preserves an explicit fetchExperience profile id', async () => {
-    const profile = { id: 'browser-profile', traits: { plan: 'pro' } };
+    const profile = completeProfile('browser-profile', { traits: { plan: 'pro' } });
     const runtime = createRuntime({ defaults: { profile } });
     const fetch = vi
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
@@ -332,9 +332,9 @@ describe('Web ContentfulExperiences', () => {
       throw new Error('storage blocked');
     });
 
-    const runtime = createRuntime({ defaults: { profile: { id: 'browser-profile' } } });
+    const runtime = createRuntime({ defaults: { profile: completeProfile('browser-profile') } });
 
-    expect(runtime.states.profile.current).toEqual({ id: 'browser-profile' });
+    expect(runtime.states.profile.current).toEqual(completeProfile('browser-profile'));
   });
 
   it('starts replacement locale state from its own configuration after destroy', () => {
@@ -409,9 +409,9 @@ describe('Web ContentfulExperiences', () => {
 
   it('updates and persists the complete profile from Personalization events', async () => {
     const runtime = createRuntime({
-      defaults: { profile: { id: 'initial-profile' } },
+      defaults: { profile: completeProfile('initial-profile') },
     });
-    const updatedProfile = { id: 'updated-profile', traits: { plan: 'pro' } };
+    const updatedProfile = completeProfile('updated-profile', { traits: { plan: 'pro' } });
     const optimization = mockOptimization(runtime, updatedProfile);
 
     const track = runtime.track({ event: 'started' });
@@ -469,7 +469,7 @@ describe('Web ContentfulExperiences', () => {
 
   it('resets the profile before establishing a new one', async () => {
     const runtime = createRuntime({
-      defaults: { profile: { id: 'first-profile' } },
+      defaults: { profile: completeProfile('first-profile') },
     });
     const optimization = mockOptimization(runtime);
 
@@ -490,12 +490,12 @@ describe('Web ContentfulExperiences', () => {
   });
 
   it('does not restore a prior profile from an in-flight Personalization response', async () => {
-    let resolveResponse!: (value: { profile: { id: string } }) => void;
-    const response = new Promise<{ profile: { id: string } }>((resolve) => {
+    let resolveResponse!: (value: { profile: EventProfile }) => void;
+    const response = new Promise<{ profile: EventProfile }>((resolve) => {
       resolveResponse = resolve;
     });
     const runtime = createRuntime({
-      defaults: { profile: { id: 'first-profile' } },
+      defaults: { profile: completeProfile('first-profile') },
     });
     const optimization = mockOptimization(runtime);
     optimization.upsertProfile.mockReturnValueOnce(response as never);
@@ -504,7 +504,7 @@ describe('Web ContentfulExperiences', () => {
     await vi.waitFor(() => expect(optimization.upsertProfile).toHaveBeenCalledOnce());
     runtime.reset();
     await runtime.page();
-    resolveResponse({ profile: { id: 'first-profile-from-api' } });
+    resolveResponse({ profile: completeProfile('first-profile-from-api') });
 
     await pending;
     expect(runtime.states.profile.current).toEqual(completeProfile('updated-profile'));
@@ -630,8 +630,11 @@ describe('Web ContentfulExperiences consent', () => {
   it('reports blocked events to onEventBlocked and drops them', async () => {
     window.localStorage.clear();
     const onEventBlocked = vi.fn();
-    const runtime = createRuntime({ onEventBlocked, defaults: { profile: { id: 'visitor' } } });
-    const optimization = mockOptimization(runtime, { id: 'visitor' });
+    const runtime = createRuntime({
+      onEventBlocked,
+      defaults: { profile: completeProfile('visitor') },
+    });
+    const optimization = mockOptimization(runtime, completeProfile('visitor'));
 
     await expect(runtime.track({ event: 'purchase' })).resolves.toEqual({ accepted: false });
 

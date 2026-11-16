@@ -1,3 +1,4 @@
+import { completeProfile as profileFixture } from './test-fixtures/profile.js';
 import { describe, expect, it } from 'vitest';
 
 import { shouldApplyHandoffProfile } from './handoff-continuity.js';
@@ -9,7 +10,7 @@ describe('shouldApplyHandoffProfile', () => {
     expect(
       shouldApplyHandoffProfile({
         cache: { scope: 'private-request' },
-        state: { profile: { id: 'visitor' } },
+        state: { profile: profileFixture('visitor') },
       })
     ).toBe(true);
   });
@@ -37,7 +38,10 @@ describe('shouldApplyHandoffProfile', () => {
         false
       );
       expect(
-        shouldApplyHandoffProfile({ cache: { scope }, state: { profile: { id: 'visitor' } } })
+        shouldApplyHandoffProfile({
+          cache: { scope },
+          state: { profile: profileFixture('visitor') },
+        })
       ).toBe(false);
     }
   );

@@ -53,6 +53,7 @@ class SnapshotRuntime implements ExperiencesRuntime {
 
     this.states = {
       flag: (name) => staticObservable(this.getFlag(name)),
+      preview: staticObservable(undefined),
       blockedEventStream: staticObservable(undefined),
       consent: staticObservable(snapshot.consent),
       persistenceConsent: staticObservable(snapshot.persistenceConsent ?? snapshot.consent),

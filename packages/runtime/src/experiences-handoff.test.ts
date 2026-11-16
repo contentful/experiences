@@ -1,3 +1,4 @@
+import { profileFixture } from './test/profile.js';
 import { describe, expect, it } from 'vitest';
 import EventBuilder from './event-builder.js';
 import {
@@ -178,7 +179,7 @@ describe('Experiences handoff', () => {
     const publicHandoff = {
       ...handoff,
       cache: { scope: 'public-permutation' as const, key: 'safe-key' },
-      state: { profile: { id: 'profile-1' } },
+      state: { profile: profileFixture('profile-1') },
     };
     expect(getExperiencesCacheSafetyWarnings(publicHandoff)).toEqual([
       expect.objectContaining({
@@ -227,13 +228,13 @@ describe('Experiences handoff', () => {
   it('packages evaluated profile state privately', () => {
     const handoff = privateHandoff();
     const data = {
-      profile: { id: 'evaluated-profile' },
+      profile: profileFixture('evaluated-profile'),
       changes: [],
       selectedOptimizations: [],
     } as unknown as EventOptimizationData;
     const packaged = createRequestHandoffFromData({ handoff, data });
 
-    expect(packaged.state).toEqual({ profile: { id: 'evaluated-profile' }, changes: [] });
+    expect(packaged.state).toEqual({ profile: profileFixture('evaluated-profile'), changes: [] });
     expect(packaged.profileId).toBe('profile-1');
     expect(packaged.replay?.events.map((event) => event.messageId)).toEqual(
       handoff.replay?.events.map((event) => event.messageId)

@@ -36,7 +36,7 @@ public bootstrap/handoff payloads and logs. The whitelist is not a privacy filte
 ## Personalization changes
 
 `plan.personalization` is optional and emitted only when a nonempty profile id
-is returned. When present, it contains required `profileId: string` and optional
+is returned. When present, it contains required `profile: ExperienceProfile` and optional
 raw XDA `changes: unknown[]`, including an explicit empty array. Core neither validates
 flag records nor selects values or emits exposures. Use the adapter-exported
 `resolveFlagChange(name, plan.personalization?.changes)` or an explicit SDK
