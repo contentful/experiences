@@ -43,10 +43,10 @@ supported product usage or a cross-fetch guarantee.
 - Validate local changes with `typecheck`, `lint`, and direct execution. There is no E2E
   suite or mock-server integration.
 
-- Optional preview uses request-local `livePreview`, the installed optional package,
+- Optional preview uses request-local `preview`, the installed optional package,
   and ordinary `fetchExperience`. Skip visitor work under `request.isPreview` and
   call `request.destroy()` in `finally`. See the README for snapshot configuration.
   Activate only when app-local `LIVE_PREVIEW_ENABLED === 'true'` and the URL has a
-  nonempty trimmed `preview_session_id`; pass explicit `isPreview: Boolean(livePreview)`.
+  nonempty trimmed `preview_session_id`; pass explicit `isPreview: Boolean(preview)`.
   `LIVE_PREVIEW_SESSION_ID` is local convenience storage only; runtime/build code
   must never read it. Missing/empty sessions or a disabled flag use ordinary events.

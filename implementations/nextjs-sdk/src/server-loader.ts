@@ -48,10 +48,11 @@ export const loadServerPage = cache(async () => {
       ...(browser.web.preview ? { preview: browser.web.preview } : {}),
     },
     consent: { server: ({ cookies }) => readConsent(cookies) },
-    livePreview: {
-      ...browser.livePreview,
+    preview: {
+      ...nodeConfig.preview,
+      sessionHost: browser.livePreview?.sessionHost,
+      resourceResolution: browser.livePreview?.resourceResolution,
       enabled: Boolean(browser.livePreview),
-      loadImplementation: () => import('@contentful/experiences-live-preview'),
     },
     request: {
       experience: ({ requestUrl }) => {

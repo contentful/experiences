@@ -15,7 +15,6 @@ import type { Observable } from './signals/index.js';
  * @public
  */
 export interface PreviewState {
-  readonly experienceId?: string;
   readonly sessionId?: string;
   readonly data: ExperiencePayload | undefined;
   readonly error: Error | undefined;
@@ -33,7 +32,7 @@ export interface PreviewUpdate {
 export interface States {
   /** Key-scoped Custom Flag value. Reads and subscriptions track exposure. */
   flag: (name: string) => Observable<Json | undefined>;
-  /** Current bound preview source. Payloads are shared read-only references. */
+  /** Shared editor session state; payloads retain their reported Experience identity. */
   preview: Observable<PreviewState | undefined>;
   /** Current consent value (if any). */
   consent: Observable<boolean | undefined>;

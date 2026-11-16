@@ -1,13 +1,7 @@
 // @vitest-environment node
 import { afterEach, expect, it, vi } from 'vitest';
-import type {
-  RuntimeLivePreviewBinding,
-  RuntimeLivePreviewModule,
-  RuntimeLivePreviewOptions,
-  RuntimePreviewClient,
-} from '@contentful/experiences-runtime';
+import type { RuntimePreviewConfig, RuntimePreviewClient } from '@contentful/experiences-runtime';
 import { WebPreview } from './web-preview.js';
-import { preview } from './signals/signals.js';
 import { deferred } from './test-fixtures/dom.js';
 
 const config = {
@@ -20,47 +14,37 @@ const config = {
 const owners: WebPreview[] = [];
 afterEach(() => {
   owners.splice(0).forEach((owner) => owner.destroy());
-  preview.value = undefined;
+  vi.unstubAllGlobals();
 });
-function fixture(experienceId = 'hero') {
+function fixture(sessionId = 'session') {
   let update = () => {};
   const stop = vi.fn(),
     stopStatus = vi.fn();
   let result: ReturnType<RuntimePreviewClient['getResult']> = { data: undefined, error: undefined };
-  const binding: RuntimeLivePreviewBinding = {
-    experienceId,
-    sessionId: 'session',
-    implementation: {
-      fetchPreviewSession: vi.fn(),
-      sendPreviewStatus: vi.fn(),
-      createLivePreviewClient: vi.fn(() => ({
-        getResult: () => result,
-        subscribe: (next: () => void) => {
-          update = next;
-          return stop;
-        },
-        subscribeStatus: (next: (status: 'live') => void) => {
-          next('live');
-          return stopStatus;
-        },
-      })),
+  const client: RuntimePreviewClient = {
+    getResult: () => result,
+    subscribe: vi.fn((next: () => void) => {
+      update = next;
+      return stop;
+    }),
+    subscribeStatus: (next) => {
+      next('live');
+      return stopStatus;
     },
   };
-  const options = {
-    experienceId,
-    sessionId: binding.sessionId,
-    loadImplementation: () => binding.implementation,
-  };
-  const create = (
-    loadImplementation: RuntimeLivePreviewOptions['loadImplementation'] = options.loadImplementation
-  ) => {
-    const owner = new WebPreview(config, { ...options, loadImplementation });
+  const createClient = vi.fn(() => client);
+  const create = (accessToken: RuntimePreviewConfig['accessToken'] = 'preview') => {
+    const owner = new WebPreview(
+      { ...config, preview: { accessToken, createClient } },
+      { sessionId }
+    );
     owners.push(owner);
+    owner.start();
     return owner;
   };
   return {
-    binding,
-    options,
+    client,
+    createClient,
     create,
     stop,
     stopStatus,
@@ -73,42 +57,47 @@ function fixture(experienceId = 'hero') {
   };
 }
 
-it('publishes one SDK-owned source and releases its subscriptions on destruction', async () => {
+it('creates one live client, reports editor status and releases its subscriptions', async () => {
+  const postMessage = vi.fn();
+  vi.stubGlobal('window', { parent: { postMessage } });
   const f = fixture(),
     owner = f.create();
-  await owner.ready();
-  await vi.waitFor(() => expect(preview.peek()?.status).toBe('live'));
+  await vi.waitFor(() => expect(owner.state.peek()?.status).toBe('live'));
+  expect(postMessage).toHaveBeenCalledExactlyOnceWith(
+    { source: 'experiences/live-preview', type: 'status', status: 'live' },
+    '*'
+  );
   const payload = f.emit();
-  expect(preview.peek()).toMatchObject({ experienceId: 'hero', sessionId: 'session', revision: 1 });
-  expect(preview.peek()?.data).toBe(payload);
+  expect(owner.state.peek()).toMatchObject({
+    sessionId: 'session',
+    revision: 1,
+  });
+  expect(owner.state.peek()?.data).toBe(payload);
   owner.clear();
   f.notify();
-  expect(preview.peek()?.data).toBeUndefined();
+  expect(owner.state.peek()?.data).toBeUndefined();
   owner.destroy();
   expect(f.stop).toHaveBeenCalledOnce();
   expect(f.stopStatus).toHaveBeenCalledOnce();
-  expect(preview.peek()).toBeUndefined();
+  expect(owner.state.peek()).toBeUndefined();
 });
 
-it('ignores an obsolete implementation load after replacing the session', async () => {
-  const old = fixture('old'),
-    fresh = fixture('fresh');
-  const pending = deferred<RuntimeLivePreviewModule>();
-  const owner = old.create(() => pending.promise);
-  const initial = owner.ready();
-  await owner.replace(fresh.options);
-  pending.resolve(old.binding.implementation);
-  await initial;
-  expect(preview.peek()?.experienceId).toBe('fresh');
-  expect(old.binding.implementation.createLivePreviewClient).not.toHaveBeenCalled();
-});
-
-it('reports initialization failure through state even without a content fetch', async () => {
+it('does not subscribe after destruction while credentials are pending', async () => {
   const f = fixture();
-  const owner = f.create(async () => {
-    throw new Error('module unavailable');
+  const token = deferred<string>();
+  const owner = f.create(() => token.promise);
+  owner.destroy();
+  token.resolve('preview');
+  await vi.waitFor(() => expect(f.createClient).toHaveBeenCalledOnce());
+  expect(f.client.subscribe).not.toHaveBeenCalled();
+  expect(owner.state.peek()).toBeUndefined();
+});
+
+it('reports subscription failure through state even without a content fetch', async () => {
+  const f = fixture();
+  vi.mocked(f.client.subscribe).mockImplementation(() => {
+    throw new Error('client unavailable');
   });
-  await expect(owner.ready()).rejects.toThrow('module unavailable');
-  expect(preview.peek()?.error?.message).toBe('module unavailable');
-  expect(f.binding.implementation.createLivePreviewClient).not.toHaveBeenCalled();
+  const owner = f.create();
+  await vi.waitFor(() => expect(owner.state.peek()?.error?.message).toBe('client unavailable'));
 });

@@ -329,10 +329,12 @@ navigation/actions use Web `fetchExperience`. Both accept existing type-tagged
 builder arguments or raw built XDA events, and the SDK builds admitted arguments
 once. Normal fetch requires no handoff or direct identify/page prerequisite.
 
-XDA always invokes XPAPI with `preflight: true` and commits neither events nor
-profile changes. SSR/CSR XDA events remain uncommitted: this tolerated service bug
-awaits upstream force-commit support. There is no current force flag or SDK
-workaround. Direct event APIs remain callable but are not compensation.
+The generated Delivery client supports optional `personalization.preflight`,
+which the SDK validates and forwards without selecting a default. Earlier service
+checks observed noncommitting XDA evaluation; backend defaults and override
+behavior have not been reverified with dev.13. Do not infer commitment from a
+selected plan or returned profile ID. Direct event APIs remain callable but are
+not compensation.
 
 Only an actual server-to-browser transfer uses the Node producer:
 
@@ -506,8 +508,10 @@ exactly-once delivery. Web queues Analytics calls separately in memory; there is
 Personalization/Analytics replay journal or global ordinary-event barrier.
 The hybrid reference packages its built events through the Node data producer and
 consumes replay through this browser API. Live Preview remains independent;
-event-bearing XDA always forces XPAPI preflight and new IDs remain provisional. Independent profile-only reads with an already-concrete
-profile remain viable. Neither handoff recipe promises exactly-once delivery for
+new XDA IDs remain provisional until backend finalization is verified.
+The generated `personalization.preflight` option is forwarded without a default;
+its deployed behavior requires verification. Independent profile-only reads with
+an already-concrete profile remain viable. Neither handoff recipe promises exactly-once delivery for
 actual XPAPI commits. See
 [XDA preflight and profile finalization](./packages/runtime/README.md#xda-preflight-and-profile-finalization).
 

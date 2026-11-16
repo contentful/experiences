@@ -1,7 +1,8 @@
+import { createLivePreviewClient } from '@contentful/experiences-live-preview';
 import type { PublicEnvironment } from '../public-config';
 
 // Build-time exclusion matches the Web reference: disabled production builds
-// never include the optional package or its dynamic import chunk.
+// tree-shake the optional package’s factory.
 declare const __LIVE_PREVIEW_ENABLED__: boolean;
 
 export function getPreviewBinding(environment: PublicEnvironment, href: string) {
@@ -21,13 +22,9 @@ export function getPreviewBinding(environment: PublicEnvironment, href: string) 
 export function createPreviewConfiguration(binding: ReturnType<typeof getPreviewBinding>) {
   if (!binding) return undefined;
   return {
-    ...binding,
-    loadImplementation() {
-      if (!__LIVE_PREVIEW_ENABLED__)
-        throw new Error(
-          'Preview assets are excluded. Enable LIVE_PREVIEW_ENABLED in .env and rebuild.'
-        );
-      return import('@contentful/experiences-live-preview');
-    },
+    sessionId: binding.sessionId,
+    sessionHost: binding.sessionHost,
+    resourceResolution: binding.resourceResolution,
+    createClient: __LIVE_PREVIEW_ENABLED__ ? createLivePreviewClient : undefined,
   };
 }

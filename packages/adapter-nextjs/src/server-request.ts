@@ -39,7 +39,10 @@ export function bindNextjsExperiencesRequest(
     anonymousIdCookieName,
     ...context
   } = options;
-  const isPreview = options.isPreview === true || options.livePreview !== undefined;
+  const isPreview =
+    options.isPreview === true ||
+    options.preview?.sessionId !== undefined ||
+    sdk.config.preview?.sessionId !== undefined;
   const canReadIdentity =
     !isPreview &&
     options.profile === undefined &&

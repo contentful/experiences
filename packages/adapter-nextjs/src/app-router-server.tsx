@@ -43,7 +43,11 @@ import {
   type NextjsServerRequestResult,
 } from './server-config.js';
 import { loadNextjsPrimaryExperience, resolveNextjsRequestPolicy } from './request-policy.js';
-import { resolveNextjsLivePreview, nextjsLivePreviewSessionId } from './live-preview.js';
+import {
+  resolveNextjsPreview,
+  resolveNextjsPreviewSession,
+  mergeNextjsPreview,
+} from './preview.js';
 import {
   NextjsAppRouterRequestRoot,
   NextjsAppRouterRequestAnalyticsRoot,
@@ -52,7 +56,7 @@ import {
 export { serializeNextjsRequestResult } from './server-config.js';
 export type { NextjsCookieConfig } from './cookies.js';
 export type { NextjsServerRequestOverrides, NextjsServerRequestPolicy } from './server-config.js';
-export type { NextjsLivePreviewConfig, NextjsLivePreviewOptions } from './live-preview.js';
+export type { NextjsPreviewConfig, NextjsPreviewContext } from './preview.js';
 
 export type NextjsAppRouterRequestContext = NextjsServerRequestContext;
 export type NextjsAppRouterServerExperiencesConfig = NextjsServerExperiencesConfig;
@@ -136,10 +140,13 @@ function createAppRouterServerExperiences<
     cookie,
     browser: _browser,
     request: _policy,
-    livePreview,
+    preview,
     ...nodeConfig
   } = options;
-  const sdk = configureNextjsServerExperiences(nodeConfig);
+  const sdk = configureNextjsServerExperiences({
+    ...nodeConfig,
+    preview: resolveNextjsPreview(preview, '/'),
+  });
 
   // One React render-local result supplies both the root and presentation.
   const loadExperience = cache(
@@ -162,16 +169,7 @@ function createAppRouterServerExperiences<
         cookies: cookieStore,
       };
       const resolved = await resolveNextjsRequestPolicy(options, overrides, context);
-      const preview =
-        typeof livePreview === 'function'
-          ? await livePreview(context)
-          : livePreview
-            ? resolveNextjsLivePreview(
-                livePreview,
-                context.requestUrl,
-                resolved.descriptor.experienceId
-              )
-            : undefined;
+      const session = resolveNextjsPreviewSession(preview, context.requestUrl);
       if (isNextjsSpeculativeRequest(context.headers)) return resolved.result;
       const request = bindNextjsExperiencesRequest(sdk, {
         request: context.request,
@@ -182,8 +180,8 @@ function createAppRouterServerExperiences<
             ? false
             : await resolveNextjsServerValue(consent.server, context)),
         locale: overrides.locale ?? nodeConfig.locale,
-        livePreview: preview,
-        isPreview: overrides.isPreview === true || preview !== undefined,
+        preview: session,
+        isPreview: overrides.isPreview === true || session !== undefined,
       });
       try {
         return await loadNextjsPrimaryExperience(request, resolved, context, options);
@@ -207,13 +205,24 @@ function createAppRouterServerExperiences<
     };
   }
 
+  function registeredRootProps(props: BoundNextjsRequestRootProps) {
+    const browser = options.browser ? nextjsBrowserRootConfig(options) : undefined;
+    const preview = mergeNextjsPreview(
+      mergeNextjsPreview(browser?.preview, props.preview),
+      props.result?.preview
+    );
+    return {
+      ...browser,
+      ...(browser ? inheritedRootProps() : {}),
+      ...props,
+      ...(preview ? { preview } : {}),
+    };
+  }
+
   function ExperiencesRoot(props: BoundNextjsRequestRootProps) {
     if (client?.request?.ExperiencesRoot)
       return createElement(client.request.ExperiencesRoot, {
-        ...(options.browser
-          ? { ...nextjsBrowserRootConfig(options), ...inheritedRootProps() }
-          : {}),
-        ...props,
+        ...registeredRootProps(props),
       });
     return createElement(NextjsAppRouterRequestRoot, {
       ...props,
@@ -221,7 +230,7 @@ function createAppRouterServerExperiences<
         props.children
       ) : (
         <>
-          <ServerPreviewRefresh experienceId={props.result?.experience.experienceId} />
+          <ServerPreviewRefresh />
           {props.children}
         </>
       ),
@@ -237,10 +246,7 @@ function createAppRouterServerExperiences<
   function ExperiencesAnalyticsRoot(props: BoundNextjsRequestRootProps) {
     if (client?.request?.ExperiencesAnalyticsRoot)
       return createElement(client.request.ExperiencesAnalyticsRoot, {
-        ...(options.browser
-          ? { ...nextjsBrowserRootConfig(options), ...inheritedRootProps() }
-          : {}),
-        ...props,
+        ...registeredRootProps(props),
       });
     return createElement(NextjsAppRouterRequestAnalyticsRoot, {
       ...props,
@@ -279,9 +285,20 @@ function createAppRouterServerExperiences<
       cache: cachePolicy,
       ...presentation
     } = props;
-    const descriptor = { experienceId, locale, parameters, personalization, extensions, preview };
+    const descriptor = {
+      experienceId,
+      locale,
+      parameters,
+      personalization,
+      extensions,
+      preview,
+    };
     if (cachePolicy)
-      assertNextjsPublicRequestPolicy({ cache: cachePolicy, fetchOptions: descriptor });
+      assertNextjsPublicRequestPolicy({
+        cache: cachePolicy,
+        fetchOptions: descriptor,
+        context: { isPreview: sdk.config.preview?.sessionId !== undefined },
+      });
     const request = sdk.forRequest({ consent: false });
     try {
       const plan = await request.fetchExperience(descriptor, { ...resolveOptions, config });
@@ -322,21 +339,8 @@ function createAppRouterServerExperiences<
           : (context) => resolveNextjsServerValue(consent.server!, handlerContext(context)),
       locale: nodeConfig.locale,
       cookieOptions: toNextjsAnonymousIdCookieOptions(cookie),
-      livePreview: livePreview
-        ? async (context) => {
-            const serverContext = handlerContext(context as NextjsExperiencesResolverContext);
-            if (typeof livePreview === 'function') return livePreview(serverContext);
-            if (!nextjsLivePreviewSessionId(livePreview, serverContext.requestUrl))
-              return undefined;
-            const descriptor = options.request?.experience
-              ? await resolveNextjsServerValue(options.request.experience, serverContext)
-              : undefined;
-            return resolveNextjsLivePreview(
-              livePreview,
-              serverContext.requestUrl,
-              descriptor?.experienceId
-            );
-          }
+      preview: preview
+        ? (context) => resolveNextjsPreviewSession(preview, context.request.url)
         : undefined,
     }),
   };

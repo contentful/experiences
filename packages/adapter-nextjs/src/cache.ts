@@ -51,7 +51,7 @@ export function assertNextjsPublicRequestPolicy(options: {
   if (
     context?.profile !== undefined ||
     context?.isPreview ||
-    context?.livePreview !== undefined ||
+    context?.preview?.sessionId !== undefined ||
     fetchOptions?.personalization !== undefined ||
     fetchOptions?.preview
   ) {

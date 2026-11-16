@@ -49,8 +49,8 @@ PREVIEW_TOKEN=<server-only preview token>
 # PREVIEW_HOST=https://...          # optional snapshot endpoint
 ```
 
-Visit `/?preview_session_id=<session>`; optional `preview_experience_id` selects
-any Experience ID (default: `LIVE_PREVIEW_EXPERIENCE_ID` or first presentation ID).
+Visit `/?preview_session_id=<session>`. Session content is used only for the
+Experience ID carried by the returned payload.
 Preview activates only when app-local `LIVE_PREVIEW_ENABLED` is exactly `true` and
 the URL supplies a nonempty, trimmed `preview_session_id`. `LIVE_PREVIEW_SESSION_ID`
 is local convenience storage only; runtime/build code never reads it.
@@ -59,9 +59,10 @@ so an older inherited environment value cannot keep preview enabled.
 Missing or empty session parameters, or a disabled flag even with a session URL,
 use ordinary mode and events. Optional `LIVE_PREVIEW_RESOURCE_RESOLUTION` is forwarded.
 The presentation ID list stays unchanged; other IDs use Delivery.
-`forRequest({ livePreview, isPreview: Boolean(livePreview) })` explicitly sets mode,
-including `false` when inactive. Active preview imports the installed optional
-package, skips page/identify work and fetches the snapshot through the normal renderer.
+`forRequest({ preview, isPreview: Boolean(preview) })` explicitly sets mode,
+including `false` when inactive. Active preview skips page/identify work and fetches
+the snapshot with the configured Preview transport through ordinary
+`fetchExperience`. Node opens no socket and needs no live-update client.
 `request.destroy()` runs in `finally`. Reload for another snapshot.
 See [Runtime preview limits](../../packages/runtime/README.md#shared-limitations).
 

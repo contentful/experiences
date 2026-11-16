@@ -30,7 +30,7 @@ supported product usage or a cross-fetch guarantee.
   helper separately; optional preview uses a separately bundled installed ESM artifact. Refresh setup after SDK changes to avoid stale installed UMDs.
   `public/dist` is generated; the vendored theme is authored local source with
   pinned provenance. No adjacent Optimization checkout/package runtime dependency.
-- Runtime-backed Preview Sessions use conditional `livePreview`, normal fetch/render,
+- Runtime-backed Preview Sessions use conditional `preview` session configuration, normal fetch/render,
   then `subscribeToPreview` for updates and `states.preview` for status. No
   application-owned preview clients, socket/retry code, Live Updates, mocks,
   fixtures, simulated responses, E2E tests, or E2E infrastructure. Validate using local
@@ -97,5 +97,5 @@ element, { data })` after DOM insertion, following Optimization. Use each card's
   ordinary events. `LIVE_PREVIEW_SESSION_ID` is local convenience storage only;
   never read it in runtime/build code or emit it in browser configuration. Branch visitor work on
   `sdk.isPreview`; release content subscriptions on route replacement/final exit,
-  retaining them for BFCache. Use `replaceLivePreview` for binding changes within
-  preview and reload the document when entering or leaving preview.
+  retaining them for BFCache. Reload the document when changing sessions
+  or entering or leaving preview; the SDK owns its connection until destruction.

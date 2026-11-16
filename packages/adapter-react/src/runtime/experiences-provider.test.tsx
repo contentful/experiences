@@ -35,6 +35,7 @@ import {
   useExperiencesContext,
   type ExperiencesContextValue,
 } from './experiences-context.js';
+import { observable } from '../test/managed-experience.js';
 import { usePreviewState } from './use-experiences-state.js';
 import {
   useExperienceRequestContext,
@@ -137,7 +138,6 @@ describe('React runtime ownership and activation', () => {
     view = createReactTestRoot();
     captures = [];
     signals.consent.value = undefined;
-    signals.preview.value = undefined;
     runtime = liveSdk();
     construct.mockReset().mockReturnValue(runtime);
   });
@@ -1176,11 +1176,12 @@ describe('React runtime ownership and activation', () => {
   );
 
   it('forwards preview configuration at commit and keeps preview independent of activation', async () => {
-    runtime.states.preview = toObservable(signals.preview);
-    const livePreview: NonNullable<Config['livePreview']> = {
-      experienceId: 'hero',
+    const source = observable<States['preview']['current']>(undefined);
+    runtime.states.preview = source.state;
+    const previewConfig: NonNullable<Config['preview']> = {
+      accessToken: 'preview',
       sessionId: 'session',
-      loadImplementation: vi.fn(),
+      createClient: vi.fn(),
     };
     let preview: States['preview']['current'];
     function Preview() {
@@ -1188,25 +1189,24 @@ describe('React runtime ownership and activation', () => {
       return <Probe />;
     }
     const tree = (
-      <ExperiencesRoot {...config} livePreview={livePreview}>
+      <ExperiencesRoot {...config} preview={previewConfig}>
         <Preview />
       </ExperiencesRoot>
     );
     renderToString(tree);
     expect(construct).not.toHaveBeenCalled();
-    expect(livePreview.loadImplementation).not.toHaveBeenCalled();
+    expect(previewConfig.createClient).not.toHaveBeenCalled();
     render(tree);
-    expect(construct).toHaveBeenCalledExactlyOnceWith({ ...config, livePreview });
+    expect(construct).toHaveBeenCalledExactlyOnceWith({ ...config, preview: previewConfig });
     const state = {
-      experienceId: 'hero',
       sessionId: 'session',
-      data: undefined,
+      data: { sys: { id: 'hero', type: 'Experience' as const }, nodes: [] },
       error: new Error('preview unavailable'),
       status: 'static' as const,
       revision: 1,
     };
     act(() => {
-      signals.preview.value = state;
+      source.emit(state);
     });
     expect(preview).toMatchObject({ ...state, error: { message: 'preview unavailable' } });
     expect(current()).toMatchObject({
@@ -1215,7 +1215,7 @@ describe('React runtime ownership and activation', () => {
       isContentReady: true,
       error: undefined,
     });
-    expect(livePreview.loadImplementation).not.toHaveBeenCalled();
+    expect(previewConfig.createClient).not.toHaveBeenCalled();
     expectNoContentWork();
   });
 });

@@ -3,12 +3,7 @@
 import { act, StrictMode, Suspense, useLayoutEffect, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  ContentfulExperiences,
-  createWebSnapshotRuntime,
-  type PortableRenderPlan,
-} from '@contentful/experiences-web';
-import type { RuntimeLivePreviewModule } from '@contentful/experiences-runtime';
+import { createWebSnapshotRuntime, type PortableRenderPlan } from '@contentful/experiences-web';
 import { ExperiencesContext } from '../runtime/experiences-context.js';
 import {
   ExperienceRequestContext,
@@ -139,53 +134,48 @@ describe('useManagedExperience', () => {
     });
   });
 
-  it.each(['home', 'other'])(
-    'waits for configured preview initialization, enriching only an unrelated ID (%s)',
-    async (experienceId) => {
-      const source = sourceSdk();
-      Object.defineProperty(source.sdk, 'config', {
-        value: {
-          livePreview: { experienceId: 'home', sessionId: 'session', loadImplementation: vi.fn() },
-        },
-      });
-      const fetchExperience = vi.fn().mockResolvedValue(plan());
-      const context = { revision: {}, fetchExperience, reset() {} };
-      await act(async () =>
-        root.render(content(source, { experienceId: 'home', config }, context))
-      );
-      expect(fetchExperience).not.toHaveBeenCalled();
-      expect(source.subscribeToPreview).not.toHaveBeenCalled();
-      expect(result.status).toBe('loading');
-      await act(async () => source.preview.emit(previewState({ experienceId })));
-      expect(fetchExperience.mock.calls[0]?.[1].extensions).toEqual(
-        experienceId === 'home' ? undefined : { sourceMap: {} }
-      );
-      expect(fetchExperience.mock.calls[0]?.[1].locale).toBe(
-        experienceId === 'home' ? undefined : 'en-US'
-      );
-      expect(fetchExperience).toHaveBeenCalledTimes(1);
-      await act(async () => source.preview.emit(previewState({ experienceId, status: 'static' })));
-      expect(fetchExperience).toHaveBeenCalledTimes(1);
-    }
-  );
-
-  it('cancels pending initializer observation on unmount and reports initialization errors', async () => {
+  it('suppresses automatic defaults for the Preview context while keeping errors scoped to its payload ID', async () => {
     const source = sourceSdk();
-    Object.defineProperty(source.sdk, 'config', {
-      value: {
-        livePreview: { experienceId: 'home', sessionId: 'session', loadImplementation: vi.fn() },
-      },
+    source.preview.emit(previewState({ error: new Error('home only') }));
+    await act(async () => root.render(content(source, { experienceId: 'other', config })));
+    expect(source.fetchExperience.mock.calls[0]?.[0]).toMatchObject({
+      experienceId: 'other',
+      locale: undefined,
+      extensions: undefined,
     });
+    expect(result.error).toBeUndefined();
     await act(async () => root.render(content(source, { experienceId: 'home', config })));
+    expect(source.fetchExperience.mock.calls.at(-1)?.[0].extensions).toBeUndefined();
+    expect(source.fetchExperience.mock.calls.at(-1)?.[0].locale).toBeUndefined();
+    await act(async () => source.preview.emit(undefined));
+    await act(async () => root.render(content(source, { experienceId: 'other', config })));
+    await act(async () => result.refresh());
+    expect(source.fetchExperience.mock.calls.at(-1)?.[0]).toMatchObject({
+      locale: 'en-US',
+      extensions: { sourceMap: {} },
+    });
+  });
+
+  it('cancels initializer observation on unmount and reports keyed initialization errors', async () => {
+    const source = sourceSdk();
+    source.preview.emit(previewState());
+    await act(async () =>
+      root.render(
+        content(source, {
+          experienceId: 'home',
+          config,
+          initialPlan: plan(),
+        })
+      )
+    );
     expect(source.fetchExperience).not.toHaveBeenCalled();
     await act(async () => root.cleanup());
     expect(source.preview.listeners.size).toBe(0);
     source.preview.emit(previewState());
     expect(source.fetchExperience).not.toHaveBeenCalled();
-
     root = createReactTestRoot();
     const error = new Error('initializer failed');
-    source.preview.emit(previewState({ experienceId: undefined, error }));
+    source.preview.emit(previewState({ error }));
     source.fetchExperience.mockRejectedValue(error);
     await act(async () => root.render(content(source, { experienceId: 'home', config })));
     expect(source.fetchExperience.mock.calls[0]?.[0].extensions).toBeUndefined();
@@ -195,18 +185,16 @@ describe('useManagedExperience', () => {
 
   it('keeps seeded preview setup errors without duplicate startup fetching and recovers through the binding', async () => {
     const source = sourceSdk();
-    Object.defineProperty(source.sdk, 'config', {
-      value: {
-        livePreview: { experienceId: 'home', sessionId: 'session', loadImplementation: vi.fn() },
-      },
-    });
+    source.preview.emit(previewState());
     const initialPlan = plan('seed');
-    const options = { experienceId: 'home', config, initialPlan };
+    const options = {
+      experienceId: 'home',
+      config,
+      initialPlan,
+    };
     await act(async () => root.render(content(source, options)));
     const error = new Error('initializer failed');
-    await act(async () =>
-      source.preview.emit(previewState({ experienceId: undefined, error, status: 'static' }))
-    );
+    await act(async () => source.preview.emit(previewState({ error, status: 'static' })));
     expect(result.data).toBe(initialPlan);
     expect(result.error).toBe(error);
     expect(source.fetchExperience).not.toHaveBeenCalled();
@@ -218,69 +206,17 @@ describe('useManagedExperience', () => {
     expect(result.error).toBeUndefined();
   });
 
-  it('automatically fetches a replacement matching session when preview is static', async () => {
-    const snapshot = deferred<PortableRenderPlan>();
-    const implementation: RuntimeLivePreviewModule = {
-      fetchPreviewSession: vi.fn(() => snapshot.promise),
-      createLivePreviewClient() {
-        throw new Error('socket unavailable');
-      },
-      sendPreviewStatus() {},
-    };
-    const sdk = new ContentfulExperiences({
-      spaceId: 'space',
-      environmentId: 'master',
-      delivery: { accessToken: 'delivery' },
-      preview: { accessToken: 'preview' },
-      livePreview: {
-        experienceId: 'home',
-        sessionId: 'session-a',
-        loadImplementation: () => implementation,
-      },
-    });
-    try {
-      await act(async () =>
-        root.render(
-          <ExperiencesContext.Provider
-            value={{ sdk, error: undefined, isLive: true, isContentReady: true }}
-          >
-            <Probe options={{ experienceId: 'home', config, initialPlan: plan('retained') }} />
-          </ExperiencesContext.Provider>
-        )
-      );
-      expect(implementation.fetchPreviewSession).not.toHaveBeenCalled();
-      await act(async () =>
-        sdk.replaceLivePreview({
-          experienceId: 'home',
-          sessionId: 'session-b',
-          loadImplementation: () => implementation,
-        })
-      );
-      expect(sdk.states.preview.current?.status).toBe('static');
-      expect(result.data?.nodes[0]?.props.content.title).toBe('retained');
-      expect(implementation.fetchPreviewSession).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ sessionId: 'session-b' }),
-        expect.anything(),
-        expect.anything()
-      );
-      await act(async () => snapshot.resolve(plan('replacement')));
-      expect(result.data?.nodes[0]?.props.content.title).toBe('replacement');
-    } finally {
-      act(() => root.cleanup());
-      sdk.destroy();
-    }
-  });
-
   it('does not invalidate an explicit refresh for connection/status-only notifications', async () => {
     const source = sourceSdk();
-    Object.defineProperty(source.sdk, 'config', {
-      value: {
-        livePreview: { experienceId: 'home', sessionId: 'session', loadImplementation: vi.fn() },
-      },
-    });
     source.preview.emit(previewState());
     await act(async () =>
-      root.render(content(source, { experienceId: 'home', config, initialPlan: plan('seed') }))
+      root.render(
+        content(source, {
+          experienceId: 'home',
+          config,
+          initialPlan: plan('seed'),
+        })
+      )
     );
     const pending = deferred<PortableRenderPlan>();
     source.fetchExperience.mockReturnValueOnce(pending.promise);

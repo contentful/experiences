@@ -31,7 +31,6 @@ export interface ExperienceSourceOptions {
   readonly requestContext?: ManagedExperienceRequestContext;
   readonly initialPlan?: PortableRenderPlan;
   readonly initialError?: Error;
-  readonly waiting?: boolean;
 }
 
 const toError = (error: unknown): Error =>
@@ -69,8 +68,6 @@ export class ExperienceSourceController {
   private requestStatus: ManagedExperienceSnapshot['status'] = 'idle';
   private listener: ((snapshot: ManagedExperienceSnapshot) => void) | undefined;
   private binding: Subscription | undefined;
-  private previewError: Error | undefined;
-  private previewSessionId: string | undefined;
   private snapshot: ManagedExperienceSnapshot;
 
   constructor(initialPlan?: PortableRenderPlan, initialError?: Error) {
@@ -111,8 +108,7 @@ export class ExperienceSourceController {
       (previous.resolve.debug ?? false) === (options.resolve.debug ?? false) &&
       // Snapshot activation and temporary preview initialization retain caller seeds.
       (!previous.sdk || !options.sdk || previous.request.locale === options.request.locale) &&
-      ((!previous.sdk && !previous.waiting) ||
-        previous.requestContext?.revision === options.requestContext?.revision);
+      (!previous.sdk || previous.requestContext?.revision === options.requestContext?.revision);
     const newSeed =
       (options.initialPlan !== undefined || options.initialError !== undefined) &&
       (!previous ||
@@ -120,26 +116,13 @@ export class ExperienceSourceController {
         previous.initialError !== options.initialError);
     const sdkChanged = previous?.sdk !== options.sdk;
     const changed = !sameDescriptor || sdkChanged || newSeed;
-    const preview = options.sdk?.states.preview.current;
-    const sessionId =
-      preview?.experienceId === options.request.experienceId ? preview.sessionId : undefined;
-    const sessionChanged =
-      sameDescriptor &&
-      !newSeed &&
-      (!sdkChanged || previous.waiting) &&
-      sessionId !== undefined &&
-      this.previewSessionId !== undefined &&
-      this.previewSessionId !== sessionId;
-    if (!sameDescriptor || (sdkChanged && previous?.sdk && options.sdk))
-      this.previewSessionId = undefined;
-    if (sessionId !== undefined) this.previewSessionId = sessionId;
     const reconnect = !this.active;
     this.active = true;
     this.options = options;
 
     if (changed) {
       this.version++;
-      const retain = sameDescriptor && (!previous?.sdk || !sdkChanged || options.waiting);
+      const retain = sameDescriptor && (!previous?.sdk || !sdkChanged);
       const data = newSeed ? options.initialPlan : retain ? this.snapshot.data : undefined;
       const error = newSeed ? options.initialError : retain ? this.snapshot.error : undefined;
       this.requestStatus = error ? 'error' : data ? 'success' : 'idle';
@@ -161,26 +144,13 @@ export class ExperienceSourceController {
             this.publish({
               data,
               error: update.error,
-              status: update.error ? 'error' : data ? 'success' : this.snapshot.status,
+              status: update.error ? 'error' : data ? 'success' : this.requestStatus,
             });
           }
         );
       }
     }
-    const previewError = this.currentPreviewError();
-    if (previewError || (this.previewError && this.snapshot.error === this.previewError)) {
-      this.publish({
-        ...this.snapshot,
-        error: previewError,
-        status: previewError ? 'error' : this.snapshot.data ? 'success' : this.requestStatus,
-      });
-    }
-    this.previewError = previewError;
-    if (options.waiting && this.requestStatus === 'idle')
-      this.publish({ ...this.snapshot, status: 'loading' });
-    // A replacement session may never stream content. Its snapshot remains view-owned.
-    if (options.sdk && sessionChanged && !preview?.data) void this.fetch(true);
-    else if (options.sdk && this.requestStatus === 'idle') void this.fetch(false);
+    if (options.sdk && this.requestStatus === 'idle') void this.fetch(false);
   }
 
   readonly refresh = async (): Promise<void> => {
@@ -198,11 +168,9 @@ export class ExperienceSourceController {
   }
 
   private currentPreviewError(): Error | undefined {
-    const preview = this.options?.sdk?.states.preview.current;
-    return preview?.experienceId === undefined ||
-      preview.experienceId === this.options?.request.experienceId
-      ? preview?.error
-      : undefined;
+    const options = this.options;
+    const preview = options?.sdk?.states.preview.current;
+    return preview?.data?.sys?.id === options?.request.experienceId ? preview?.error : undefined;
   }
 
   private async fetch(isRefresh: boolean): Promise<void> {
@@ -210,13 +178,13 @@ export class ExperienceSourceController {
     const sdk = options.sdk!;
     const version = ++this.version;
     this.requestStatus = 'loading';
-    this.publish({ ...this.snapshot, status: 'loading', error: this.currentPreviewError() });
     let request = options.request;
     if (isRefresh && request.personalization) {
       const { events: _events, ...personalization } = request.personalization;
       request = { ...request, personalization };
     }
     try {
+      this.publish({ ...this.snapshot, status: 'loading', error: this.currentPreviewError() });
       const data = await (options.requestContext
         ? options.requestContext.fetchExperience(sdk, request, options.resolve, isRefresh)
         : sdk.fetchExperience(request, options.resolve));

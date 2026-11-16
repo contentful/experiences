@@ -22,8 +22,8 @@ await request.page(); // { accepted: false, reason: 'preview' } in Session previ
 ```
 
 `isPreview: true` fixes read-only `request.isPreview` for this request, independently
-of consent, CPA configuration and socket status. It defaults to false; the host determines
-preview intent before calling `forRequest()`. All event calls skip before building or
+of consent, CPA configuration and socket status. It defaults to false unless an active Preview Session is configured; the host determines
+other preview intent before calling `forRequest()`. All event calls skip before building or
 profile lookup, report `onEventBlocked` with reason `preview`, and cannot affect other requests.
 Preview fetches omit personalization and do not attach/adopt profiles. Handoff preparation
 returns scope/cache only with `skipped: 'preview'`, without preflight or replay;
@@ -32,8 +32,9 @@ cookie helper leaves an existing identity untouched because the handoff has no p
 Other preview contexts may explicitly opt in with `isPreview: true`. Raw `sdk.api` calls
 and standalone free fetches remain outside this policy.
 
-For session snapshots, install the optional Live Preview package and configure
-`preview.accessToken` on the SDK. When preview is enabled, bind the request once.
+For session snapshots, configure `preview.accessToken` (or a trusted proxy host) on
+the SDK and pass the active session through the request's `preview` option. Node uses
+its existing Preview transport and needs no optional Live Preview package or socket.
 
 For query-based sessions, Node re-exports Runtime's pure
 `getPreviewSessionBinding(defaults, searchParams)` and `PreviewSessionBinding`
@@ -44,30 +45,21 @@ import { getPreviewSessionBinding } from '@contentful/experiences-node';
 
 const requestUrl = new URL(incomingRequest.url);
 const binding = getPreviewSessionBinding({ experienceId }, requestUrl.searchParams);
-const livePreview = binding
-  ? {
-      ...binding,
-      loadImplementation: () => import('@contentful/experiences-live-preview'),
-    }
+const preview = binding
+  ? { sessionId: binding.sessionId, resourceResolution: binding.resourceResolution }
   : undefined;
-// Pass livePreview to sdk.forRequest({ livePreview }).
+// Pass preview to sdk.forRequest({ preview }).
 ```
 
 Defaults accept `experienceId` and optional `sessionHost`/`resourceResolution`,
 with no Session ID or environment fallback. Missing or empty Session IDs select
 no binding; see Runtime's [query parsing contract](../runtime/README.md#preview-session-query-binding).
 Call the helper according to your deployment policy; it does not load the preview
-package or manage request/session lifetime. If you already have the IDs, supply
-`livePreview` directly:
+package or manage request/session lifetime. If you already have the Session ID, supply
+`preview` directly:
 
 ```ts
-const request = sdk.forRequest({
-  livePreview: {
-    experienceId,
-    sessionId,
-    loadImplementation: () => import('@contentful/experiences-live-preview'),
-  },
-});
+const request = sdk.forRequest({ preview: { sessionId } });
 try {
   const plan = await request.fetchExperience({ experienceId }, { config: experienceConfig });
   renderPlan(plan);
@@ -76,12 +68,15 @@ try {
 }
 ```
 
-The session configuration sets preview policy immediately; its implementation loads
-lazily once per request, only for the bound Experience ID. Unrelated IDs do not await
-the loader, even if it fails or remains pending.
-`isPreview: false` conflicts with it. Matching IDs load session plans with Runtime →
-request → operation metadata/debug precedence; other IDs and destinations retain their
-sources. Node opens no socket. Hosts omit automatic visitor-cookie work for preview.
+An active session sets preview policy immediately; `isPreview: false` conflicts with
+it. Preview credentials alone do not enable this policy. The request fetches one raw
+session snapshot lazily and resolves it only when its `sys.id` matches the requested
+Experience ID. Other IDs, including payloads with no ID, use the ordinary by-ID source
+and preserve an explicit `preview: true` choice. Each matching call retains its own
+registry and Runtime → request → operation metadata/debug precedence. Optional
+`resourceResolution` and `sessionHost` override constructor Preview defaults; a stable
+constructor `preview.sessionId` can also supply the active session. Destinations retain
+their sources. Node opens no socket. Hosts omit automatic visitor-cookie work for preview.
 `request.destroy()` invalidates unfinished content results and prevents late profile
 writes without affecting sibling requests. Event calls disposed before transport return
 `{ accepted: false }`; successful transports retain acceptance and Personalization response

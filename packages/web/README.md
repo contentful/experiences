@@ -9,9 +9,10 @@ Only one live Experiences Web SDK instance is supported in a JavaScript runtime.
 ## Session preview
 
 Set `isPreview: true` to suppress events or `isPreview: false` to select ordinary event policy.
-When omitted, the SDK detects a nonempty, trimmed `preview_session_id` in the initial
-browser URL only when `preview` is configured. A Session ID alone does not enable preview.
-The resulting read-only `sdk.isPreview` is fixed at construction, before tracking starts.
+When omitted, the SDK uses the configured Preview session or a nonempty, trimmed
+`preview_session_id` in the initial browser URL only when `preview` is configured.
+A Session ID alone does not enable preview. The resulting read-only `sdk.isPreview`
+is fixed at construction, before tracking starts.
 All event methods return `{ accepted: false, reason: 'preview' }` and report through
 `onEventBlocked`/`blockedEventStream`, without building, publishing or queueing events.
 Consent stays unchanged; automatic and explicitly enabled interaction tracking stays inactive.
@@ -27,12 +28,21 @@ and `debug` do not select this policy. Static preview without a Session ID is no
 applications may opt in with `isPreview: true`. Raw `sdk.api` calls and standalone free
 fetches remain outside it.
 
-### Shared source and optional live preview
+### Editor session and optional live updates
 
-Web owns one Preview Session source/connection through `states.preview`, which
-is `undefined` while initialization is pending or integration is disabled.
-`fetchExperience` loads initial/refresh snapshots for the bound Experience ID;
-other IDs keep their ordinary source. The SDK shares equivalent in-flight
+Web owns one connection for the active editor session. Configure credentials under
+`preview` and pass the optional package’s `createLivePreviewClient` factory as
+`preview.createClient`. The session defaults to the standard
+`preview_session_id` query parameter. An explicit `preview.sessionId` overrides
+the URL; a blank value disables URL inference. `isPreview: false` disables automatic
+session integration. Rendering components and fetches keep their ordinary Experience IDs. `states.preview`
+exposes raw session data, error, status and revision.
+
+The package returns one current Experience payload. The SDK uses its actual
+`sys.id` to route snapshots and updates: only matching requests/subscriptions
+receive that payload, and updates without an ID are ignored. Other Experience
+IDs retain their ordinary fetch source and are not overwritten by the session.
+The SDK shares equivalent in-flight
 fetching/resolution while each consumer receives an independent mutable plan;
 the view keeps its existing presentation state.
 
@@ -40,7 +50,10 @@ the view keeps its existing presentation state.
 `Subscription` and emits only `PreviewUpdate` plan/error updates, without snapshot
 fetching. Resolved plans retain all resolver diagnostics without discarding usable
 content. Its optional `data` and `error` may appear together: a new plan can carry
-an existing source error. Connection status comes from `states.preview`.
+an existing source error. Connection status comes from the shared `states.preview`.
+Repeated presentations of the same ID receive the same update and resolve with
+their own options. The SDK context owns the connection until `destroy()`;
+unsubscribing detaches only that view.
 
 For query-based sessions, import `getPreviewSessionBinding` from the Web SDK.
 Its thin wrapper uses Runtime's [query parsing contract](../runtime/README.md#preview-session-query-binding)
@@ -64,23 +77,21 @@ explicit parameters override the current location. Defaults contain `experienceI
 and optional `sessionHost`/`resourceResolution`, with no Session ID or environment
 fallback. Missing or empty Session IDs return `undefined`.
 
-Applications gate helper calls using their deployment policy, then pass
-`binding ? { ...binding, loadImplementation } : undefined` as `livePreview`.
+Applications gate helper calls using their deployment policy, then configure the
+session once on the SDK owner. The SDK does not need a configured target Experience ID.
 The helper does not load the optional package, watch navigation or manage session/mode
 lifetime. It is a package export; the UMD constructor surface is unchanged.
-Known IDs can still configure `livePreview` directly, as below:
+Configure an editor context directly:
 
 ```ts
+import { createLivePreviewClient } from '@contentful/experiences-live-preview';
+
 const sdk = new ContentfulExperiences({
   ...browserConfig,
-  preview: { accessToken: previewToken },
-  livePreview: sessionId
-    ? {
-        experienceId,
-        sessionId,
-        loadImplementation: () => import('@contentful/experiences-live-preview'),
-      }
-    : undefined,
+  preview: {
+    accessToken: previewToken,
+    createClient: createLivePreviewClient,
+  },
 });
 if (initialPlan) renderPlan(initialPlan);
 else renderPlan(await sdk.fetchExperience({ experienceId }, { config: registry }));
@@ -97,14 +108,34 @@ subscription.unsubscribe();
 sdk.destroy();
 ```
 
-The session configuration establishes preview policy before events/tracking.
-Unrelated IDs do not await the implementation loader, even if it fails or remains
-pending. Explicit consent/reset commands retain their behavior. `replaceLivePreview(options)`
-switches sessions within fixed preview mode and invalidates obsolete work.
-Bindings detach their listeners; source lifetime belongs to the SDK. Failed
+`preview.createClient` accepts the package's synchronous `createLivePreviewClient`
+factory. The SDK supplies `{ spaceId, environmentId, sessionId, previewToken,
+sessionHost?, resourceResolution?, debug? }` and receives the client synchronously.
+To load the optional package lazily, await
+its import before constructing the SDK, then pass its exported factory directly:
+
+```ts
+const { createLivePreviewClient } = await import('@contentful/experiences-live-preview');
+const sdk = new ContentfulExperiences({
+  ...browserConfig,
+  preview: { accessToken: previewToken, createClient: createLivePreviewClient },
+});
+```
+
+Recreate the context when its session changes. Node configures Preview credentials
+on the SDK and supplies `preview: { sessionId }` explicitly to `forRequest()`;
+the shared configuration also accepts `createClient`, but Node snapshot HTTP does
+not require it or open a socket.
+
+The session establishes Preview policy before events/tracking; credentials alone
+do not. HTTP snapshots use the configured Preview client independently of the
+optional live-update client. A configured factory runs once per context. Web reports
+Preview connection status to the editor automatically. Explicit
+consent/reset commands retain their behavior. Change session by recreating the SDK
+context; React/Next roots handle their session lifecycle internally. Failed
 updates leave usable presentation content intact.
 
-SSR-only adapters observe matching `states.preview` content revisions for server
+SSR-only adapters observe identified `states.preview` revisions for server
 refresh, without browser resolution. Status-only changes do not advance revision;
 keep the connection stable across refreshes and preserve server content.
 
@@ -279,8 +310,10 @@ Independent profile-only reads with a concrete profile can still run concurrentl
 Built XDA events retain `context.gdpr`. Default Web-built page context follows the
 [documented browser metadata](../runtime/README.md#xda-preflight-and-profile-finalization);
 raw caller-built XDA metadata is not sanitized.
-Event-bearing XDA forces XPAPI preflight and does not commit events or
-profile changes. Local adoption and storage do not finalize the returned ID.
+The SDK validates and forwards optional `personalization.preflight` without
+selecting a default. Earlier service checks observed noncommitting evaluation;
+backend defaults and override behavior have not been reverified with dev.13.
+Local adoption and storage do not prove that the returned ID is finalized.
 Successful submission commits against the selected live target, which may differ
 from the XDA continuation ID; admission and generic SDK success are not
 proof of commit. See [XDA preflight and profile finalization](../runtime/README.md#xda-preflight-and-profile-finalization).
@@ -383,17 +416,17 @@ validation used by the constructor and setter.
 `experiences.states` exposes the browser SDK's observable state. Each observable
 has a `current` snapshot, `subscribe(next)`, and `subscribeOnce(next)`:
 
-| State                         | Value                                                                                                                                                                  |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `profile`                     | Current profile, or `undefined`.                                                                                                                                       |
-| `flag(name)`                  | Key-scoped JSON flag value, or `undefined`; reads and subscriptions attempt exposure.                                                                                  |
-| `locale`                      | Current SDK locale, or `undefined`; update it with `setLocale()`.                                                                                                      |
-| `consent`                     | Event consent: `true`, `false`, or undecided (`undefined`).                                                                                                            |
-| `persistenceConsent`          | Persistence consent: `true`, `false`, or undecided (`undefined`).                                                                                                      |
-| `personalizationRequestState` | Latest Personalization request outcome: `{ status: 'idle' \| 'pending' \| 'success' }`, or `{ status: 'failed', reason: 'timeout' \| 'api-error' }`.                   |
-| `eventStream`                 | Most recent validated, consent-allowed event attempt, or `undefined`.                                                                                                  |
-| `blockedEventStream`          | Most recently blocked event metadata, or `undefined`.                                                                                                                  |
-| `preview`                     | Shared `PreviewState` or `undefined`: optional `experienceId`/`sessionId`, raw `ExperiencePayload` data, error, `live`/`static`/undefined status and content revision. |
+| State                         | Value                                                                                                                                                           |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `profile`                     | Current profile, or `undefined`.                                                                                                                                |
+| `flag(name)`                  | Key-scoped JSON flag value, or `undefined`; reads and subscriptions attempt exposure.                                                                           |
+| `locale`                      | Current SDK locale, or `undefined`; update it with `setLocale()`.                                                                                               |
+| `consent`                     | Event consent: `true`, `false`, or undecided (`undefined`).                                                                                                     |
+| `persistenceConsent`          | Persistence consent: `true`, `false`, or undecided (`undefined`).                                                                                               |
+| `personalizationRequestState` | Latest Personalization request outcome: `{ status: 'idle' \| 'pending' \| 'success' }`, or `{ status: 'failed', reason: 'timeout' \| 'api-error' }`.            |
+| `eventStream`                 | Most recent validated, consent-allowed event attempt, or `undefined`.                                                                                           |
+| `blockedEventStream`          | Most recently blocked event metadata, or `undefined`.                                                                                                           |
+| `preview`                     | Shared editor-session state: session ID, raw Experience payload, error, connection status and content revision. Updates preserve the reported payload `sys.id`. |
 
 `subscribe` immediately invokes its callback with the current value, including
 `undefined`, then observes changes. `subscribeOnce` waits for the first

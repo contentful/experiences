@@ -2,6 +2,7 @@
 
 export { ManualViewTracking } from '@contentful/experiences-nextjs/client';
 
+import { createLivePreviewClient } from '@contentful/experiences-live-preview';
 import {
   bindNextjsAppRouterClientExperiences,
   useNextAppAutoPageInputs,
@@ -21,7 +22,7 @@ import {
   type ComponentType,
   type ReactNode,
 } from 'react';
-import { previewBinding, routeIds, type BrowserEnvironment } from '../reference';
+import type { BrowserEnvironment } from '../reference';
 import { browserRegistry } from './browser-registry';
 import { createAttemptLog, type AttemptLog } from './attempt-log';
 import { ConsentMirror } from './ConsentMirror';
@@ -51,10 +52,12 @@ export function AppBrowserRoot({
     bindNextjsAppRouterClientExperiences({
       ...environment.web,
       config: browserRegistry,
-      livePreview: {
-        ...environment.livePreview,
+      preview: {
+        ...environment.web.preview,
+        sessionHost: environment.livePreview?.sessionHost,
+        resourceResolution: environment.livePreview?.resourceResolution,
         enabled: Boolean(environment.livePreview),
-        loadImplementation: () => import('@contentful/experiences-live-preview'),
+        createClient: createLivePreviewClient,
       },
     })
   );
@@ -89,10 +92,12 @@ export function PagesBrowserRoot({
     bindNextjsPagesRouterExperiences({
       ...environment.web,
       config: browserRegistry,
-      livePreview: {
-        ...environment.livePreview,
+      preview: {
+        ...environment.web.preview,
+        sessionHost: environment.livePreview?.sessionHost,
+        resourceResolution: environment.livePreview?.resourceResolution,
         enabled: Boolean(environment.livePreview),
-        loadImplementation: () => import('@contentful/experiences-live-preview'),
+        createClient: createLivePreviewClient,
       },
     })
   );
@@ -132,16 +137,14 @@ function ReferenceBrowserRoot({
     AnalyticsRoot: ComponentType<BoundNextjsRequestRootProps>;
   }) {
   const url = new URL(currentRouteKey, 'https://nextjs.invalid');
-  const preview = previewBinding(environment, url);
   const [log] = useState(createAttemptLog);
   const serverOnly = url.searchParams.get('mode') === 'server-only';
   const ExperiencesRoot = serverOnly ? AnalyticsRoot : ContentRoot;
   return (
     <ExperiencesRoot
       {...props}
-      livePreview={{
+      preview={{
         enabled: Boolean(environment.livePreview),
-        experienceId: preview?.experienceId ?? routeIds(url.pathname, environment.experienceIds)[0],
       }}
       onStatesReady={log.onStatesReady}
     >

@@ -101,17 +101,17 @@ the URL supplies a nonempty, trimmed `preview_session_id`. `LIVE_PREVIEW_SESSION
 is local convenience storage only; runtime/build code never reads it or emits it
 into browser configuration. Missing or empty session parameters, or a disabled
 flag even with a session URL, use ordinary mode and events. Optional
-`LIVE_PREVIEW_RESOURCE_RESOLUTION` is forwarded. Other IDs use Delivery. Optional `PREVIEW_HOST` sets the server snapshot endpoint.
-Node uses request-local `livePreview` and `request.destroy()`. Node and Web both
+`LIVE_PREVIEW_RESOURCE_RESOLUTION` is forwarded. Session content updates only
+presentations matching the payload’s own Experience ID; other IDs use Delivery. Optional `PREVIEW_HOST` sets the server snapshot endpoint.
+Node uses request-local `preview` and `request.destroy()`. Node and Web both
 pass explicit `isPreview: Boolean(binding)` from the same enabled URL binding,
 overriding SDK URL autodetection even when false. Web retains SSR
 markup and serialized `initialPlans`, then attaches `subscribeToPreview()` without
 a startup fetch, page event or visitor handoff. Navigation and Retry use
-`fetchExperience()` before attaching listeners; `states.preview` exposes connection status.
+`fetchExperience()` before attaching listeners; `states.preview` exposes connection status for the active session.
 Preview skips visitor initialization and disables Identify. Navigation inherits
 the current binding only when the destination omits it; explicit destination
-preview parameters take precedence. Binding changes within preview use
-`replaceLivePreview`; entering or leaving preview reloads the document to create
+preview parameters take precedence. Changing sessions or entering or leaving preview reloads the document to create
 a new SDK owner. An explicit empty `preview_session_id` leaves preview.
 The presentation ID list stays unchanged.
 Ordinary `build`, `dev`, `serve`, and `restart` commands read app-local

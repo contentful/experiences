@@ -36,9 +36,9 @@ import {
   validatePreparedEvents,
   withEventConsent,
   assertRuntimePreviewRequest,
-  fetchRuntimePreviewSession,
   mergeRuntimePreviewResolveOptions,
-  type RuntimeLivePreviewOptions,
+  type RuntimePreviewSessionOptions,
+  resolvePreviewSessionId,
 } from '@contentful/experiences-runtime';
 import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import {
@@ -63,10 +63,9 @@ import {
   online as onlineSignal,
   persistenceConsent as persistenceConsentSignal,
   profile as profileSignal,
-  preview as previewSignal,
   toObservable,
 } from './signals/index.js';
-import type { States, PreviewUpdate } from './states.js';
+import type { States, PreviewState, PreviewUpdate } from './states.js';
 import { normalizeExplicitLocale } from './locale.js';
 import {
   mergePersonalizationState,
@@ -110,8 +109,6 @@ export type ConfigDefaults = StatefulDefaults;
 export type Config = Omit<BaseConfig, 'eventBuilder' | 'locale'> & {
   /** Suppresses events for this instance. Defaults to URL session detection when preview is configured. */
   isPreview?: boolean;
-  /** Preview Session configuration with lazy implementation loading; establishes preview policy immediately. */
-  livePreview?: RuntimeLivePreviewOptions;
   /** Automatic interaction defaults; each omitted flag defaults to true. */
   autoTrackEntryInteraction?: AutoTrackEntryInteractionOptions;
   locale?: string;
@@ -222,7 +219,11 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
 > {
   readonly #singletonOwner: string;
   readonly #isPreview: boolean;
+  readonly #previewOptions: RuntimePreviewSessionOptions | undefined;
+  readonly #previewState = signal<PreviewState | undefined>();
   #preview: WebPreview | undefined;
+  #previewSnapshot: Promise<{ payload: ExperiencePayload; revision: number }> | undefined;
+  #snapshotRevision = 0;
   readonly #pendingContent = new Map<
     FetchResolveOptions['config'],
     Map<string, Promise<PortableRenderPlan>>
@@ -299,7 +300,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   /** Observable state shared with application subscriptions and internal effects. */
   readonly states: States = {
     flag: (name) => this.#flagObservable(name),
-    preview: toObservable(previewSignal, (value) => value),
+    preview: toObservable(this.#previewState, (value) => value),
     blockedEventStream: toObservable(blockedEventSignal),
     consent: toObservable(consentSignal),
     persistenceConsent: toObservable(persistenceConsentSignal),
@@ -342,16 +343,21 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         getUserAgent: browserContext?.getUserAgent ?? getUserAgent,
       },
     });
-    if (config.livePreview !== undefined && config.isPreview === false) {
-      throw new TypeError('livePreview cannot be combined with isPreview: false');
-    }
-    this.#isPreview =
-      (config.livePreview !== undefined ? true : config.isPreview) ??
-      (config.preview !== undefined &&
-        typeof window !== 'undefined' &&
-        Boolean(
-          new globalThis.URLSearchParams(window.location.search).get('preview_session_id')?.trim()
-        ));
+    const sessionId = resolvePreviewSessionId(
+      config.preview?.sessionId,
+      new globalThis.URLSearchParams(typeof window === 'undefined' ? '' : window.location.search)
+    );
+    if (config.preview?.sessionId?.trim() && config.isPreview === false)
+      throw new TypeError('Preview Session cannot be combined with isPreview: false');
+    this.#isPreview = config.isPreview ?? (config.preview !== undefined && Boolean(sessionId));
+    this.#previewOptions =
+      this.isPreview && config.preview && sessionId
+        ? {
+            sessionId,
+            sessionHost: config.preview.sessionHost,
+            resourceResolution: config.preview.resourceResolution,
+          }
+        : undefined;
     // The lock is taken after the base class has validated its configuration, so a
     // failed construction never holds it. Construction is synchronous, so nothing
     // else can acquire it in between.
@@ -382,7 +388,6 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         eventSignal.value = undefined;
         blockedEventSignal.value = undefined;
         personalizationRequestStateSignal.value = { status: 'idle' };
-        previewSignal.value = undefined;
       });
       this.eventBuilder.getConsent = () => consentSignal.value;
       this.#identity = new IdentityCookie(LocalStore, cookie);
@@ -450,7 +455,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         await this.#interactionTracking?.endActive();
         await this.flushQueues({ force: true, beacon: beaconHandler });
       });
-      if (config.livePreview) this.#preview = new WebPreview(this.config, config.livePreview);
+      if (this.#previewOptions) {
+        this.#preview = new WebPreview(this.config, this.#previewOptions, this.#previewState);
+        this.#preview.start();
+      }
     } catch (error) {
       this.#preview?.destroy();
       this.#interactionTracking?.destroy();
@@ -592,7 +600,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     return resolvedLocale;
   }
 
-  /** Deliver resolved preview updates; the caller retains its existing view state. */
+  /** The shared session may update only the Experience identified by its payload. */
   subscribeToPreview(
     experienceId: string,
     resolveOptions: FetchResolveOptions,
@@ -605,37 +613,32 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     let previousError: Error | undefined;
     const subscription = this.states.preview.subscribe((state) => {
       if (!active || this.#destroyed) return;
-      if (!state || (state.experienceId && state.experienceId !== experienceId)) {
+      const data = state?.data;
+      if (!data || typeof data.sys?.id !== 'string' || data.sys.id !== experienceId) {
         previous = undefined;
         previousError = undefined;
         return;
       }
-      if (state.error && state.error !== previousError) listener({ error: state.error });
-      previousError = state.error;
-      const data = state.data;
-      if (!data) {
-        previous = undefined;
-        return;
+      if (state.error !== previousError) {
+        previousError = state.error;
+        listener({ error: state.error });
+        if (!active || this.#destroyed) return;
       }
-      if (data === previous || state.experienceId !== experienceId) return;
+      if (data === previous) return;
       previous = data;
       const lifetime = this.#contentLifetime;
       const stateRevision = this.#stateRevision;
-      const source = this.#preview?.revision;
       const currentSource = () =>
         !this.#destroyed &&
         lifetime === this.#contentLifetime &&
-        source === this.#preview?.revision &&
-        previewSignal.peek()?.data === data;
-      const current = () => active && currentSource();
+        this.#previewState.peek()?.data === data;
+      if (!currentSource()) return;
       const key = getExperienceSourceKey(
         { request: { experienceId }, revision: [lifetime, state.revision] },
         resolve,
-        source ?? 0,
+        0,
         'preview'
       );
-      // Unlike resolved snapshots, the preview client emits raw payloads.
-      // Resolve streamed content with the caller's registry before publishing a plan.
       void this.#shareContent(key, resolve, async () => {
         const plan = await this.resolveExperience(data, resolveOptions);
         await this.#adoptFetchedState(
@@ -646,11 +649,11 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         return plan;
       }).then(
         (plan) => {
-          if (!current()) return;
-          listener({ data: plan, error: previewSignal.peek()?.error });
+          if (active && currentSource())
+            listener({ data: plan, error: this.#previewState.peek()?.error });
         },
         (error: unknown) => {
-          if (current())
+          if (active && currentSource())
             listener({ error: error instanceof Error ? error : new Error(String(error)) });
         }
       );
@@ -663,16 +666,16 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     };
   }
 
-  async replaceLivePreview(options: RuntimeLivePreviewOptions): Promise<void> {
-    if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
-    if (!this.isPreview) throw new Error('Entering preview requires a new Web SDK instance');
-    this.#contentLifetime++;
-    this.#pendingContent.clear();
-    if (this.#preview) await this.#preview.replace(options);
-    else {
-      this.#preview = new WebPreview(this.config, options);
-      await this.#preview.ready();
-    }
+  #readPreviewSnapshot() {
+    if (this.#previewSnapshot) return this.#previewSnapshot;
+    const revision = ++this.#snapshotRevision;
+    const pending = super
+      .fetchPreviewSessionPayload(this.#previewOptions!)
+      .then((payload) => ({ payload, revision }))
+      .finally(() => {
+        if (this.#previewSnapshot === pending) this.#previewSnapshot = undefined;
+      });
+    return (this.#previewSnapshot = pending);
   }
 
   #shareContent(
@@ -698,9 +701,9 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     options: FetchExperienceOptions,
     resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan> {
-    const { source, assertCurrent } = this.#createFreshnessGuard();
+    const { assertCurrent } = this.#createFreshnessGuard();
     assertCurrent();
-    if (this.#preview !== undefined) {
+    if (this.#previewOptions) {
       const preview = await this.#fetchPreview(options, resolveOptions, assertCurrent);
       assertCurrent();
       if (preview !== undefined) return preview;
@@ -724,7 +727,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
                   revision,
                 },
                 resolve,
-                source ?? 0,
+                0,
                 'delivery'
               );
         return this.#shareContent(key, resolve, load);
@@ -820,17 +823,11 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   #createFreshnessGuard() {
     const generation = this.#contentLifetime;
     const token = this.#resetToken;
-    const source = this.#preview?.revision;
     return {
       generation,
-      source,
       assertCurrent: () => {
         if (this.#destroyed) throw new Error('Experiences SDK has been destroyed');
-        if (
-          generation !== this.#contentLifetime ||
-          (!this.isPreview && token !== this.#resetToken) ||
-          source !== this.#preview?.revision
-        )
+        if (generation !== this.#contentLifetime || (!this.isPreview && token !== this.#resetToken))
           throw new Error('Experiences fetch was superseded');
       },
     };
@@ -841,9 +838,11 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     resolveOptions: FetchResolveOptions,
     assertCurrent: () => void
   ): Promise<PortableRenderPlan | undefined> {
-    if (this.#preview?.experienceId !== options.experienceId) return undefined;
-    const binding = await this.#preview.ready();
+    if (!this.#previewOptions) return undefined;
+    const { payload, revision } = await this.#readPreviewSnapshot();
     assertCurrent();
+    if (typeof payload.sys?.id !== 'string' || payload.sys.id !== options.experienceId)
+      return undefined;
     assertRuntimePreviewRequest(options);
     this.#gatePersonalizationEvents(options);
     assertCurrent();
@@ -852,15 +851,18 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       options.personalization?.events !== undefined
         ? undefined
         : getExperienceSourceKey(
-            { request: { experienceId: options.experienceId }, revision: [this.#contentLifetime] },
+            {
+              request: { experienceId: options.experienceId },
+              revision: [this.#contentLifetime, revision],
+            },
             resolve,
-            this.#preview?.revision ?? 0,
+            0,
             'snapshot'
           );
     return this.#shareContent(key, resolve, async () => {
       const stateRevision = this.#stateRevision;
-      const previewRevision = previewSignal.peek()?.revision;
-      const plan = await fetchRuntimePreviewSession(binding, this.config, resolve);
+      const previewRevision = this.#previewState.peek()?.revision;
+      const plan = await this.resolveExperience(payload, resolveOptions);
       // Snapshot HTTP cannot be aborted through the package API; discard obsolete results.
       assertCurrent();
       await this.#adoptFetchedState(
@@ -869,7 +871,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
           assertCurrent();
           return (
             stateRevision === this.#stateRevision &&
-            previewRevision === previewSignal.peek()?.revision
+            previewRevision === this.#previewState.peek()?.revision
           );
         },
         false
@@ -958,6 +960,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       this.#resetToken = {};
       this.#contentLifetime += 1;
       this.#pendingContent.clear();
+      this.#previewSnapshot = undefined;
       this.#preview?.clear();
       this.#interactionTracking?.reset();
       this.#currentInitialization = undefined;

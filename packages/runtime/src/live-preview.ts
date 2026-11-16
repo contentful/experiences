@@ -1,5 +1,6 @@
-import { PREVIEW_HOST } from '@contentful/experiences-client';
-import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experiences-sdk-core';
+import { NotFoundError, type ContentfulViewDeliveryClient } from '@contentful/experiences-client';
+import type { DeliveryClientOptions } from './create-runtime-delivery-client.js';
+import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 import type {
   Config,
   FetchExperienceOptions,
@@ -18,48 +19,31 @@ export interface RuntimePreviewSessionIdentity {
   sessionId: string;
   resourceResolution?: string;
 }
-/** Structural public module contract; no import of the optional package is required. */
-export interface RuntimeLivePreviewModule {
-  fetchPreviewSession(
-    session: RuntimePreviewSessionIdentity,
-    client: { previewToken: string; host?: string },
-    resolve: FetchResolveOptions
-  ): Promise<PortableRenderPlan>;
-  createLivePreviewClient(
-    session: RuntimePreviewSessionIdentity & {
-      previewToken: string;
-      sessionHost?: string;
-      debug?: boolean;
-    },
-    initialPayload?: ExperiencePayload
-  ): RuntimePreviewClient;
-  sendPreviewStatus(status: RuntimePreviewStatus): void;
-}
-export interface RuntimeLivePreviewBinding {
-  experienceId: string;
-  sessionId: string;
-  resourceResolution?: string;
+/** The synchronous createLivePreviewClient factory exported by the Preview package. */
+export type RuntimePreviewClientOptions = RuntimePreviewSessionIdentity & {
+  previewToken: string;
   sessionHost?: string;
-  implementation: RuntimeLivePreviewModule;
-}
-export interface RuntimeLivePreviewOptions extends Omit<
-  RuntimeLivePreviewBinding,
-  'implementation'
-> {
-  loadImplementation(): RuntimeLivePreviewModule | Promise<RuntimeLivePreviewModule>;
-}
-export type RuntimeLivePreviewConfig = Pick<
+  debug?: boolean;
+};
+export type RuntimePreviewClientFactory = (
+  options: RuntimePreviewClientOptions
+) => RuntimePreviewClient;
+export type RuntimePreviewSessionOptions = Pick<
+  RuntimePreviewSessionIdentity,
+  'sessionId' | 'resourceResolution'
+> & { sessionHost?: string };
+export type RuntimePreviewConfig = DeliveryClientOptions & {
+  /** Web defaults to preview_session_id in the URL; an explicit blank disables inference. */
+  sessionId?: string;
+  sessionHost?: string;
+  resourceResolution?: string;
+  /** Pass createLivePreviewClient from @contentful/experiences-live-preview. */
+  createClient?: RuntimePreviewClientFactory;
+};
+export type RuntimeLivePreviewOwnerConfig = Pick<
   Config,
   'spaceId' | 'environmentId' | 'preview' | 'resolveDefaults'
 >;
-
-/** Owners retain the returned promise to share initialization within their own lifetime. */
-export async function initializeRuntimeLivePreview({
-  loadImplementation,
-  ...binding
-}: RuntimeLivePreviewOptions): Promise<RuntimeLivePreviewBinding> {
-  return { ...binding, implementation: await loadImplementation() };
-}
 
 /** Call only after selecting the matching session, before ordinary-source enrichment. */
 export function assertRuntimePreviewRequest(options: FetchExperienceOptions): void {
@@ -71,7 +55,7 @@ export function assertRuntimePreviewRequest(options: FetchExperienceOptions): vo
 }
 
 export function mergeRuntimePreviewResolveOptions(
-  config: RuntimeLivePreviewConfig,
+  config: RuntimeLivePreviewOwnerConfig,
   resolve: FetchResolveOptions
 ): FetchResolveOptions {
   return {
@@ -81,61 +65,54 @@ export function mergeRuntimePreviewResolveOptions(
   };
 }
 
-/** Resolve options must already include the owner's applicable defaults. */
-export async function fetchRuntimePreviewSession(
-  binding: RuntimeLivePreviewBinding,
-  config: RuntimeLivePreviewConfig,
-  resolve: FetchResolveOptions
-): Promise<PortableRenderPlan> {
-  // Preview API returns a resolved plan, without a raw payload or AbortSignal.
-  // Owners adopt the plan and discard obsolete completions; HTTP work continues.
-  const client = await previewClientOptions(config);
-  return binding.implementation.fetchPreviewSession(
-    sessionIdentity(binding, config),
-    client,
-    resolve
-  );
+/** @internal Fetch raw content so owners can match its actual Experience identity before resolution. */
+export async function fetchRuntimePreviewSessionPayload(
+  session: RuntimePreviewSessionIdentity,
+  client: Pick<ContentfulViewDeliveryClient, 'fetch'>
+): Promise<ExperiencePayload> {
+  const { spaceId, environmentId, sessionId, resourceResolution } = session;
+  const path =
+    `/spaces/${encodeURIComponent(spaceId)}/environments/${encodeURIComponent(environmentId)}` +
+    `/preview_sessions/${encodeURIComponent(sessionId)}/experience`;
+  const query =
+    resourceResolution === undefined
+      ? ''
+      : `?${new URLSearchParams({ resource_resolution: resourceResolution })}`;
+  try {
+    const response = await client.fetch(path + query);
+    if (response.status === 404) throw new NotFoundError();
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = (await response.json()) as ExperiencePayload;
+    if (!payload || !Array.isArray(payload.nodes) || payload.sys?.type !== 'Experience') {
+      throw new Error('Response was not a valid Experience payload');
+    }
+    return payload;
+  } catch (error) {
+    if (error instanceof NotFoundError) throw error;
+    const reason = error instanceof Error ? error.message : String(error);
+    const failure = new Error(
+      `Failed to fetch Preview Session "${sessionId}" (space "${spaceId}", environment "${environmentId}"): ${reason}`,
+      { cause: error }
+    );
+    failure.name = 'PreviewSessionFetchError';
+    throw failure;
+  }
 }
 
 export async function createRuntimePreviewClient(
-  binding: RuntimeLivePreviewBinding,
-  config: RuntimeLivePreviewConfig,
-  debug?: boolean
-): Promise<RuntimePreviewClient> {
-  const previewToken = await evaluatePreviewToken(config);
-  return binding.implementation.createLivePreviewClient({
-    ...sessionIdentity(binding, config),
-    previewToken,
-    sessionHost: binding.sessionHost,
-    debug: debug ?? config.resolveDefaults?.debug,
-  });
-}
-
-function sessionIdentity(
-  binding: RuntimeLivePreviewBinding,
-  config: RuntimeLivePreviewConfig
-): RuntimePreviewSessionIdentity {
-  return {
-    spaceId: config.spaceId,
-    environmentId: config.environmentId,
-    sessionId: binding.sessionId,
-    resourceResolution: binding.resourceResolution,
-  };
-}
-
-async function evaluatePreviewToken(config: RuntimeLivePreviewConfig): Promise<string> {
-  // Preview API accepts a token string: evaluate SDK suppliers at this boundary.
-  // Socket reconnects reuse that value; token rotation requires a new client.
+  session: RuntimePreviewSessionOptions,
+  config: RuntimeLivePreviewOwnerConfig
+): Promise<RuntimePreviewClient | undefined> {
+  const createClient = config.preview?.createClient;
+  if (!createClient) return undefined;
   const token = config.preview?.accessToken;
   const previewToken = await (typeof token === 'function' ? token() : token);
   if (!previewToken) throw new TypeError('Live Preview requires preview.accessToken');
-  return previewToken;
-}
-
-async function previewClientOptions(config: RuntimeLivePreviewConfig) {
-  // The snapshot helper accepts token/host strings and constructs its own HTTP client.
-  const previewToken = await evaluatePreviewToken(config);
-  const endpoint = config.preview?.host ?? config.preview?.environment ?? PREVIEW_HOST;
-  const host = await (typeof endpoint === 'function' ? endpoint() : endpoint);
-  return { previewToken, host };
+  return createClient({
+    ...session,
+    spaceId: config.spaceId,
+    environmentId: config.environmentId,
+    previewToken,
+    debug: config.resolveDefaults?.debug,
+  });
 }

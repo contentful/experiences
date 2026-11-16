@@ -187,7 +187,11 @@ describe('Session preview event isolation', () => {
 
   it('omits embedded events/profile on the wire and ignores a returned profile in both runtimes', async () => {
     const fetch = http();
-    const sdk = web({ defaults: { profile: profileFixture('browser') } });
+    const sdk = web({
+      preview: undefined,
+      isPreview: true,
+      defaults: { profile: profileFixture('browser') },
+    });
     const request = node().forRequest({
       isPreview: true,
       consent: true,

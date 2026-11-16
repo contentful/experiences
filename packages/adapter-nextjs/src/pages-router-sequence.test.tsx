@@ -291,7 +291,7 @@ describe('Pages managed request sequence', () => {
         spaceId: 'space',
         environmentId: 'master',
         delivery: { accessToken: 'delivery' },
-        livePreview: { enabled: true, loadImplementation: vi.fn() },
+        preview: { enabled: true, createClient: vi.fn() },
       });
       const content = <bound.request.Experience />;
       expect(() =>
@@ -376,17 +376,13 @@ describe('Pages managed request sequence', () => {
       spaceId: 'space',
       environmentId: 'master',
       delivery: { accessToken: 'delivery' },
-      preview: { accessToken: 'preview' },
       allowedEventTypes: [],
-      livePreview: {
+      preview: {
+        accessToken: 'preview',
         enabled: true,
-        loadImplementation: async () => ({
-          fetchPreviewSession: vi.fn(),
-          sendPreviewStatus() {},
-          createLivePreviewClient() {
-            throw new Error('No socket in this test');
-          },
-        }),
+        createClient() {
+          throw new Error('No socket in this test');
+        },
       },
     });
     await act(async () =>
@@ -411,8 +407,8 @@ describe('Pages managed request sequence', () => {
     expect(current.isPreview).toBe(true);
     const owner = current;
     await shallow('b');
-    expect(current).toBe(owner);
-    expect(current.states.preview.current?.sessionId).toBe('b');
+    expect(current).not.toBe(owner);
+    expect(current.isPreview).toBe(true);
     await shallow('');
     expect(current.isPreview).toBe(false);
     expect(current.states.profile.current).toBeUndefined();

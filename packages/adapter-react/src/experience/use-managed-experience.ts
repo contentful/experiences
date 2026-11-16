@@ -71,7 +71,6 @@ export function useExperienceSource(
     throw new Error('Experiences hooks require an ExperiencesRoot or ExperiencesProvider.');
   const requestContext = useExperienceRequestContext();
   const locale = useObservableState(managed ? context?.sdk.states.locale : undefined);
-  const preview = useObservableState(managed ? context?.sdk.states.preview : undefined);
   const suppliedData = managed ? undefined : (options.experience ?? undefined);
   const suppliedStatus = suppliedData ? 'success' : 'idle';
   const [controller] = useState(
@@ -109,12 +108,9 @@ export function useExperienceSource(
       preview: options.preview,
     };
     const liveSdk = context?.isLive ? context.sdk : undefined;
-    // Wait for the bound ID before adding delivery-only locale/source-map defaults.
-    const pendingPreview = liveSdk?.config.livePreview !== undefined && preview === undefined;
     const previewRequest =
-      pendingPreview ||
-      preview?.experienceId === request.experienceId ||
-      (liveSdk?.config.livePreview !== undefined && preview?.error !== undefined);
+      liveSdk?.states.preview.current?.sessionId !== undefined ||
+      liveSdk?.config.preview?.sessionId !== undefined;
     controller.updateOptions({
       seedRequest: request,
       request: {
@@ -129,8 +125,7 @@ export function useExperienceSource(
       initialPlan,
       initialError,
       requestContext,
-      sdk: pendingPreview ? undefined : liveSdk,
-      waiting: pendingPreview,
+      sdk: liveSdk,
     });
   });
 

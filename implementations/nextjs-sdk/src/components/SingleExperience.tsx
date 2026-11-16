@@ -1,5 +1,6 @@
 'use client';
 
+import { createLivePreviewClient } from '@contentful/experiences-live-preview';
 import {
   bindNextjsAppRouterClientExperiences,
   type NextjsRequestExperienceProps,
@@ -7,18 +8,18 @@ import {
 import { bindNextjsPagesRouterExperiences } from '@contentful/experiences-nextjs/pages-router';
 import { browserRegistry } from './browser-registry';
 
-const livePreview = {
+const preview = {
   enabled: true,
-  loadImplementation: () => import('@contentful/experiences-live-preview'),
+  createClient: createLivePreviewClient,
 };
 
-const app = bindNextjsAppRouterClientExperiences({ config: browserRegistry, livePreview }).request;
+const app = bindNextjsAppRouterClientExperiences({ config: browserRegistry, preview }).request;
 const { Experience: AppRequestExperience } = app;
 export const AppExperiencesRoot = app.ExperiencesAnalyticsRoot;
 export const ClientRequestRoot = app.ExperiencesRoot;
 export const { ExperiencesRoot, Experience } = bindNextjsPagesRouterExperiences({
   config: browserRegistry,
-  livePreview,
+  preview,
 }).request;
 export const singleExperienceFallbacks = {
   loadingFallback: (

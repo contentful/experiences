@@ -6,7 +6,6 @@ import {
   type RequestRuntime,
   type FetchExperienceOptions,
   type FetchResolveOptions,
-  type RuntimeLivePreviewOptions,
 } from '@contentful/experiences-node';
 import type { Config } from '@contentful/experiences-react/server';
 import type { ExperiencesRootProps } from '@contentful/experiences-react/client';
@@ -14,10 +13,10 @@ import type { NextjsBrowserConfig } from './browser-config.js';
 import type { NextjsCookieConfig } from './cookies.js';
 import type { NextjsCookieReader, NextjsRequestLike } from './request-context.js';
 import type { NextjsRequestResult } from './request-result.js';
-import type { NextjsLivePreviewConfig } from './live-preview.js';
+import type { NextjsPreviewConfig } from './preview.js';
 import { serializeNextjsJsonForHtml, serializeNextjsPlan } from './serialization.js';
 
-export type { NextjsLivePreviewConfig, NextjsLivePreviewOptions } from './live-preview.js';
+export type { NextjsPreviewConfig, NextjsPreviewContext } from './preview.js';
 
 export interface NextjsServerRequestContext {
   readonly request: NextjsRequestLike;
@@ -50,7 +49,7 @@ export interface NextjsServerRequestPolicy {
   ) => void | Promise<void>;
 }
 
-export interface NextjsServerExperiencesConfig extends NodeConfig {
+export interface NextjsServerExperiencesConfig extends Omit<NodeConfig, 'preview'> {
   readonly config: Config;
   readonly browser?: NextjsBrowserConfig;
   readonly consent?: {
@@ -61,11 +60,7 @@ export interface NextjsServerExperiencesConfig extends NodeConfig {
     >;
   };
   readonly cookie?: NextjsCookieConfig;
-  readonly livePreview?:
-    | NextjsLivePreviewConfig
-    | ((
-        context: NextjsServerRequestContext
-      ) => RuntimeLivePreviewOptions | undefined | Promise<RuntimeLivePreviewOptions | undefined>);
+  readonly preview?: NextjsPreviewConfig;
   readonly request?: NextjsServerRequestPolicy;
 }
 
@@ -112,7 +107,7 @@ export function serializeNextjsRequestResult(
       ...(result.contentError ? { contentError: result.contentError } : {}),
       ...(result.handoff ? { handoff: result.handoff } : {}),
       ...(result.initialPagePayload ? { initialPagePayload: result.initialPagePayload } : {}),
-      ...(result.livePreview === undefined ? {} : { livePreview: result.livePreview }),
+      ...(result.preview === undefined ? {} : { preview: result.preview }),
     })
   ) as NextjsRequestResult;
 }

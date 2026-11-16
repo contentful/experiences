@@ -44,15 +44,18 @@ codes must contain two characters. XDA does not support Optimization's
 `exo_node_view` event or null property/trait values; Client rejects those before
 transport. Invalid input throws `TypeError` before Delivery is called.
 
-Event-bearing XDA forces XPAPI `preflight: true`, with no override; it does not
-commit events or profile changes. Newly returned IDs are provisional, and
-profile-only XDA uses XPAPI GET internally even when SDK-to-XDA uses POST.
+The generated dev.13 request supports optional `personalization.preflight`.
+Client validates and forwards the boolean without selecting a default. Earlier
+service checks observed noncommitting evaluation; backend defaults and override
+behavior have not been reverified for this version. Treat newly returned IDs as
+provisional until finalization is verified. Profile-only XDA uses XPAPI GET
+internally even when SDK-to-XDA uses POST.
 See [XDA preflight and profile finalization](../runtime/README.md#xda-preflight-and-profile-finalization)
 for finalization requirements and the subsequent GET limitation. Node's
 `fetchExperienceForHandoff` producer is retained only for an actual server-to-browser
 transfer, with `{ routeKey }` as its third argument. It retains finalized replay
 for optional explicit browser consumption; ordinary SSR/CSR uses ordinary fetch
-and remains uncommitted pending upstream service support. Handoff is never content
+and relies on verified upstream commitment behavior. Handoff is never content
 Retry input. Replay compatibility remains stricter than ordinary XDA's supported
 metadata/query arrays. Client owns no consent, construction or replay decision.
 

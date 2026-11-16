@@ -3,7 +3,7 @@ import type {
   ContentfulExperiences,
   ConsentInput,
   MaybePromise,
-  RuntimeLivePreviewOptions,
+  RuntimePreviewSessionOptions,
 } from '@contentful/experiences-node';
 import { applyNextjsPrivateResponseCache } from './cache.js';
 import { persistNextjsAnonymousId, type PersistNextjsAnonymousIdOptions } from './cookies.js';
@@ -32,21 +32,21 @@ export interface NextjsExperiencesResolverContext {
   readonly cookies: NextjsCookieReader;
 }
 
-export type NextjsLivePreviewResolver = (context: {
+export type NextjsPreviewResolver = (context: {
   readonly request: NextjsRequestLike;
-}) => MaybePromise<RuntimeLivePreviewOptions | undefined>;
+}) => MaybePromise<RuntimePreviewSessionOptions | undefined>;
 
 export interface NextjsExperiencesContextHandlerOptions
   extends
     Omit<
       BindNextjsExperiencesRequestOptions,
-      'request' | 'headers' | 'cookies' | 'consent' | 'livePreview'
+      'request' | 'headers' | 'cookies' | 'consent' | 'preview'
     >,
     PersistNextjsAnonymousIdOptions {
   readonly sdk: ContentfulExperiences;
   readonly consent:
     ConsentInput | ((context: NextjsExperiencesResolverContext) => MaybePromise<ConsentInput>);
-  readonly livePreview?: NextjsLivePreviewResolver;
+  readonly preview?: NextjsPreviewResolver;
 }
 
 export type NextjsExperiencesRequestHandler = (
@@ -91,7 +91,7 @@ export function createNextjsExperiencesContextHandler(
         cookies,
         consent:
           typeof options.consent === 'function' ? await options.consent(context) : options.consent,
-        livePreview: await options.livePreview?.(context),
+        preview: await options.preview?.(context),
       });
     }
     try {

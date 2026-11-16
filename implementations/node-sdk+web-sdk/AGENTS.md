@@ -102,7 +102,7 @@ isCurrent })` operation independently of SSR display. One stable operation lifet
 - Stop/restart/status/logs must target only `experiences-node-web-sdk-app`.
   Preserve siblings, unrelated processes, local credentials and stack metadata.
 
-- Optional preview uses request-local Node `livePreview`; Web retains SSR plans/DOM
+- Optional preview uses request-local Node `preview`; Web retains SSR plans/DOM
   and attaches `subscribeToPreview` without a startup refetch. Navigation/Retry fetch
   and render before attaching listeners; `states.preview` exposes status. Skip visitor
   work/handoff and identity-cookie writes under `isPreview`; destroy Node facades in
@@ -115,7 +115,7 @@ isCurrent })` operation independently of SSR display. One stable operation lifet
   or disabled flags use ordinary events, visitor cookies and handoff policy.
   `LIVE_PREVIEW_SESSION_ID` is local convenience storage only; never read it in
   runtime/build code or emit it in browser configuration.
-  Use `replaceLivePreview` for binding changes within
-  preview and reload the document when entering or leaving preview.
+  Reload the document when changing sessions or entering or leaving Preview;
+  the SDK owns its connection until destruction.
   Release subscriptions on route replacement/final exit and retain them for BFCache.
   Use the installed optional Preview package's public exports and preserve local `.env` files.

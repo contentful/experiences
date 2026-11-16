@@ -72,13 +72,7 @@ describe('explicit cache boundaries', () => {
       { profile: { id: 'id' } },
       { isPreview: true },
       {
-        livePreview: {
-          experienceId: 'home',
-          sessionId: 'session',
-          loadImplementation: async () => {
-            throw new Error();
-          },
-        },
+        preview: { sessionId: 'session' },
       },
     ]) {
       expect(() =>

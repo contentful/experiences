@@ -1,128 +1,85 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
+import { NotFoundError } from '@contentful/experiences-client';
 import {
   assertRuntimePreviewRequest,
   createRuntimePreviewClient,
-  fetchRuntimePreviewSession,
-  mergeRuntimePreviewResolveOptions,
-  type RuntimeLivePreviewConfig,
-  type RuntimeLivePreviewModule,
+  fetchRuntimePreviewSessionPayload,
 } from './live-preview.js';
 
-const resolve = { config: { components: {} } };
-const config: RuntimeLivePreviewConfig = {
-  spaceId: 'space',
-  environmentId: 'master',
-  preview: { accessToken: 'preview-token' },
-  resolveDefaults: { metadata: { base: true, shared: 'base' }, debug: true },
-};
-
-function fixture() {
-  const plan: PortableRenderPlan = { nodes: [], metadata: {}, debug: false, diagnostics: [] };
-  const client = {
-    getResult: () => ({ data: undefined, error: undefined }),
-    subscribe: vi.fn(() => vi.fn()),
-    subscribeStatus: vi.fn(() => vi.fn()),
-  };
-  const implementation = {
-    fetchPreviewSession: vi
-      .fn<RuntimeLivePreviewModule['fetchPreviewSession']>()
-      .mockResolvedValue(plan),
-    createLivePreviewClient: vi
-      .fn<RuntimeLivePreviewModule['createLivePreviewClient']>()
-      .mockReturnValue(client),
-    sendPreviewStatus: vi.fn(),
-  };
-  const binding = {
-    experienceId: 'experience',
-    sessionId: 'session',
-    resourceResolution: 'resource',
-    sessionHost: 'wss://session.test',
-    implementation,
-  };
-  return { binding, implementation, plan, client };
-}
-
 describe('Runtime Live Preview wrapper', () => {
-  it('maps the snapshot scope, endpoint and resolve options and adopts its plan', async () => {
-    const { binding, implementation, plan } = fixture();
-    const scoped = {
-      ...config,
-      preview: { accessToken: async () => 'token', host: 'https://preview.test' },
-    };
-    const preparedResolve = mergeRuntimePreviewResolveOptions(scoped, {
-      ...resolve,
-      debug: false,
-      metadata: { shared: 'operation' },
-    });
-    await expect(fetchRuntimePreviewSession(binding, scoped, preparedResolve)).resolves.toBe(plan);
-    expect(implementation.fetchPreviewSession).toHaveBeenCalledWith(
-      {
-        spaceId: 'space',
-        environmentId: 'master',
-        sessionId: 'session',
-        resourceResolution: 'resource',
-      },
-      { previewToken: 'token', host: 'https://preview.test' },
-      { ...resolve, debug: false, metadata: { base: true, shared: 'operation' } }
+  it('maps the raw snapshot route and retains its Experience identity', async () => {
+    const payload = { sys: { id: 'edited', type: 'Experience' }, nodes: [] };
+    const fetch = vi.fn().mockResolvedValue(globalThis.Response.json(payload));
+    await expect(
+      fetchRuntimePreviewSessionPayload(
+        {
+          spaceId: 'space/id',
+          environmentId: 'master',
+          sessionId: 'session/id',
+          resourceResolution: 'encoded=value',
+        },
+        { fetch }
+      )
+    ).resolves.toEqual(payload);
+    expect(fetch).toHaveBeenCalledWith(
+      '/spaces/space%2Fid/environments/master/preview_sessions/session%2Fid/experience?resource_resolution=encoded%3Dvalue'
     );
-    expect(implementation.fetchPreviewSession.mock.calls[0]![2]).toBe(preparedResolve);
   });
 
-  it('maps subscription credentials and session configuration into the public client', async () => {
-    const { binding, implementation, client } = fixture();
-    await expect(createRuntimePreviewClient(binding, config)).resolves.toBe(client);
-    expect(implementation.createLivePreviewClient).toHaveBeenCalledWith({
+  it.each([
+    [new globalThis.Response(null, { status: 404 }), NotFoundError],
+    [new globalThis.Response(null, { status: 500 }), /HTTP 500/],
+    [globalThis.Response.json({ nodes: [], sys: { type: 'Entry' } }), /valid Experience/],
+  ])(
+    'preserves missing-session errors and rejects failed or invalid snapshots',
+    async (response, error) => {
+      const fetch = vi.fn().mockResolvedValue(response);
+      await expect(
+        fetchRuntimePreviewSessionPayload(
+          {
+            spaceId: 'space',
+            environmentId: 'master',
+            sessionId: 'session',
+          },
+          { fetch }
+        )
+      ).rejects.toThrow(error);
+    }
+  );
+
+  it('passes session context and evaluated credentials to the Preview package factory', async () => {
+    const client = {
+      getResult: () => ({ data: undefined, error: undefined }),
+      subscribe: vi.fn(() => vi.fn()),
+      subscribeStatus: vi.fn(() => vi.fn()),
+    };
+    const createClient = vi.fn(() => client);
+    const accessToken = vi.fn(async () => 'preview-token');
+    const host = vi.fn(() => 'https://preview.test');
+    const config = {
       spaceId: 'space',
       environmentId: 'master',
+      preview: { accessToken, host, createClient },
+      resolveDefaults: { debug: true },
+    };
+    const session = {
       sessionId: 'session',
+      sessionHost: 'wss://preview.test',
       resourceResolution: 'resource',
+    };
+    await expect(createRuntimePreviewClient(session, config)).resolves.toBe(client);
+    expect(createClient).toHaveBeenCalledExactlyOnceWith({
+      ...session,
+      spaceId: 'space',
+      environmentId: 'master',
       previewToken: 'preview-token',
-      sessionHost: 'wss://session.test',
       debug: true,
     });
-  });
-
-  it('requires a preview token before transport', async () => {
-    const { binding, implementation } = fixture();
-    await expect(
-      fetchRuntimePreviewSession(
-        binding,
-        { ...config, preview: undefined },
-        mergeRuntimePreviewResolveOptions(config, resolve)
-      )
-    ).rejects.toThrow(/accessToken/);
-    expect(implementation.fetchPreviewSession).not.toHaveBeenCalled();
-  });
-
-  it('evaluates the HTTP host supplier only for snapshots, not subscriptions', async () => {
-    const { binding, implementation, client, plan } = fixture();
-    const accessToken = vi.fn(async () => 'token');
-    const host = vi.fn<() => Promise<string>>(async () => {
-      throw new Error('HTTP endpoint unavailable');
-    });
-    const scoped = { ...config, preview: { accessToken, host } };
-    await expect(createRuntimePreviewClient(binding, scoped)).resolves.toBe(client);
-    expect(host).not.toHaveBeenCalled();
     expect(accessToken).toHaveBeenCalledOnce();
-    expect(implementation.createLivePreviewClient).toHaveBeenCalledWith(
-      expect.objectContaining({ previewToken: 'token', sessionHost: 'wss://session.test' })
-    );
-
-    host.mockResolvedValueOnce('https://preview.test');
+    expect(host).not.toHaveBeenCalled();
     await expect(
-      fetchRuntimePreviewSession(
-        binding,
-        scoped,
-        mergeRuntimePreviewResolveOptions(scoped, resolve)
-      )
-    ).resolves.toBe(plan);
-    expect(host).toHaveBeenCalledOnce();
-    expect(implementation.fetchPreviewSession).toHaveBeenCalledWith(
-      expect.anything(),
-      { previewToken: 'token', host: 'https://preview.test' },
-      expect.anything()
-    );
+      createRuntimePreviewClient(session, { ...config, preview: { host, createClient } })
+    ).rejects.toThrow(/accessToken/);
   });
 
   it('rejects explicit session-owned request options', () => {

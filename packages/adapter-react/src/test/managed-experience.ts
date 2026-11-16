@@ -94,11 +94,8 @@ export function sourceSdk() {
       // Web owns error delivery and suppresses callbacks after unsubscribe.
       let previousError: Error | undefined;
       const subscription = preview.state.subscribe((state) => {
-        const error =
-          state?.experienceId === undefined || state.experienceId === _id
-            ? state?.error
-            : undefined;
-        if (error && error !== previousError) deliver({ error });
+        const error = state?.data?.sys?.id === _id ? state.error : undefined;
+        if (error !== previousError) deliver({ error });
         previousError = error;
       });
       const unsubscribe = vi.fn(() => {
@@ -127,10 +124,9 @@ export function sourceSdk() {
 
 export function previewState(overrides: Partial<PreviewState> = {}): PreviewState {
   return {
-    experienceId: 'home',
     sessionId: 'session-a',
     revision: 1,
-    data: undefined,
+    data: { sys: { id: 'home', type: 'Experience' }, nodes: [] },
     error: undefined,
     status: 'live',
     ...overrides,

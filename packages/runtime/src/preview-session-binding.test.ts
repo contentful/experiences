@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getPreviewSessionBinding } from './preview-session-binding.js';
+import { getPreviewSessionBinding, resolvePreviewSessionId } from './preview-session-binding.js';
 
 const defaults = {
   experienceId: 'default',
@@ -57,5 +57,7 @@ describe('Preview Session binding', () => {
     binding.sessionId = 'changed';
     expect(getPreviewSessionBinding(input, params)).toEqual({ ...defaults, sessionId: 'session' });
     expect(params.toString()).toBe(original);
+    expect(resolvePreviewSessionId(' explicit ', params)).toBe('explicit');
+    expect(resolvePreviewSessionId('', params)).toBeUndefined();
   });
 });

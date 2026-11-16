@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createWebSnapshotRuntime,
   ContentfulExperiences,
-  type PreviewState,
+  type States,
 } from '@contentful/experiences-web';
 import {
   bindNextjsAppRouterClientExperiences,
@@ -478,7 +478,7 @@ describe('App committed route inputs', () => {
         spaceId: 'space',
         environmentId: 'master',
         delivery: { accessToken: 'delivery' },
-        livePreview: { enabled: true, loadImplementation: vi.fn() },
+        preview: { enabled: true, createClient: vi.fn() },
       });
       const content = <bound.request.Experience />;
       expect(() =>
@@ -560,8 +560,8 @@ describe('App committed route inputs', () => {
   });
 
   it('refreshes the current SDK Preview target without a root Experience ID', async () => {
-    let current: PreviewState | undefined;
-    const listeners = new Set<(value: PreviewState | undefined) => void>();
+    let current: States['preview']['current'];
+    const listeners = new Set<(value: States['preview']['current']) => void>();
     const snapshot = createWebSnapshotRuntime();
     const fetchExperience = vi.fn();
     const trackCurrentPage = vi.fn().mockResolvedValue({ accepted: true });
@@ -579,7 +579,7 @@ describe('App committed route inputs', () => {
           get current() {
             return current;
           },
-          subscribe(listener: (value: PreviewState | undefined) => void) {
+          subscribe(listener: (value: States['preview']['current']) => void) {
             listeners.add(listener);
             listener(current);
             return { unsubscribe: () => listeners.delete(listener) };
@@ -597,7 +597,7 @@ describe('App committed route inputs', () => {
           result={{
             requestId: 'preview',
             routeKey: '/page?q=hello+world',
-            experience: { experienceId: 'initial' },
+            experience: { experienceId: 'primary' },
           }}
         >
           <p>Server content</p>
@@ -606,7 +606,12 @@ describe('App committed route inputs', () => {
     );
     const publish = async (experienceId: string, revision: number) =>
       act(async () => {
-        current = { experienceId, revision, data: undefined, error: undefined, status: undefined };
+        current = {
+          revision,
+          data: { sys: { id: experienceId, type: 'Experience' }, nodes: [] },
+          error: undefined,
+          status: undefined,
+        };
         for (const listener of listeners) listener(current);
       });
     await publish('primary', 1);
@@ -624,7 +629,7 @@ describe('App committed route inputs', () => {
       environmentId: 'master',
       delivery: { accessToken: 'delivery' },
       initialPagePayload,
-      livePreview: { enabled: false, loadImplementation: vi.fn() },
+      preview: { enabled: false, createClient: vi.fn() },
     });
     await act(async () => root.render(<ExperiencesRoot />));
     expect(vi.mocked(NextjsRequestPresentation).mock.calls.at(-1)![0].initialPagePayload).toBe(

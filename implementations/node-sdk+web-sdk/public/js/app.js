@@ -43,6 +43,8 @@ async function activate() {
     const { handoff, preview } = bootstrap;
     previewBinding = preview?.binding;
     routes = createRoutes(environment.EXPERIENCE_IDS);
+    const previewImplementation = previewBinding ? await loadPreviewImplementation() : undefined;
+    if (disposed) return;
     // Consumer integration: one Web runtime discovers existing SSR attribution
     // and later DOM changes. Tracking uses SDK consent and current identity.
     sdk = new window.ContentfulExperiences({
@@ -51,10 +53,18 @@ async function activate() {
       locale: environment.LOCALE,
       delivery: { accessToken: environment.CDA_TOKEN },
       preview: environment.LIVE_PREVIEW
-        ? { accessToken: environment.LIVE_PREVIEW.accessToken, host: environment.LIVE_PREVIEW.host }
-        : undefined,
-      livePreview: previewBinding
-        ? { ...previewBinding, loadImplementation: loadPreviewImplementation }
+        ? {
+            accessToken: environment.LIVE_PREVIEW.accessToken,
+            host: environment.LIVE_PREVIEW.host,
+            ...(previewBinding
+              ? {
+                  sessionId: previewBinding.sessionId,
+                  sessionHost: previewBinding.sessionHost,
+                  resourceResolution: previewBinding.resourceResolution,
+                  createClient: previewImplementation.createLivePreviewClient,
+                }
+              : {}),
+          }
         : undefined,
       isPreview: Boolean(previewBinding),
       cookie: { path: '/', sameSite: 'lax', secure: location.protocol === 'https:', expires: 365 },
@@ -275,7 +285,7 @@ async function renderRoute({ sendPage = false, events, reset = false, focus = fa
     ? getPreviewSessionBinding(environment.LIVE_PREVIEW)
     : undefined;
   const nextIsPreview = Boolean(nextBinding);
-  if (nextIsPreview !== sdk.isPreview) {
+  if (nextIsPreview !== sdk.isPreview || nextBinding?.sessionId !== previewBinding?.sessionId) {
     location.reload();
     return;
   }
@@ -308,16 +318,8 @@ async function renderRoute({ sendPage = false, events, reset = false, focus = fa
   appMain.setAttribute('aria-busy', 'true');
   status.textContent = 'Updating content…';
   try {
-    if (sdk.isPreview) {
-      if (nextBinding && JSON.stringify(nextBinding) !== JSON.stringify(previewBinding)) {
-        await sdk.replaceLivePreview({
-          ...nextBinding,
-          loadImplementation: loadPreviewImplementation,
-        });
-        if (!isCurrent()) return;
-        previewBinding = nextBinding;
-      }
-    }
+    if (sdk.isPreview) previewBinding = nextBinding;
+
     const failed = await loadExperiences(destinations, isCurrent, undefined, requestOptions);
     if (!isCurrent()) return;
     if (failed && !sdk.isPreview) {
@@ -464,7 +466,7 @@ function releasePreviewSubscriptions() {
 }
 
 function bindPreview(destinations, isCurrent, failures, rendered) {
-  // Fetch/render first: the source buffers its latest payload while HTTP is pending.
+  // Fetch/render first, then subscribe to the selected Preview Session.
   // The SDK resolves updates and guards stale work; the app owns presentations/errors.
   for (const [experienceId, targets] of destinations) {
     const subscription = sdk.subscribeToPreview(experienceId, resolveOptions, ({ data, error }) => {

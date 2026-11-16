@@ -24,8 +24,8 @@ import type {
   BoundNextjsRequestRootProps,
   NextjsRequestExperienceProps,
 } from './request-result.js';
-import { mergeNextjsLivePreview, type NextjsLivePreviewConfig } from './live-preview.js';
-export type { NextjsLivePreviewConfig, NextjsLivePreviewOptions } from './live-preview.js';
+import { mergeNextjsPreview, type NextjsPreviewConfig } from './preview.js';
+export type { NextjsPreviewConfig, NextjsPreviewContext } from './preview.js';
 export type {
   BoundNextjsExperiencesRootProps,
   BoundNextjsRequestRootProps,
@@ -42,17 +42,11 @@ export interface NextjsClientExperiencesConfig
   extends
     Omit<
       ExperiencesRootProps,
-      | RuntimeIdentity
-      | 'children'
-      | 'handoff'
-      | 'handoffKey'
-      | 'snapshot'
-      | 'routeKey'
-      | 'livePreview'
+      RuntimeIdentity | 'children' | 'handoff' | 'handoffKey' | 'snapshot' | 'routeKey' | 'preview'
     >,
     Partial<Pick<ExperiencesRootProps, RuntimeIdentity>> {
   readonly config: Config;
-  readonly livePreview?: ExperiencesRootProps['livePreview'] | NextjsLivePreviewConfig;
+  readonly preview?: NextjsPreviewConfig;
   readonly consent?: { readonly clientDefaults?: ExperiencesRootProps['defaults'] };
 }
 
@@ -116,14 +110,14 @@ export function bindNextjsAppRouterClientExperiences(options: NextjsClientExperi
     return (
       <NextjsBrowserRoot
         {...effective}
-        livePreview={mergeNextjsLivePreview(rootConfig.livePreview, props.livePreview)}
+        preview={mergeNextjsPreview(rootConfig.preview, props.preview)}
       />
     );
   }
 
   function ExperiencesRoot(props: BoundNextjsExperiencesRootProps) {
-    const preview = props.livePreview ?? rootConfig.livePreview;
-    return preview && 'enabled' in preview && props.routeKey === undefined ? (
+    const preview = props.preview ?? rootConfig.preview;
+    return preview && props.routeKey === undefined ? (
       <AppRouterRequestOwner
         initialPagePayload={rootConfig.initialPagePayload}
         {...props}
@@ -140,7 +134,7 @@ export function bindNextjsAppRouterClientExperiences(options: NextjsClientExperi
       <NextjsRequestResultBoundary result={props.result}>
         <AppRouterRequestOwner
           {...props}
-          livePreview={mergeNextjsLivePreview(rootConfig.livePreview, props.livePreview)}
+          preview={mergeNextjsPreview(rootConfig.preview, props.preview)}
           Root={BrowserRoot}
           configuredBuilder={rootConfig.buildPagePayload}
         />

@@ -199,7 +199,12 @@ describe('ExperienceSourceController', () => {
 
   it('does not inherit another Experience source error into a successful snapshot', async () => {
     const source = sourceSdk();
-    source.preview.emit(previewState({ experienceId: 'other', error: new Error('other source') }));
+    source.preview.emit(
+      previewState({
+        data: { sys: { id: 'other', type: 'Experience' }, nodes: [] },
+        error: new Error('other source'),
+      })
+    );
     const controller = new ExperienceSourceController();
     const data = plan('ordinary snapshot');
     source.fetchExperience.mockResolvedValue(data);

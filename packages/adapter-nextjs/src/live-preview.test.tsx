@@ -3,11 +3,11 @@ import { act, Suspense } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { useExperiences } from '@contentful/experiences-react/client';
 import { ContentfulExperiences, type PortableRenderPlan } from '@contentful/experiences-web';
-import type { RuntimeLivePreviewModule } from '@contentful/experiences-runtime';
+import type { RuntimePreviewClientFactory } from '@contentful/experiences-runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bindNextjsAppRouterClientExperiences } from './app-router-client.js';
 import { bindNextjsPagesRouterExperiences } from './pages-router.js';
-import { resolveNextjsLivePreview } from './live-preview.js';
+import { resolveNextjsPreview } from './preview.js';
 import type { NextjsRequestResult } from './request-result.js';
 
 const route = vi.hoisted(() => ({
@@ -29,16 +29,12 @@ const plan = (label: string): PortableRenderPlan => ({
   diagnostics: [],
   metadata: { label },
 });
-function implementation() {
-  return {
-    fetchPreviewSession: vi.fn(async () => plan('preview')),
-    createLivePreviewClient: vi.fn(() => ({
-      getResult: () => ({ data: undefined, error: undefined }),
-      subscribe: () => () => {},
-      subscribeStatus: () => () => {},
-    })),
-    sendPreviewStatus: vi.fn(),
-  } satisfies RuntimeLivePreviewModule;
+function clientFactory() {
+  return vi.fn<RuntimePreviewClientFactory>(() => ({
+    getResult: () => ({ data: undefined, error: undefined }),
+    subscribe: () => () => {},
+    subscribeStatus: () => () => {},
+  }));
 }
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -72,6 +68,7 @@ describe('managed Next Live Preview', () => {
   });
   afterEach(async () => {
     await act(async () => root.unmount());
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -82,22 +79,20 @@ describe('managed Next Live Preview', () => {
       )
     )
   )(
-    '$family $surface uses its configured preview target without a result (enabled=$enabled)',
+    '$family $surface sets URL owner mode without guessing a source (enabled=$enabled)',
     async ({ family, surface, enabled }) => {
-      const module = implementation();
-      const loadImplementation = vi.fn(async () => module);
+      const createClient = clientFactory();
       const options = {
         config: { components: {} },
         spaceId: 'space',
         environmentId: 'master',
         delivery: { accessToken: 'delivery' },
-        preview: { accessToken: 'preview' },
         allowedEventTypes: [],
         defaults: { consent: false, persistenceConsent: false },
-        livePreview: {
+        preview: {
+          accessToken: 'preview',
           enabled,
-          experienceId: 'primary',
-          loadImplementation,
+          createClient,
           sessionHost: 'https://preview.example.com',
           resourceResolution: 'resolved',
         },
@@ -120,47 +115,62 @@ describe('managed Next Live Preview', () => {
         )
       );
       expect(sdk.isPreview).toBe(enabled);
-      expect(loadImplementation).toHaveBeenCalledTimes(enabled ? 1 : 0);
-      if (enabled) {
-        expect(sdk.config.livePreview?.experienceId).toBe('primary');
-        expect(module.createLivePreviewClient).toHaveBeenCalledWith(
-          expect.objectContaining({
-            sessionId: 'a',
-            sessionHost: 'https://preview.example.com',
-            resourceResolution: 'resolved',
-          })
-        );
-      }
-      const send = vi
-        .spyOn(sdk.api.personalization, 'upsertProfile')
-        .mockResolvedValue({} as never);
-      await act(async () => {
-        sdk.consent({ events: true });
-        await expect(sdk.track({ event: 'explicit-action' })).resolves.toMatchObject({
-          accepted: !enabled,
-        });
-      });
-      const events = send.mock.calls.flatMap(([request]) => request.events ?? []);
-      expect(events.filter((event) => event.type === 'track')).toHaveLength(enabled ? 0 : 1);
-      if (enabled) expect(send).not.toHaveBeenCalled();
+      expect(sdk.config.preview?.sessionId).toBe(enabled ? 'a' : '');
       expect(network).not.toHaveBeenCalled();
     }
   );
 
   it.each(['app', 'pages'] as const)(
-    '%s preserves initial content, replaces sessions in place and keeps history guards through mode changes',
+    '%s configures one explicit context while renderer IDs stay ordinary',
     async (family) => {
-      const module = implementation();
-      const loadImplementation = vi.fn(async () => module);
+      const createClient = clientFactory();
       const options = {
         config: { components: {} },
         spaceId: 'space',
         environmentId: 'master',
         delivery: { accessToken: 'delivery' },
-        preview: { accessToken: 'preview' },
+        preview: { accessToken: 'preview', sessionId: 'session', createClient },
+      };
+      const binding =
+        family === 'app'
+          ? bindNextjsAppRouterClientExperiences(options)
+          : bindNextjsPagesRouterExperiences(options);
+      const subscribe = vi
+        .spyOn(ContentfulExperiences.prototype, 'subscribeToPreview')
+        .mockImplementation(() => ({ unsubscribe: vi.fn() }));
+      const result: NextjsRequestResult = {
+        requestId: 'primary',
+        routeKey: '/home',
+        experience: { experienceId: 'hero' },
+        plan: plan('hero'),
+      };
+      await act(async () =>
+        root.render(
+          <binding.request.ExperiencesRoot result={result}>
+            <Probe />
+            <binding.request.Experience />
+            <binding.Experience experienceId="footer" initialPlan={plan('footer')} />
+          </binding.request.ExperiencesRoot>
+        )
+      );
+      expect(sdk.config.preview?.sessionId).toBe('session');
+      expect(sdk.isPreview).toBe(true);
+      expect(subscribe.mock.calls.map(([id]) => id)).toEqual(['hero', 'footer']);
+    }
+  );
+
+  it.each(['app', 'pages'] as const)(
+    '%s preserves initial content and history guards while reconnecting session selections',
+    async (family) => {
+      const createClient = clientFactory();
+      const options = {
+        config: { components: {} },
+        spaceId: 'space',
+        environmentId: 'master',
+        delivery: { accessToken: 'delivery' },
         allowedEventTypes: [],
         defaults: { consent: false, persistenceConsent: false },
-        livePreview: { enabled: true, experienceId: 'fallback', loadImplementation },
+        preview: { accessToken: 'preview', enabled: true, createClient },
       };
       const bound =
         family === 'app'
@@ -172,6 +182,9 @@ describe('managed Next Live Preview', () => {
         if (suspended) throw pending.promise;
         return null;
       }
+      const fetch = vi
+        .spyOn(ContentfulExperiences.prototype, 'fetchExperience')
+        .mockResolvedValue(plan('preview'));
       const tree = (requestId: string, session?: string) => {
         route.search = session ? '?preview_session_id=' + session : '';
         const routeKey = route.path + route.search;
@@ -197,24 +210,19 @@ describe('managed Next Live Preview', () => {
       await act(async () => root.render(tree('original', 'a')));
       const previewSdk = sdk;
       expect(sdk.isPreview).toBe(true);
-      expect(sdk.config.livePreview?.experienceId).toBe('primary');
-      expect(loadImplementation).toHaveBeenCalledOnce();
-      expect(module.fetchPreviewSession).not.toHaveBeenCalled();
+      expect(createClient).toHaveBeenCalledOnce();
+      expect(fetch).not.toHaveBeenCalled();
       expect(container.textContent).toBe('original');
-      const replace = vi.spyOn(sdk, 'replaceLivePreview');
+      const subscribe = vi.spyOn(ContentfulExperiences.prototype, 'subscribeToPreview');
       await act(async () => root.render(tree('second', 'b')));
-      expect(sdk).toBe(previewSdk);
-      expect(replace).toHaveBeenCalledOnce();
-      expect(sdk.states.preview.current?.sessionId).toBe('b');
-      expect(module.createLivePreviewClient).toHaveBeenLastCalledWith(
-        expect.objectContaining({ sessionId: 'b' })
-      );
+      expect(sdk).not.toBe(previewSdk);
+      expect(subscribe).toHaveBeenCalledWith('primary', expect.anything(), expect.any(Function));
+      expect(createClient).toHaveBeenLastCalledWith(expect.objectContaining({ sessionId: 'b' }));
       suspended = true;
       await act(async () => root.render(tree('second', 'b')));
       suspended = false;
       await act(async () => pending.resolve());
       expect(sdk).not.toBe(previewSdk);
-      expect(sdk.states.preview.current?.sessionId).toBe('b');
       const destroy = vi.spyOn(sdk, 'destroy');
       await act(async () => root.render(tree('ordinary')));
       expect(destroy).toHaveBeenCalledOnce();
@@ -223,9 +231,8 @@ describe('managed Next Live Preview', () => {
       // Returning to the original route must not re-adopt its original SSR plan.
       await act(async () => root.render(tree('original', 'a')));
       expect(container.textContent).toBe('preview');
-      expect(module.fetchPreviewSession).toHaveBeenCalledWith(
-        expect.objectContaining({ sessionId: 'a' }),
-        expect.anything(),
+      expect(fetch).toHaveBeenCalledWith(
+        expect.objectContaining({ experienceId: 'primary' }),
         expect.anything()
       );
       expect(network).not.toHaveBeenCalled();
@@ -234,25 +241,20 @@ describe('managed Next Live Preview', () => {
 });
 
 it.each([
-  [false, '?preview_session_id=a', undefined],
+  [false, '?preview_session_id=a', ''],
   [true, '', undefined],
   [true, '?preview_session_id=%20', undefined],
   [true, '?preview_session_id=%20a%20&preview_experience_id=other', 'a'],
 ] as const)(
   'activates only enabled nonempty URL sessions (%s, %s)',
   async (enabled, search, expected) => {
-    const loadImplementation = vi.fn(async () => implementation());
-    const previewOptions = resolveNextjsLivePreview(
-      { enabled, loadImplementation, experienceId: 'fallback' },
-      '/' + search,
-      'primary'
+    const createClient = clientFactory();
+    const previewOptions = resolveNextjsPreview(
+      { accessToken: 'preview', enabled, createClient },
+      '/' + search
     );
-    expect(loadImplementation).not.toHaveBeenCalled();
-    expect(previewOptions === undefined).toBe(expected === undefined);
-    if (previewOptions) {
-      expect(previewOptions).toMatchObject({ experienceId: 'primary', sessionId: expected });
-      await previewOptions.loadImplementation();
-      expect(loadImplementation).toHaveBeenCalledOnce();
-    }
+    expect(createClient).not.toHaveBeenCalled();
+    expect(previewOptions?.sessionId).toBe(expected);
+    expect(previewOptions?.createClient).toBe(createClient);
   }
 );
