@@ -217,10 +217,20 @@ describe('Web Analytics queue', () => {
       const send = vi
         .spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents')
         .mockResolvedValue(true);
-      const runtime = createRuntime();
+      const onEventBlocked = vi.fn();
+      const runtime = createRuntime({ onEventBlocked });
       runtime.consent({ events: false });
 
       await expect(runtime.trackView(view)).resolves.toEqual({ accepted: false });
+      await expect(runtime.trackView({ ...view, viewDurationMs: -1 })).resolves.toEqual({
+        accepted: false,
+      });
+      expect(onEventBlocked).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'consent', method: 'trackView' })
+      );
+      await expect(
+        runtime.trackClick({ entityId: 'hero', entityKind: 'invalid' as 'Experience' })
+      ).rejects.toThrow();
       await runtime.flush();
       expect(send).not.toHaveBeenCalled();
     });

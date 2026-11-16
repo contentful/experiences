@@ -4,7 +4,6 @@ import {
   type Json,
   AnalyticsDelivery,
   type AnalyticsFlushOptions,
-  ContentfulExperiences as RuntimeContentfulExperiences,
   PersonalizationDelivery,
   InterceptorManager,
   DEFAULT_ALLOWED_EVENT_TYPES,
@@ -22,7 +21,6 @@ import {
   type QueuePolicy,
   resolveQueuePolicy,
   parseExperiencesHandoffEnvelope,
-  type EventMethods as RuntimeEventMethods,
   type FetchByDestinationNodeOptions,
   type FetchByDestinationPathOptions,
   type FetchExperienceOptions,
@@ -99,6 +97,7 @@ import LocalStore from './storage/local-store.js';
 import { acquireSingleton, releaseSingleton } from './singleton.js';
 import { PreviewSession } from './preview-session.js';
 import { getExperienceSourceKey } from './experience-source-key.js';
+import { WebEventEmitter } from './web-event-emitter.js';
 
 /** Optional browser context providers, useful for application-specific redaction. */
 export type EventContextProviders = Pick<EventBuilderConfig, 'getPageProperties' | 'getUserAgent'>;
@@ -170,11 +169,6 @@ interface HandoffInitialization {
   delivery?: Promise<EventEmissionResult>;
 }
 
-type EventMethods = Pick<
-  RuntimeEventMethods,
-  'identify' | 'page' | 'track' | 'trackView' | 'trackClick' | 'trackHover' | 'trackFlagView'
->;
-
 export type ExperiencesTrackingApi = EntryInteractionApi;
 
 /**
@@ -217,7 +211,7 @@ function clonePlan<T extends PortableRenderPlan | DestinationRedirectResult>(pla
 }
 
 /** Browser runtime with mutable application locale and live event context. */
-export class ContentfulExperiences extends RuntimeContentfulExperiences<
+export class ContentfulExperiences extends WebEventEmitter<
   Config & Pick<BaseConfig, 'eventBuilder'>
 > {
   readonly #singletonOwner: string;
@@ -269,7 +263,6 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
    * consent withdrawal replace it; destroy() makes it read `undefined`.
    */
   #resetToken: object = {};
-  readonly #eventMethods: RuntimeEventMethods;
   readonly #handleOnline = (): void => {
     this.online = true;
   };
@@ -283,23 +276,6 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       console.warn('Event stream subscriber failed', error);
     }
   };
-  readonly identify: EventMethods['identify'] = (...args) =>
-    this.#destroyed ? Promise.resolve({ accepted: false }) : this.#eventMethods.identify(...args);
-  readonly page: EventMethods['page'] = (...args) =>
-    this.#destroyed ? Promise.resolve({ accepted: false }) : this.#eventMethods.page(...args);
-  readonly track: EventMethods['track'] = (...args) =>
-    this.#destroyed ? Promise.resolve({ accepted: false }) : this.#eventMethods.track(...args);
-  readonly trackView: EventMethods['trackView'] = (...args) =>
-    this.#destroyed ? Promise.resolve({ accepted: false }) : this.#eventMethods.trackView(...args);
-  readonly trackClick: EventMethods['trackClick'] = (...args) =>
-    this.#destroyed ? Promise.resolve({ accepted: false }) : this.#eventMethods.trackClick(...args);
-  readonly trackHover: EventMethods['trackHover'] = (...args) =>
-    this.#destroyed ? Promise.resolve({ accepted: false }) : this.#eventMethods.trackHover(...args);
-  readonly trackFlagView: EventMethods['trackFlagView'] = (...args) =>
-    this.#destroyed
-      ? Promise.resolve({ accepted: false })
-      : this.#eventMethods.trackFlagView(...args);
-
   /** Observable state shared with application subscriptions and internal effects. */
   readonly states: States = {
     flag: (name) => this.#flagObservable(name),
@@ -415,19 +391,6 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
         publishEvent: this.#publishEvent,
         admitEvent: (event) => this.#admitEvent(event, true),
       });
-      this.#eventMethods = this.createEventMethods(
-        {
-          getProfile: () => profileSignal.value,
-          getConsent: () => this.#getConsent(),
-          getIsPreview: () => this.isPreview,
-          allowedEventTypes: this.allowedEventTypes,
-          reportBlockedEvent: (event) => this.#reportBlockedEvent(event),
-        },
-        {
-          personalization: (event) => this.personalizationQueue.send(event),
-          analytics: (event, currentProfile) => this.analyticsQueue.send(event, currentProfile),
-        }
-      );
       installCoreBridgeCapabilities(this, (data) => {
         const token = this.#resetToken;
         return this.#applyOptimizationDataToSignals(data, () => this.#isCurrent(token));
@@ -486,6 +449,10 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     }
   }
 
+  protected get eventEmissionActive(): boolean {
+    return !this.#destroyed;
+  }
+
   get isPreview(): boolean {
     return this.#isPreview;
   }
@@ -504,7 +471,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
 
   /** Whether event consent or the configured allowlist admits this method/type. */
   hasConsent(name: string): boolean {
-    return hasEventConsent(name, this.#getConsent(), this.allowedEventTypes);
+    return hasEventConsent(name, this.getEventConsent(), this.allowedEventTypes);
   }
 
   /**
@@ -1094,7 +1061,8 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       this.config.autoTrackEntryInteraction,
       {
         isAllowed: (method) =>
-          !this.isPreview && hasEventConsent(method, this.#getConsent(), this.allowedEventTypes),
+          !this.isPreview &&
+          hasEventConsent(method, this.getEventConsent(), this.allowedEventTypes),
         getResetToken: () => (this.#destroyed ? undefined : this.#resetToken),
       }
     ));
@@ -1263,12 +1231,12 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   #admitEvent(event: { type: string }, reportUnmapped = false): boolean {
     if (
       !this.isPreview &&
-      hasEventTypeConsent(event.type, this.#getConsent(), this.allowedEventTypes)
+      hasEventTypeConsent(event.type, this.getEventConsent(), this.allowedEventTypes)
     )
       return true;
     const method = methodForEventType(event.type);
     if (method !== undefined || reportUnmapped) {
-      this.#reportBlockedEvent({
+      this.reportBlockedEvent({
         reason: this.isPreview ? 'preview' : 'consent',
         method: method ?? event.type,
         args: [event],
@@ -1440,7 +1408,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
     });
   }
 
-  #getConsent(): ConsentState {
+  protected getEventConsent(): ConsentState {
     return { events: consentSignal.value, persistence: persistenceConsentSignal.value };
   }
 
@@ -1490,11 +1458,11 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
   }
 
   #skipPreviewEvent(method: string, args: readonly unknown[]): EventEmissionResult {
-    this.#reportBlockedEvent({ reason: 'preview', method, args });
+    this.reportBlockedEvent({ reason: 'preview', method, args });
     return { accepted: false, reason: 'preview' };
   }
 
-  #reportBlockedEvent(event: BlockedEvent): void {
+  protected reportBlockedEvent(event: BlockedEvent): void {
     if (this.#destroyed) return;
     const token = this.#resetToken;
     try {
@@ -1599,7 +1567,7 @@ export class ContentfulExperiences extends RuntimeContentfulExperiences<
       variantIndex: selected?.meta.variantIndex,
     };
     if (!this.hasConsent('trackFlagView')) {
-      this.#reportBlockedEvent({ reason: 'consent', method: 'trackFlagView', args: [payload] });
+      this.reportBlockedEvent({ reason: 'consent', method: 'trackFlagView', args: [payload] });
       return;
     }
     const profileId = this.#eligibleFlagProfileId();

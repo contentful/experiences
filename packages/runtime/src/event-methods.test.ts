@@ -12,8 +12,7 @@ import {
   type EventOptimizationData,
   type EventProfile,
   type PersonalizationRequestOptions,
-  type EventDispatch,
-  type EventBindings,
+  type DirectEventBindings,
   type EventApi,
 } from './event-methods.js';
 
@@ -56,15 +55,12 @@ function optimizationData(profileId: string): EventOptimizationData {
 
 function createFixture(
   options: {
-    profile?: ReturnType<EventBindings['getProfile']>;
+    profile?: ReturnType<DirectEventBindings['getProfile']>;
     eventInterceptors?: EventInterceptors;
     consent?: ConsentState;
     allowedEventTypes?: readonly AllowedEventType[];
     onEventBlocked?: (event: BlockedEvent) => void;
-    reportBlockedEvent?: (event: BlockedEvent) => void;
     sendResult?: boolean;
-    dispatch?: EventDispatch;
-    requireProfile?: boolean;
     analyticsOptions?: AnalyticsApiClientRequestOptions;
     personalizationOptions?: PersonalizationRequestOptions;
     isActive?: () => boolean;
@@ -85,32 +81,21 @@ function createFixture(
   const setProfile = vi.fn((nextProfile: EventProfile) => {
     profile = nextProfile;
   });
-  const bindings: EventBindings = {
+  const bindings: DirectEventBindings = {
     getProfile: () => profile,
     getEventContext: () => ({ locale: 'de-DE' }),
     getLocale: () => 'en-US',
     getConsent: () => options.consent,
     allowedEventTypes: options.allowedEventTypes,
-    requireProfile: options.requireProfile,
     getAnalyticsOptions: () => options.analyticsOptions,
     getPersonalizationOptions: () => options.personalizationOptions,
+    setProfile,
+    eventInterceptors: options.eventInterceptors,
+    getProfileRevision: () => revision,
+    isActive: options.isActive,
+    onEventBlocked: options.onEventBlocked,
   };
-  const methods =
-    options.dispatch === undefined
-      ? createEventMethods(api, eventBuilder, {
-          ...bindings,
-          setProfile,
-          eventInterceptors: options.eventInterceptors,
-          getProfileRevision: () => revision,
-          isActive: options.isActive,
-          onEventBlocked: options.onEventBlocked,
-        })
-      : createEventMethods(
-          api,
-          eventBuilder,
-          { ...bindings, reportBlockedEvent: options.reportBlockedEvent },
-          options.dispatch
-        );
+  const methods = createEventMethods(api, eventBuilder, bindings);
 
   return {
     methods,
@@ -363,18 +348,6 @@ describe('EventMethods', () => {
     expect(f.setProfile).not.toHaveBeenCalled();
   });
 
-  it('keeps the current profile when queued Personalization work is accepted without response data', async () => {
-    const dispatch: EventDispatch = {
-      personalization: vi.fn().mockResolvedValue({ accepted: true }),
-      analytics: vi.fn().mockResolvedValue(true),
-    };
-    const { methods } = createFixture({ profile: { id: 'current-profile' }, dispatch });
-
-    await expect(methods.page()).resolves.toEqual({ accepted: true });
-
-    expect(methods.profile).toEqual({ id: 'current-profile' });
-  });
-
   it('propagates direct Personalization transport errors', async () => {
     const error = new Error('Personalization transport failed');
     const { methods, upsertProfile } = createFixture({ profile: { id: 'current-profile' } });
@@ -414,29 +387,12 @@ describe('EventMethods', () => {
   it('requires a profile for stateless Analytics events without calling the transport', async () => {
     const { methods, sendBatchEvents } = createFixture({
       consent: { events: true },
-      requireProfile: true,
     });
 
     await expect(methods.trackClick(interaction)).rejects.toMatchObject({
       name: 'EventProfileRequiredError',
       method: 'trackClick',
     } satisfies Partial<EventProfileRequiredError>);
-    expect(sendBatchEvents).not.toHaveBeenCalled();
-  });
-
-  it('warns and drops a stateful Analytics event without a profile, as Optimization does', async () => {
-    const { methods, sendBatchEvents } = createFixture({ consent: { events: true } });
-
-    await expect(
-      methods.trackView({ ...interaction, viewId: 'view-1', viewDurationMs: 100 })
-    ).resolves.toEqual({ accepted: true });
-    for (const call of [
-      () => methods.trackClick(interaction),
-      () => methods.trackHover({ ...interaction, hoverId: 'hover-1', hoverDurationMs: 50 }),
-      () => methods.trackFlagView({ componentId: 'flag-1' }),
-    ]) {
-      await expect(call()).resolves.toEqual({ accepted: true });
-    }
     expect(sendBatchEvents).not.toHaveBeenCalled();
   });
 
@@ -467,30 +423,10 @@ describe('EventMethods', () => {
       expect(upsertProfile.mock.calls[0]?.[0].profileId).toBe('profile-1');
     });
 
-    it('drops a stateful Analytics event with an id-only profile, since Analytics needs a complete one', async () => {
-      const { methods, sendBatchEvents } = createFixture({
-        consent: { events: true },
-        profile: idOnly,
-      });
-
-      await expect(
-        methods.trackView({ ...interaction, viewId: 'view-1', viewDurationMs: 100 })
-      ).resolves.toEqual({ accepted: true });
-      await expect(methods.trackClick(interaction)).resolves.toEqual({ accepted: true });
-      await expect(
-        methods.trackHover({ ...interaction, hoverId: 'hover-1', hoverDurationMs: 50 })
-      ).resolves.toEqual({ accepted: true });
-      await expect(methods.trackFlagView({ componentId: 'flag-1' })).resolves.toEqual({
-        accepted: true,
-      });
-      expect(sendBatchEvents).not.toHaveBeenCalled();
-    });
-
     it('rejects a stateless Analytics event with an id-only profile', async () => {
       const { methods, sendBatchEvents } = createFixture({
         consent: { events: true },
         profile: idOnly,
-        requireProfile: true,
       });
 
       await expect(methods.trackClick(interaction)).rejects.toMatchObject({
@@ -536,40 +472,6 @@ describe('EventMethods', () => {
     expect(onEventBlocked).toHaveBeenCalledWith(
       expect.objectContaining({ method: 'trackView', reason: 'consent' })
     );
-    expect(upsertProfile).not.toHaveBeenCalled();
-    expect(sendBatchEvents).not.toHaveBeenCalled();
-  });
-
-  it('supports a runtime-owned dispatch strategy without using the direct transports', async () => {
-    const dispatch: EventDispatch = {
-      personalization: vi.fn().mockResolvedValue({
-        accepted: true,
-        data: optimizationData('profile-from-dispatch'),
-      }),
-      analytics: vi.fn().mockResolvedValue(true),
-    };
-    const { methods, sendBatchEvents, upsertProfile, setProfile } = createFixture({
-      consent: { events: true },
-      dispatch,
-      profile: completeProfile('initial-profile'),
-    });
-
-    await methods.page();
-    await methods.trackClick(interaction);
-
-    expect(dispatch.personalization).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'page',
-        context: expect.objectContaining({ gdpr: { isConsentGiven: true } }),
-      }),
-      completeProfile('initial-profile')
-    );
-    expect(dispatch.analytics).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'exo_node_click' }),
-      completeProfile('initial-profile')
-    );
-    expect(methods.profile).toEqual(completeProfile('initial-profile'));
-    expect(setProfile).not.toHaveBeenCalled();
     expect(upsertProfile).not.toHaveBeenCalled();
     expect(sendBatchEvents).not.toHaveBeenCalled();
   });
@@ -677,26 +579,6 @@ describe('EventMethods', () => {
       });
       await expect(methods.track({ event: 'again' })).resolves.toEqual({ accepted: false });
     });
-
-    it('propagates errors from a custom dispatch owner blocked-event reporter', async () => {
-      const error = new Error('blocked-event subscriber failed');
-      const reportBlockedEvent = vi.fn(() => {
-        throw error;
-      });
-      const dispatch: EventDispatch = {
-        personalization: vi.fn(),
-        analytics: vi.fn(),
-      };
-      const { methods } = createFixture({ reportBlockedEvent, dispatch });
-
-      await expect(methods.track({ event: 'purchase' })).rejects.toBe(error);
-      expect(reportBlockedEvent).toHaveBeenCalledWith({
-        reason: 'consent',
-        method: 'track',
-        args: [{ event: 'purchase' }],
-      });
-      expect(dispatch.personalization).not.toHaveBeenCalled();
-    });
   });
 
   describe('trackView acceptance result', () => {
@@ -718,7 +600,7 @@ describe('EventMethods', () => {
     });
 
     it('keeps the stateless profile requirement for views', async () => {
-      const { methods } = createFixture({ consent: { events: true }, requireProfile: true });
+      const { methods } = createFixture({ consent: { events: true } });
 
       await expect(methods.trackView(view)).rejects.toBeInstanceOf(EventProfileRequiredError);
     });

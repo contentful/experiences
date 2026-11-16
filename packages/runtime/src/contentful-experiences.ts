@@ -47,9 +47,7 @@ import {
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 import {
   createEventMethods,
-  type EventBindings,
   type DirectEventBindings,
-  type EventDispatch,
   type EventMethods,
 } from './event-methods.js';
 
@@ -266,21 +264,11 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
     return resolveFlagChange(name, changes)?.value;
   }
 
-  protected createEventMethods(
-    ...args: [bindings: DirectEventBindings] | [bindings: EventBindings, dispatch: EventDispatch]
-  ): EventMethods {
-    if (args.length === 1) {
-      return createEventMethods(this.api, this.eventBuilder, {
-        getLocale: () => this.locale,
-        ...args[0],
-      });
-    }
-    return createEventMethods(
-      this.api,
-      this.eventBuilder,
-      { getLocale: () => this.locale, ...args[0] },
-      args[1]
-    );
+  protected createEventMethods(bindings: DirectEventBindings): EventMethods {
+    return createEventMethods(this.api, this.eventBuilder, {
+      getLocale: () => this.locale,
+      ...bindings,
+    });
   }
 
   resolveExperience(

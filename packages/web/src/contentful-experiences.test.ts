@@ -507,17 +507,20 @@ describe('Web ContentfulExperiences', () => {
     expect(JSON.parse(window.localStorage.getItem(PROFILE_CACHE_KEY)!)).toEqual(updatedProfile);
   });
 
-  it('warns and drops an Analytics event without a profile, as Optimization does', async () => {
-    const runtime = createRuntime();
-    const optimization = mockOptimization(runtime);
+  it.each([undefined, { id: 'profile-1' }])(
+    'warns and drops an Analytics event with incomplete profile %j, as Optimization does',
+    async (profile) => {
+      const runtime = createRuntime({ defaults: { profile: profile as EventProfile } });
+      const optimization = mockOptimization(runtime);
 
-    await expect(
-      runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
-    ).resolves.toEqual({ accepted: true });
-    await runtime.flush();
+      await expect(
+        runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
+      ).resolves.toEqual({ accepted: true });
+      await runtime.flush();
 
-    expect(optimization.sendBatchEvents).not.toHaveBeenCalled();
-  });
+      expect(optimization.sendBatchEvents).not.toHaveBeenCalled();
+    }
+  );
 
   it('drops an Analytics call made while the initial profile request is still pending', async () => {
     const runtime = createRuntime();
