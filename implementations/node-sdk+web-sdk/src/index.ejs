@@ -47,7 +47,9 @@ function experience(plan, experienceId, section) {
         Some content could not be resolved (<%= issues %> delivery issues).
       <% } %></p>
     <% } %>
-    <% if (!plan || !plan.nodes.length) { %>
+    <% if (!plan) { %>
+      <p class="page-status" role="alert">This Experience could not be loaded.</p>
+    <% } else if (!plan.nodes.length) { %>
       <p data-empty <% if (plan) { %>data-testid="<%= section %>-experience-empty"<% } %>>This Experience has no content.</p>
     <% } else {
       nodes(plan.nodes, `${section}-${experienceId}`, section === 'auto');

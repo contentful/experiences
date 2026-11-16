@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import type { Profile as EventProfile } from '@contentful/optimization-api-client/api-schemas';
-import { buildPreparedEvents } from '@contentful/experiences-runtime';
+import { withEventConsent } from '@contentful/experiences-runtime';
 import {
   ExperienceApiClient as PersonalizationApiClient,
   InsightsApiClient as AnalyticsApiClient,
@@ -42,11 +42,10 @@ const click = (runtime: ContentfulExperiences) =>
   runtime.trackClick({ entityId: 'hero', entityKind: 'Experience' });
 
 const prepared = (runtime: TestContentfulExperiences) =>
-  buildPreparedEvents({
-    eventBuilder: runtime.eventBuilder,
-    initialEvents: [{ type: 'track', event: 'prepared' }],
-    eventConsent: true,
-  });
+  [
+    runtime.eventBuilder.buildTrack({ event: 'prepared' }),
+    runtime.eventBuilder.buildPageView(),
+  ].map((event) => withEventConsent(event, true));
 
 beforeEach(() => {
   seedConsent({ events: true, persistence: true });
@@ -153,7 +152,12 @@ describe('Web queue parity with Optimization', () => {
         .mockResolvedValue({ profile: completeProfile('visitor') } as never);
       const runtime = createRuntime({ queuePolicy: { offlineMaxEvents: 3 } });
       window.dispatchEvent(new Event('offline'));
-      expect((await offlineTracks(runtime, 4)).every((result) => result.accepted)).toBe(true);
+      expect((await offlineTracks(runtime, 4)).map((result) => result.accepted)).toEqual([
+        true,
+        true,
+        true,
+        false,
+      ]);
       window.dispatchEvent(new Event('online'));
       await vi.advanceTimersByTimeAsync(0);
       expect(upsert.mock.calls[0]?.[0].events).toHaveLength(3);

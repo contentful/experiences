@@ -1,5 +1,9 @@
 # Node SDK reference implementation
 
+Official support is one Experience fetch per page, without code enforcement.
+Reference multi-ID loops exist only to compare rendering scenarios, not as
+supported product usage or a cross-fetch guarantee.
+
 - Use ordinary package scripts for commands; keep any necessary shared tooling in
   repository-level TypeScript scripts executed with `tsx`. Do not add app-owned
   runner, process-management, or verification scripts.
@@ -10,16 +14,21 @@
 - Use `npx nx run implementation-node-sdk:<target>` from the root. Run setup or
   install after SDK artifacts change; never add workspace source aliases to bypass
   a failed installation.
-- Keep one runtime and a facade per request. Send the page event
-  directly with `request.page()`. Build the optional identify event with
-  `sdk.eventBuilder`, including `traits: { identified: true }`, and pass it in
-  `fetchExperience()` personalization options. Fetch each Experience only once per
-  app request; do not send identify independently. XDA selects content using the
-  fetch’s identify event. Profile IDs come from API responses
-  and stay SDK-managed; do not add manual profile input, cookies, or sessions.
-- Follow the README's [XDA workaround removal criteria](./README.md#current-xda-limitations-and-workaround-removal)
-  when upstream behavior changes. Verify profile-only selection, initial-profile
-  identification, and built-event compatibility before simplifying the flow.
+- Keep one runtime and a facade per request. Supply literal identify arguments with
+  `traits: { identified: true }` and explicit page arguments in ordinary
+  `fetchExperience({ personalization: { events } })`; the SDK builds admitted
+  arguments once and also accepts raw built events. Later comparison IDs and same-ID
+  Retry use ordinary event-free fetch, with no builders, hooks or replay.
+  Reuse plans for repeated presentations. Profiles remain SDK-managed; add no
+  manual input, cookies or sessions.
+- XDA preflight leaves this SSR intent uncommitted. This is a tolerated service bug
+  awaiting upstream force-commit support; add no SDK workaround or current force flag.
+  Remove the Node aggregate commit path. This app has no actual server-to-browser
+  transfer and uses no handoff producer. Direct event APIs remain callable without
+  becoming prerequisites or compensation. Current Phase 6 implementation/checks
+  are pending; acceptance/completion remains withdrawn. See
+  [Runtime's XDA contract](../../packages/runtime/README.md#xda-preflight-and-profile-finalization)
+  and the README's [personalization contract](./README.md#personalization-contract-and-validation-limits).
 - Use the public runtime for SDK operations. Do not inspect raw responses or
   compensate for runtime gaps with application-level transport adapters.
 - Preserve Optimization's EJS shell and styling. Keep the shell in `index.ejs`

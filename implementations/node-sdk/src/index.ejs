@@ -76,7 +76,7 @@
           <% if (isPreview) { %>
             <span>Preview snapshot; no visitor identification</span>
           <% } else if (identifyRequested) { %>
-            <span>Identify event included</span>
+            <span>Identify requested</span>
           <% } else { %>
             <a href="/?userId=charles">Identify</a>
           <% } %>
@@ -90,7 +90,11 @@
           <% for (const { id, plan } of experiences) { %>
             <div data-experience-id="<%= id %>">
               <div>
-                <%- include('nodes', { nodes: plan.nodes }) %>
+                <% if (plan) { %>
+                  <%- include('nodes', { nodes: plan.nodes }) %>
+                <% } else { %>
+                  <p role="status">This Experience could not be loaded.</p>
+                <% } %>
               </div>
             </div>
           <% } %>

@@ -8,7 +8,7 @@ import {
 import { useCallback } from 'react';
 
 import type { ContentResult } from './content-loader';
-import { experiences } from './experiences';
+import { ExperienceRenderer } from './experiences';
 
 function ManualPlan({ plan }: { plan: PortableRenderPlan }) {
   const sdk = useExperiences();
@@ -22,7 +22,7 @@ function ManualPlan({ plan }: { plan: PortableRenderPlan }) {
   );
 
   return (
-    <experiences.ExperienceRenderer
+    <ExperienceRenderer
       experience={plan}
       trackViews={false}
       trackHovers={false}
@@ -71,7 +71,7 @@ function PlanPresentation({ plan, manual }: { plan: PortableRenderPlan; manual: 
       {manual ? (
         <ManualPlan plan={plan} />
       ) : (
-        <experiences.ExperienceRenderer
+        <ExperienceRenderer
           experience={plan}
           renderUnknown={UnknownComponent}
           renderError={RenderError}

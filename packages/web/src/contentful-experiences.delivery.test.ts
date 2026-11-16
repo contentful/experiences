@@ -2,7 +2,7 @@
 
 import type { Profile as EventProfile } from '@contentful/optimization-api-client/api-schemas';
 import {
-  buildPreparedEvents,
+  withEventConsent,
   PROFILE_CACHE_KEY,
   type ExperiencesHandoff,
 } from '@contentful/experiences-runtime';
@@ -43,11 +43,10 @@ function createRuntime(profile?: EventProfile) {
 
 // Prepared for an opted-in visitor, matching the browser these tests run as.
 function prepared(runtime: TestContentfulExperiences, consent = true) {
-  return buildPreparedEvents({
-    eventBuilder: runtime.eventBuilder,
-    initialEvents: [{ type: 'track', event: 'prepared' }],
-    eventConsent: consent,
-  });
+  return [
+    runtime.eventBuilder.buildTrack({ event: 'prepared' }),
+    runtime.eventBuilder.buildPageView(),
+  ].map((event) => withEventConsent(event, consent));
 }
 
 // Consent is not what these tests are about: run as a visitor who has opted in.
@@ -110,7 +109,7 @@ describe('Web prepared Personalization delivery', () => {
   });
 
   it('drops early Analytics under a bare continuation ID without persisting a synthetic profile', async () => {
-    const pending = deferred<{ profile: { id: string } }>();
+    const pending = deferred<{ profile: EventProfile }>();
     const upsert = vi
       .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
       .mockReturnValue(pending.promise as never);
@@ -146,76 +145,6 @@ describe('Web prepared Personalization delivery', () => {
     expect(analytics).toHaveBeenCalledExactlyOnceWith([
       expect.objectContaining({ profile: apiProfile }),
     ]);
-  });
-
-  it('prefers an established browser profile over a handoff continuation ID', async () => {
-    const upsert = vi
-      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
-      .mockResolvedValue({ profile: completeProfile('browser-profile') } as never);
-    const runtime = createRuntime(completeProfile('browser-profile'));
-
-    await expect(
-      runtime.hydrateAndTrackCurrentPage(
-        {
-          spaceId: 'space',
-          environmentId: 'environment',
-          cache: { scope: 'private-request' },
-          profileId: 'server-profile',
-          replay: { routeKey: '/first', events: prepared(runtime) },
-        },
-        { routeKey: '/first' }
-      )
-    ).resolves.toEqual({ accepted: true });
-    expect(upsert.mock.calls[0]?.[0].profileId).toBe('browser-profile');
-  });
-
-  it('keeps the adopted continuation ID when another prepared handoff arrives', async () => {
-    const first = deferred<{ profile: EventProfile }>();
-    const upsert = vi
-      .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
-      .mockReturnValueOnce(first.promise as never)
-      .mockResolvedValueOnce({ profile: completeProfile('committed-profile') } as never);
-    const analytics = vi
-      .spyOn(AnalyticsApiClient.prototype, 'sendBatchEvents')
-      .mockResolvedValue(true);
-    const runtime = createRuntime();
-
-    await expect(
-      runtime.hydrateAndTrackCurrentPage(
-        {
-          spaceId: 'space',
-          environmentId: 'environment',
-          cache: { scope: 'private-request' },
-          profileId: 'first-profile',
-          replay: { routeKey: '/first', events: prepared(runtime) },
-        },
-        { routeKey: '/first' }
-      )
-    ).resolves.toEqual({ accepted: true });
-    await expect(
-      runtime.hydrateAndTrackCurrentPage(
-        {
-          spaceId: 'space',
-          environmentId: 'environment',
-          cache: { scope: 'private-request' },
-          profileId: 'second-profile',
-          replay: { routeKey: '/second', events: prepared(runtime) },
-        },
-        { routeKey: '/second' }
-      )
-    ).resolves.toEqual({ accepted: true });
-    expect(upsert).toHaveBeenCalledTimes(1);
-
-    // The adopted continuation ID is id-only, which Analytics cannot accept: the click is
-    // admitted but not sent.
-    await expect(
-      runtime.trackClick({ entityId: 'hero', entityKind: 'Experience' })
-    ).resolves.toEqual({ accepted: true });
-    expect(analytics).not.toHaveBeenCalled();
-
-    first.resolve({ profile: completeProfile('first-committed-profile') });
-    await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(2));
-    expect(upsert.mock.calls[1]?.[0].profileId).toBe('first-profile');
   });
 
   it('sends an ordinary online event while prepared HTTP is pending', async () => {

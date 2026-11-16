@@ -81,6 +81,7 @@ export function mergeRuntimePreviewResolveOptions(
   };
 }
 
+/** Resolve options must already include the owner's applicable defaults. */
 export async function fetchRuntimePreviewSession(
   binding: RuntimeLivePreviewBinding,
   config: RuntimeLivePreviewConfig,
@@ -88,12 +89,11 @@ export async function fetchRuntimePreviewSession(
 ): Promise<PortableRenderPlan> {
   // Preview API returns a resolved plan, without a raw payload or AbortSignal.
   // Owners adopt the plan and discard obsolete completions; HTTP work continues.
-  const merged = mergeRuntimePreviewResolveOptions(config, resolve);
   const client = await previewClientOptions(config);
   return binding.implementation.fetchPreviewSession(
     sessionIdentity(binding, config),
     client,
-    merged
+    resolve
   );
 }
 

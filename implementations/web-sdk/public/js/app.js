@@ -45,32 +45,34 @@ const resolveOptions = { config: { components: {}, experienceTemplates: {} } };
 // Reference app: these guards coordinate this vanilla SPA's overlapping actions.
 // A framework/router may own equivalent cancellation and lifecycle handling.
 let generation = 0;
-let pageGeneration = 0;
 let disposed = false;
-let pagePending = false;
-let pageFailed = false;
-let pendingPage = Promise.resolve();
 let manualElements = [];
 let previewSubscriptions = [];
 
 // Reference app: a fixed URL identity makes personalization easy to verify.
 // Consumers supply identity from their own application; this is not authentication.
 const controls = createControlPanel(sdk, {
-  onIdentify() {
+  async onIdentify() {
+    if (disposed || sdk.isPreview) return;
     const url = new URL(location.href);
     url.searchParams.set('userId', 'charles');
     history.replaceState(null, '', url.pathname + url.search);
-    void renderRoute();
+    await renderRoute({
+      events: [
+        {
+          type: 'identify',
+          userId: 'charles',
+          traits: { identified: true },
+          locale: sdk.states.locale.current,
+        },
+      ],
+    });
   },
   onReset() {
     const url = new URL(location.href);
     url.searchParams.delete('userId');
     history.replaceState(null, '', url.pathname + url.search);
-    if (sdk.isPreview) void renderRoute({ reset: true });
-    else {
-      sdk.reset();
-      void renderRoute({ sendPage: true });
-    }
+    void renderRoute({ sendPage: true, reset: true });
   },
 });
 
@@ -96,13 +98,20 @@ function showStatus(target, text, { error = false, retry = false } = {}) {
   message.textContent = text;
   const button = content.querySelector('button');
   if (retry) {
-    button.addEventListener('click', () => void renderRoute({ retry: true }));
+    button.addEventListener('click', () => void renderRoute());
   } else button.remove();
   target.replaceChildren(content);
 }
 
 // Reference app: keep route orchestration separate from shell, visitor and content work.
-async function renderRoute({ sendPage = false, retry = false, focus = false, reset = false } = {}) {
+async function renderRoute({
+  sendPage = false,
+  identify = false,
+  events,
+  focus = false,
+  reset = false,
+} = {}) {
+  if (disposed) return;
   const nextBinding = getPreviewBinding(env, location.href);
   const nextIsPreview = Boolean(
     nextBinding || new URL(location.href).searchParams.get('preview_session_id')?.trim()
@@ -116,16 +125,39 @@ async function renderRoute({ sendPage = false, retry = false, focus = false, res
   const isCurrent = () => !disposed && current === generation;
   const path = location.pathname;
   const route = routes[path];
-  const identifyRequested = new URL(location.href).searchParams.get('userId') === 'charles';
   const previousManualElements = manualElements;
   manualElements = [];
 
   renderRouteShell(path, route);
-  if (reset) sdk.reset();
+  if (reset) {
+    // SDK reset resumes discovery immediately; old attributed DOM is already removed.
+    sdk.reset();
+  }
+  const locale = sdk.states.locale.current;
+  if (!sdk.isPreview && route && sendPage) {
+    events = [
+      ...(identify
+        ? [
+            {
+              type: 'identify',
+              userId: 'charles',
+              traits: { identified: true },
+              locale,
+            },
+          ]
+        : []),
+      { type: 'page', locale },
+    ];
+  }
+  const requestOptions = sdk.isPreview
+    ? undefined
+    : { locale, ...(events ? { personalization: { events } } : {}) };
   // Consumer integration, manual observation only: release explicit registrations.
   // Let DOM removal finish measured intervals before clearing their overrides.
+  // Reset already discarded the old measurements and overrides.
   await Promise.resolve();
-  previousManualElements.forEach((element) => sdk.tracking.clearElement('views', element));
+  if (!reset)
+    previousManualElements.forEach((element) => sdk.tracking.clearElement('views', element));
   if (!isCurrent() || !route) return;
 
   wireRouteControls(path, focus);
@@ -140,13 +172,9 @@ async function renderRoute({ sendPage = false, retry = false, focus = false, res
         if (!isCurrent()) return;
         previewBinding = nextBinding;
       }
-    } else {
-      // Identify joins any initial page; it does not send a separate identify call.
-      await initializeVisitor(sendPage, retry, isCurrent);
-      if (!isCurrent()) return;
     }
 
-    const failed = await loadExperiences(destinations, identifyRequested, isCurrent);
+    const failed = await loadExperiences(destinations, isCurrent, requestOptions);
     if (!isCurrent()) return;
     appMain.removeAttribute('aria-busy');
     if (failed && !sdk.isPreview) {
@@ -164,7 +192,7 @@ async function renderRoute({ sendPage = false, retry = false, focus = false, res
       errorPanel,
       sdk.isPreview
         ? 'Preview content could not be loaded. Check the session and retry.'
-        : 'A visitor profile could not be established. Check your connection and retry.',
+        : 'Experience content could not be loaded. Retry content to try again.',
       { error: true, retry: true }
     );
     for (const targets of destinations.values()) {
@@ -173,7 +201,7 @@ async function renderRoute({ sendPage = false, retry = false, focus = false, res
           target,
           sdk.isPreview
             ? 'Preview content is unavailable. Retry content to try again.'
-            : 'Content is unavailable until visitor initialization succeeds.'
+            : 'Experience content is unavailable. Retry content to try again.'
         )
       );
     }
@@ -210,19 +238,23 @@ function wireRouteControls(path, focus) {
   for (const link of appMain.querySelectorAll('a[href]')) link.href = routeUrl(link.href);
   controls.wire();
   if (path === '/page-two') {
-    // Reference app: this button demonstrates a custom event independently of XDA.
+    // Reference app: evaluate custom intent through XDA and refresh route content.
     appMain.querySelector('.sections-grid').dataset.testid = 'page-two-experiences';
     const actions = appMain.querySelector('[data-custom-action]');
-    const status = actions.querySelector('[role="status"]');
-    actions.querySelector('button').addEventListener('click', async () => {
-      try {
-        const result = await sdk.track({ event: 'reference_custom_action' });
-        status.textContent = result.accepted
-          ? 'Custom event admitted; delivery unconfirmed.'
-          : 'Custom event not admitted.';
-      } catch {
-        status.textContent = 'Unable to record the custom action.';
-      }
+    const button = actions.querySelector('button');
+    const owner = generation;
+    button.disabled = sdk.isPreview;
+    button.addEventListener('click', () => {
+      if (disposed || generation !== owner || sdk.isPreview) return;
+      void renderRoute({
+        events: [
+          {
+            type: 'track',
+            event: 'reference_custom_action',
+            locale: sdk.states.locale.current,
+          },
+        ],
+      });
     });
     appMain.querySelector('.control-panel').appendChild(actions);
   }
@@ -249,74 +281,35 @@ function createDestinations(route) {
   return destinations;
 }
 
-// XDA workaround: the standalone page, pre-fetch profile prerequisite and
-// page-specific recovery jointly compensate for initial identify-bearing XDA timeouts.
-// Reassess them together when the first event-bearing fetch can establish identity
-// and select the expected variant (README); retain route ownership/lifetime checks.
-async function initializeVisitor(sendPage, retry, isCurrent) {
-  if (sendPage || (retry && !pagePending && (pageFailed || !sdk.states.profile.current?.id))) {
-    const pageRequest = ++pageGeneration;
-    const properties = { url: location.href, title: document.title };
-    pagePending = true;
-    pageFailed = false;
-    pendingPage = pendingPage
-      .catch(() => {})
-      .then(async () => {
-        if (disposed || pageRequest !== pageGeneration) return;
-        try {
-          const result = await sdk.page({ properties });
-          if (disposed || pageRequest !== pageGeneration) return;
-          if (!result.accepted) throw new Error('Page event was not admitted.');
-        } catch (error) {
-          if (!disposed && pageRequest === pageGeneration) pageFailed = true;
-          throw error;
-        } finally {
-          if (pageRequest === pageGeneration) pagePending = false;
-        }
-      });
-  }
-  await pendingPage;
-  // An admitted offline page can acquire a profile later. Keep content eligibility
-  // separate from the shared page promise so a later content action can proceed.
-  if (isCurrent()) {
-    if (!sdk.states.profile.current?.id) {
-      pageFailed = true;
-      throw new Error('Visitor profile is not available.');
-    }
-    pageFailed = false;
-  }
-}
-
-async function loadExperiences(destinations, identifyRequested, isCurrent) {
-  const identifyEvent =
-    !sdk.isPreview && identifyRequested
-      ? sdk.eventBuilder.buildIdentify({ userId: 'charles', traits: { identified: true } })
-      : undefined;
+async function loadExperiences(destinations, isCurrent, requestOptions) {
   const failures = new Set();
   const rendered = new Set();
-  // Repeated identify makes these requests potentially profile-producing; later
-  // fetches can depend on earlier SDK profile updates. Reassess serialization when
-  // repeated identify is removed, retaining only actual dependencies (README).
+  let profileId = sdk.states.profile.current?.id;
+  let personalization = requestOptions?.personalization;
   for (const [experienceId, targets] of destinations) {
-    if (!isCurrent()) return;
+    if (!isCurrent()) return failures.size > 0;
     try {
-      const plan = await sdk.fetchExperience(
-        {
-          experienceId,
-          // XDA workaround: profile-only selection can return baseline. Reuse one built
-          // identify across this cycle's fetches until equivalent profile-only
-          // selection is verified; Client owns wire normalization (README).
-          ...(identifyEvent ? { personalization: { events: [identifyEvent] } } : {}),
-        },
-        resolveOptions
-      );
-      if (!isCurrent()) return;
+      const options = {
+        experienceId,
+        ...requestOptions,
+        personalization: sdk.isPreview
+          ? undefined
+          : {
+              ...personalization,
+              profileId,
+            },
+      };
+      // Evaluate intent once; comparison IDs and Retry fetch without new events.
+      personalization = undefined;
+      const plan = await sdk.fetchExperience(options, resolveOptions);
+      if (!isCurrent()) return failures.size > 0;
+      profileId = plan.personalization?.profile.id ?? profileId;
       renderPresentations(plan, experienceId, targets);
       rendered.add(experienceId);
       if (sdk.isPreview && (plan.diagnostics?.length || plan.deliveryDiagnostics?.length))
         failures.add(experienceId);
     } catch (error) {
-      if (!isCurrent()) return;
+      if (!isCurrent()) return failures.size > 0;
       failures.add(experienceId);
       // The UMD may minify constructor names; Delivery exposes a stable statusCode.
       const message =
@@ -380,7 +373,6 @@ window.addEventListener('pagehide', (event) => {
   // A back/forward-cache suspension keeps this instance alive for resumption.
   if (event.persisted) return;
   disposed = true;
-  generation += 1;
   releasePreviewSubscriptions();
   trackingLog.dispose();
   controls.dispose();
@@ -388,7 +380,10 @@ window.addEventListener('pagehide', (event) => {
   // durations. Browser teardown releases this document's SDK. Explicitly destroy
   // it when replacing the owner inside a still-live document instead.
 });
-void renderRoute({ sendPage: true });
+void renderRoute({
+  sendPage: true,
+  identify: !sdk.isPreview && new URL(location.href).searchParams.get('userId') === 'charles',
+});
 
 function releasePreviewSubscriptions() {
   previewSubscriptions.forEach((subscription) => subscription.unsubscribe());

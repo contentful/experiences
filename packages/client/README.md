@@ -2,7 +2,7 @@
 
 > **Internal package.** Published to npm so framework adapters can resolve it at install time, but you're not meant to import it directly. It comes in transitively via the framework adapter (`@contentful/experiences-react`, `@contentful/experiences-svelte`, etc.).
 
-Isolates `@contentful/experience-delivery` — the generated Experience Delivery client — and owns the free fetch functions, payload conversion, delivery errors, and XDA-derived request types. The shared runtime and complete `EventBuilder` live in `@contentful/experiences-runtime`, which depends on this package. Client does not build events or depend on Runtime. The existing free functions remain supported for adapter and application integration.
+Isolates `@contentful/experience-delivery` — the generated Experience Delivery client — and owns the free fetch functions, payload conversion, delivery errors, and XDA-derived request types. The shared runtime and complete `EventBuilder` live in `@contentful/experiences-runtime`, which depends on this package. Client accepts only raw built XDA events; it does not build events or depend on Runtime. Runtime-backed fetch accepts the existing type-tagged builder arguments and builds them before calling Client. The existing free functions remain supported for adapter and application integration.
 
 ---
 
@@ -43,6 +43,18 @@ require a title, Track properties and Identify traits are required, and country
 codes must contain two characters. XDA does not support Optimization's
 `exo_node_view` event or null property/trait values; Client rejects those before
 transport. Invalid input throws `TypeError` before Delivery is called.
+
+Event-bearing XDA forces XPAPI `preflight: true`, with no override; it does not
+commit events or profile changes. Newly returned IDs are provisional, and
+profile-only XDA uses XPAPI GET internally even when SDK-to-XDA uses POST.
+See [XDA preflight and profile finalization](../runtime/README.md#xda-preflight-and-profile-finalization)
+for finalization requirements and the subsequent GET limitation. Node's
+`fetchExperienceForHandoff` producer is retained only for an actual server-to-browser
+transfer, with `{ routeKey }` as its third argument. It retains finalized replay
+for optional explicit browser consumption; ordinary SSR/CSR uses ordinary fetch
+and remains uncommitted pending upstream service support. Handoff is never content
+Retry input. Replay compatibility remains stricter than ordinary XDA's supported
+metadata/query arrays. Client owns no consent, construction or replay decision.
 
 By-ID `parameters` accepts strings, numbers, and one-level Records of strings/numbers:
 `{ featuredPosts: { limit: 6, order: '-fields.title' } }`. IDs are declared in
@@ -248,6 +260,7 @@ const client = new ContentfulViewDeliveryClient({
 - Do not import `@contentful/experience-delivery` from anywhere except this package.
 - Re-export only what framework adapters need to surface to their users.
 - Keep `fetchExperience` thin — fetch + cast + resolve. Business logic belongs in `packages/core`.
+- Validate personalization with the canonical Optimization event schemas, retaining their defaults and omission of undeclared fields. Keep the direct Optimization API client and `zod` dependencies; reject XDA-unsupported event variants and null property/trait values. Do not import Runtime or `EventBuilder` into Client.
 - Name mappings between SDK options and delivery-client options live in `create-delivery-client.ts` — one place to change.
 
 ## License

@@ -2,6 +2,7 @@ import {
   ContentfulViewDeliveryClient,
   createUserAgentHeaders,
   fetchExperience,
+  fetchExperiencePayload,
   serializePersonalization,
   PREVIEW_HOST,
   type DestinationRedirectResult,
@@ -17,7 +18,12 @@ import type {
   ResolverConfig,
 } from '@contentful/experiences-sdk-core';
 import EventBuilder from './event-builder.js';
-import type { EventBuilderConfig } from './event-builder.js';
+import type {
+  EventBuilderConfig,
+  IdentifyBuilderArgs,
+  PageViewBuilderArgs,
+  TrackBuilderArgs,
+} from './event-builder.js';
 import type {
   ExperienceEvent as PersonalizationEvent,
   Json,
@@ -71,25 +77,70 @@ export type FetchPersonalizationOptions = Omit<PersonalizationOptions, 'events'>
   events?: (NonNullable<PersonalizationOptions['events']>[number] | PersonalizationEvent)[];
 };
 
+type FetchEventArguments =
+  | ({ type: 'identify' } & IdentifyBuilderArgs)
+  | ({ type: 'page' } & PageViewBuilderArgs)
+  | ({ type: 'track' } & TrackBuilderArgs);
+type BuiltFetchEvent = NonNullable<FetchPersonalizationOptions['events']>[number];
+type BuiltFetchPersonalization = Omit<PersonalizationOptions, 'events'> & {
+  events?: BuiltFetchEvent[];
+};
+
+export type RuntimePersonalizationOptions = Omit<PersonalizationOptions, 'events'> & {
+  /** Event builder arguments or already-built XDA events; no page is added implicitly. */
+  events?: (FetchEventArguments | BuiltFetchEvent)[];
+};
+
 export type FetchExperienceOptions = {
   experienceId: string;
   locale?: string;
   parameters?: ExperienceParameters;
-  personalization?: FetchPersonalizationOptions;
+  personalization?: RuntimePersonalizationOptions;
   extensions?: ExperienceRequestExtensions;
   preview?: boolean;
 };
 
+/** @internal Leaf owners build admitted intent before interception and XDA validation. */
+export type BuiltRuntimeFetchExperienceOptions = Omit<FetchExperienceOptions, 'personalization'> & {
+  personalization?: PersonalizationOptions;
+};
+
+/** @internal Use the owner's existing builder; retain caller-built messages unchanged. */
+export function buildFetchPersonalization(
+  input: RuntimePersonalizationOptions | undefined,
+  builder: Pick<EventBuilder, 'buildIdentify' | 'buildPageView' | 'buildTrack'>
+): BuiltFetchPersonalization | undefined {
+  if (input === undefined) return undefined;
+  if (input.events === undefined) return { ...input, events: undefined };
+  return {
+    ...input,
+    events: input.events.map((event) => {
+      if ('context' in event || 'messageId' in event) return event as BuiltFetchEvent;
+      const { type, ...args } = event;
+      switch (type) {
+        case 'identify':
+          return builder.buildIdentify(args as IdentifyBuilderArgs);
+        case 'page':
+          return builder.buildPageView(args as PageViewBuilderArgs);
+        case 'track':
+          return builder.buildTrack(args as TrackBuilderArgs);
+        default:
+          return event as BuiltFetchEvent;
+      }
+    }),
+  };
+}
+
 export type FetchByDestinationNodeOptions = {
   destinationId: string;
   nodeId: string;
-  personalization?: FetchPersonalizationOptions;
+  personalization?: RuntimePersonalizationOptions;
 };
 
 export type FetchByDestinationPathOptions = {
   destinationId: string;
   path: string;
-  personalization?: FetchPersonalizationOptions;
+  personalization?: RuntimePersonalizationOptions;
 };
 
 /** Structural contract implemented by the shared runtime. */
@@ -215,24 +266,35 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
     payload: ExperiencePayload,
     resolveOptions: ResolveOptions
   ): Promise<PortableRenderPlan> {
-    return resolveCoreExperience(
-      payload,
-      requireResolverConfig(resolveOptions),
-      this.#mergeResolveOptions(resolveOptions)
-    );
+    return resolveCoreExperience(payload, requireResolverConfig(resolveOptions), {
+      ...this.#mergeFetchResolveOptions(resolveOptions),
+      sourceMap: resolveOptions.sourceMap,
+    });
   }
 
   fetchExperience(
     options: FetchExperienceOptions,
     resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan> {
+    const payload = this.fetchExperiencePayload(options, resolveOptions);
+    const { config } = resolveOptions;
+    const merged = this.#mergeFetchResolveOptions(resolveOptions);
+    return payload.then((value) => resolveCoreExperience(value, config, merged));
+  }
+
+  /** Fetch a payload for a leaf operation that must retain identity before resolution. */
+  protected fetchExperiencePayload(
+    options: FetchExperienceOptions,
+    resolveOptions: FetchResolveOptions
+  ): Promise<ExperiencePayload> {
     if (options.preview === true && this.#previewClient === undefined) {
       throw new Error(
         'fetchExperience() called with preview: true but this runtime has no preview client'
       );
     }
-    const resolverConfig = requireResolverConfig(resolveOptions);
-    return fetchExperience(
+    requireResolverConfig(resolveOptions);
+    const personalization = buildFetchPersonalization(options.personalization, this.eventBuilder);
+    return fetchExperiencePayload(
       {
         spaceId: this.spaceId,
         environmentId: this.environmentId,
@@ -240,17 +302,13 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
         locale: options.locale ?? this.locale,
         parameters: options.parameters,
         personalization:
-          options.personalization === undefined
-            ? undefined
-            : serializePersonalization(options.personalization),
+          personalization === undefined ? undefined : serializePersonalization(personalization),
         extensions: options.extensions,
       },
-      {
-        client: options.preview
-          ? (this.#previewClient as ContentfulViewDeliveryClient)
-          : this.#deliveryClient,
-      },
-      { config: resolverConfig, ...this.#mergeFetchResolveOptions(resolveOptions) }
+      options.preview
+        ? (this.#previewClient as ContentfulViewDeliveryClient)
+        : this.#deliveryClient,
+      resolveOptions.debug ?? this.#resolveDefaults.debug
     );
   }
 
@@ -292,15 +350,6 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
       { client: this.#deliveryClient },
       { config: resolverConfig, ...this.#mergeFetchResolveOptions(resolveOptions) }
     );
-  }
-
-  #mergeResolveOptions(
-    options: ResolveOptions
-  ): ResolveDefaults & Pick<ResolveOptions, 'sourceMap'> {
-    return {
-      ...this.#mergeFetchResolveOptions(options),
-      sourceMap: options.sourceMap,
-    };
   }
 
   #mergeFetchResolveOptions(options: FetchResolveOptions): ResolveDefaults {

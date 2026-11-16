@@ -1,5 +1,11 @@
 # Experiences React SDK rendering reference
 
+Official support is one Experience fetch per page, without code enforcement.
+Reference multi-ID loops exist only to compare rendering scenarios, not as
+supported product usage or a cross-fetch guarantee.
+
+**Current Phase 6 correction:** Implementation and checks are pending; Phase 6 is not accepted or complete and Phase 7 stays gated. Earlier remedy checks and no-production-findings review are historical evidence for a superseded design; no new live-service validation is claimed.
+
 This private standalone React/Vite application loads and renders real Experience
 plans. It consumes locally packed SDK artifacts outside the
 root npm workspaces.
@@ -16,7 +22,22 @@ React commits. Utilities expose event and persistence consent; the optional
 Tracking sidebar reports actual event-attempt notifications. Credentials are
 unnecessary to build and start; content loading requires the app-local space and
 browser-approved Delivery token. Managed content/navigation/preview and
-page/identify/reset/retry sequences remain Phase 6 work. See the
+page/identify/reset/retry sequences remain Phase 7 work. Phase 6 corrects the
+existing Node/Web/hybrid references and owner checks, plus the necessary React
+provider/root migration to `handoff?: ExperiencesHandoff`, replacing
+`initialization: { routeKey, handoff }` and `ExperiencesStateInitialization`.
+Lifecycle consumes the complete operation using current browser route. Matching
+nonpage replay has no page fallback; replay-less state applies internally and returns
+`{ accepted: false }` unless explicit `buildPayload` supplies page intent. Other
+managed React/Phase 7 capabilities stay gated. Phase 7 uses ordinary Web fetch for
+CSR and browser-local navigation/actions; normal fetch requires no handoff.
+Optional Web/React handoff consumption is mode agnostic and consumer supplied
+only for an actual server transfer, independently of display. No local CSR/
+navigation producer remains. Retry is ordinary event-free fetch of the same ID;
+accepted incoming replay delivery retry remains queue-owned. Page Two's CUSTOM TRACK
+action is nonpage; navigation still carries a page. Preserve pinned ownership,
+consent/lifetime and the page consent-retry exception without direct initial
+emission as a prerequisite. See the
 [implementation plan](../../tmp/react-next-runtime-implementation-plan.md#phase-5-implement-react-ownership-providers-and-hooks)
 and [accepted design](../../tmp/react-next-runtime-phase-1-design.md).
 
@@ -144,8 +165,9 @@ the frozen package's public exports and Runtime's supported initializer; see
   action for independent event/persistence Grant/Revoke controls.
 - `src/attempt-log.ts`, `src/TrackingLog.tsx`: early retained event subscription,
   notification counts, actual view/hover interval grouping and cleaned-up age timer.
-- `src/content-loader.ts`: concurrent free fetches for distinct route IDs with
-  source maps, per-ID error results and plan reuse; no runtime initialization.
+- `src/content-loader.ts`: concurrent free fetches for distinct route IDs solely to compare rendering
+  scenarios, with source maps, per-ID error results and plan reuse; no runtime
+  initialization or supported multi-Experience product pattern.
 - `src/experience-config.tsx`: coded component/template registrations, generated
   source-field types, binding checks, Rich Text and the actual named `slot`.
 - `src/ExperiencePresentation.tsx`: standard supplied-plan renderer, content/error
@@ -216,7 +238,7 @@ to inherit Web automatic defaults. The manual-view section sets all three to fal
 preserving its original all-automatic-off behavior while retaining scope attribution.
 This adapts the refs/per-kind pattern from Optimization's
 [`ContentEntry.tsx`](https://github.com/contentful/optimization/blob/59add9d6ebff503b9033a59a2eee0149d4b4e925/implementations/react-web-sdk/src/sections/ContentEntry.tsx)
-at the pinned revision. That example disables only automatic views; this section
+at the historical revision. That example disables only automatic views; this section
 also disables hovers and clicks to preserve the existing reference behavior.
 The manual presentation obtains `sdk` from `useExperiences()`, registers only
 roots with normalized `onNodeRoot` data through
@@ -251,7 +273,7 @@ A profileless `trackView` can return `{ accepted: true }` with no `eventStream`
 notification or network request. The sidebar counts actual notifications, which
 do not establish successful transport delivery.
 Page/identify/reset/retry and managed preview
-content are deferred to Phase 6.
+content are deferred to Phase 7.
 
 The stable `onStatesReady` callback attaches the optional sidebar's retained
 subscription during activation, before root-driven work. It ignores the immediate
@@ -259,7 +281,8 @@ historical `.current` emission on every attachment. Each later event notificatio
 increments the attempt count, even when message IDs repeat. Only real view/hover
 interval IDs with durations group into one row; the row shows the latest duration,
 first-observed age and notification count. React renders labels as text. These
-rows describe attempts before queue admission/transport completion, never delivery
+rows describe attempts after applicable capacity/whole-batch admission and before
+transport completion, never delivery
 success. Clearing SDK event state does not fabricate an attempt or erase history.
 The age timer and UI subscriptions clean up on unmount; the root owns the early
 subscription's cleanup.
@@ -273,14 +296,16 @@ uses renderer/provider cleanup to release manual registrations, subscriptions an
 the owned SDK. Persisted `pagehide` retains the root, subscriptions and SDK for
 BFCache resumption; no new load or runtime is created.
 
-The ownership/consent/sidebar patterns were traced with `git show` at Optimization
-commit `59add9d6ebff503b9033a59a2eee0149d4b4e925`: React `OptimizationProvider`,
+The ownership/consent/sidebar patterns were historically traced with `git show`
+at Optimization commit `59add9d6ebff503b9033a59a2eee0149d4b4e925`: React `OptimizationProvider`,
 Web `presentation/optimizationRootRuntime.ts`, and the maintained React reference's
 `main.tsx`, `ControlPanel.tsx` and `AnalyticsEventDisplay.tsx`. The retained
 Experiences differences are supplied XDA plans rather than local CDA variant
-resolution, no route-page work until Phase 6, SDK-normalized attribution data,
+resolution, no route-page work until Phase 7, SDK-normalized attribution data,
 and skipping historical notifications when attaching diagnostics. The pinned
-reference is evidence only, with no adjacent-checkout runtime dependency.
+reference is historical evidence only, with no adjacent-checkout runtime dependency.
+The active parity baseline is PR #549 at
+`f76f1ff04df1b466c98fc6ce5db6b569f9212438`, rather than that historical pin.
 
 Use scoped build/lint/typecheck and direct inspection of this maintained app for
 validation after refreshing the installed tarballs. Inspect both routes, repeated

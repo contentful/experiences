@@ -1,5 +1,9 @@
 # Web SDK reference implementation
 
+Official support is one Experience fetch per page, without code enforcement.
+Reference multi-ID loops exist only to compare rendering scenarios, not as
+supported product usage or a cross-fetch guarantee.
+
 - Read `README.md` and parent implementation guidance before changing this app.
   Use automatic setup through rendered plan containers.
 - Keep the application outside root workspaces and consume installed local SDK
@@ -40,14 +44,34 @@
 - Keep one SDK instance, SDK-owned profile/consent/persistence, and empty SDK resolver
   registries. Render the two current registration kinds through the app DOM
   registry and actual named slots recursively; do not invent composed hierarchy.
-- Follow README/D5: await page on navigation, build one identify per explicit
-  content cycle and embed it in each distinct sequential fetch, never send identify
-  independently. URL `?userId=charles` is intent only. Reset clears that intent and
-  SDK state, then page/fetches again. No profile subscription may refresh content.
-- Retain current XDA workaround comments/removal criteria and stale-action guards.
-  Consent subscriptions update Utilities only and remain caller-owned. Show
-  initialization failure when admission produces no profile; do not equate event
-  admission, an event attempt, or HTTP 200 with delivered/personalized success.
+- Phase 6 implementation/checks are pending for the current correction; earlier
+  checks/review are historical. Phase 6 is unaccepted/incomplete; Phase 7 stays gated. Follow the [Runtime aggregate contract](../../packages/runtime/README.md#shared-handoff-primitives).
+- Supply explicit page/optional initial URL identify intent through ordinary Web
+  fetch, accepting existing type-tagged arguments or raw built events with SDK
+  construction once. CSR needs no handoff or direct initial event prerequisite.
+  Later comparison IDs and same-ID Retry use ordinary event-free fetch without
+  builders, hooks or replay; incoming replay delivery retry remains queue-owned.
+- Standalone Identify and CUSTOM TRACK use fresh nonpage intent through ordinary
+  fetch, with no local handoff or commit. Navigation still carries page intent.
+  Preserve URL intent without repeating initial identify; blocked nonpage events
+  do not replay automatically on consent grant.
+- Retain accepted aggregate replay identity across newer initialization within the
+  owner lifetime; serialized A after B is refused for page/nonpage intent without
+  state/event republication, recommit or fallback. New visitors/actions need fresh
+  message IDs. Reset/destroy clear this history; consent withdrawal does not restore
+  accepted/blocked intent on grant.
+- Reset removes old attributed DOM, invalidates route/identify ownership and
+  detaches old visitor work before SDK reset and a fresh page/fetch cycle. Check
+  ownership after awaits and before further fetch, admission or UI work. Keep per-ID
+  content errors separate from event outcomes; refusal does not block valid content.
+- Consent subscriptions update Utilities only and remain caller-owned. No profile
+  subscription refreshes content. XDA always forces XPAPI preflight; local adoption,
+  storage, admission and generic SDK success do not commit provisional profiles.
+  Keep consent context and use the default Web browser provider's commented omission
+  of title/hash/width/height. Custom providers/arguments remain caller-owned; add no
+  instance wrappers or event sanitizers. Refresh installed SDK artifacts. See
+  [XDA preflight and profile finalization](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
+  XPAPI is actual commit transport; retain no standalone XPAPI preparation workflow.
 - Automatic tracking uses the existing getTrackingAttributes helper on each plan
   container and each node's roots. Web fetches request source maps automatically
   while any automatic type is enabled. Do not restore application lookup maps,
@@ -60,9 +84,9 @@ element, { data })` after DOM insertion, following Optimization. Use each card's
   innermost real scope; there are no Record view/click controls or automatic scope
   attributes. Release explicit registrations after DOM removal when replacing
   content. The SDK owns measurement and consent; do not add app observers.
-  Page Two's separate custom action uses `sdk.track`. An attempt is not delivery success.
+  Page Two's CUSTOM TRACK action supplies literal nonpage track arguments through ordinary Web fetch. Navigation still carries a page; evaluation does not prove commitment.
 - Subscribe to eventStream before initial page and retain that one sidebar
-  subscription across routes. Count notifications, including repeated XDA messages,
+  subscription across routes. Count every actual notification, including repeated message IDs,
   and group only actual view/hover interval IDs. Keep event text safe and dispose
   caller-owned subscription/age timer before destroying the SDK.
 

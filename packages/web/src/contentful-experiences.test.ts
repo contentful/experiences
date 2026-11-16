@@ -5,7 +5,6 @@ import {
   PROFILE_CACHE_KEY,
   type EventProfile,
 } from '@contentful/experiences-runtime';
-import { serializePersonalization } from '@contentful/experiences-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContentfulExperiences, type Config } from './contentful-experiences.js';
@@ -99,19 +98,16 @@ describe('Web ContentfulExperiences', () => {
         path: '/first',
         query: { utm_source: 'search', tag: ['one', 'two'] },
         search: '?utm_source=search&tag=one&tag=two',
-        hash: '#details',
-        title: 'First page',
-        width: window.innerWidth,
-        height: window.innerHeight,
       },
     });
     expect(second.context.page).toMatchObject({
       path: '/second',
       query: { campaign: 'spring' },
-      hash: '#top',
-      title: 'Second page',
     });
     expect(second.context.campaign).toEqual({});
+    const page = runtime.eventBuilder.buildPageView();
+    expect(page.context.page!.title).toBeUndefined();
+    expect(page.properties.title).toBe('');
   });
 
   it('allows browser context providers to redact page and user-agent data', () => {
@@ -259,7 +255,7 @@ describe('Web ContentfulExperiences', () => {
     };
 
     await runtime.fetchExperience(
-      { experienceId: 'personalized', personalization: serializePersonalization(personalization) },
+      { experienceId: 'personalized', personalization },
       { config: { components: {} } }
     );
 
@@ -268,7 +264,7 @@ describe('Web ContentfulExperiences', () => {
       {
         experienceId: 'personalized',
         extensions: { sourceMap: {} },
-        personalization: serializePersonalization(personalization),
+        personalization,
       },
       { config: { components: {} } }
     );
@@ -655,11 +651,14 @@ describe('Web ContentfulExperiences consent on pre-built events', () => {
   it('drops caller-built fetchExperience events that consent does not admit', async () => {
     const onEventBlocked = vi.fn();
     const runtime = createRuntime({ onEventBlocked });
+    runtime.consent({ events: true });
     const fetch = vi
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
     const page = runtime.eventBuilder.buildPageView();
     const track = runtime.eventBuilder.buildTrack({ event: 'purchase' });
+    const original = globalThis.structuredClone([page, track]);
+    runtime.consent({ events: false });
 
     await runtime.fetchExperience(
       {
@@ -673,22 +672,31 @@ describe('Web ContentfulExperiences consent on pre-built events', () => {
       {
         experienceId: 'personalized',
         extensions: { sourceMap: {} },
-        personalization: serializePersonalization({ profileId: 'profile-1', events: [page] }),
+        personalization: {
+          profileId: 'profile-1',
+          events: [{ ...page, context: { ...page.context, gdpr: { isConsentGiven: false } } }],
+        },
       },
       { config: { components: {} } }
     );
     expect(onEventBlocked).toHaveBeenCalledWith(
       expect.objectContaining({ reason: 'consent', method: 'track' })
     );
+    expect(runtime.states.eventStream.current).toMatchObject({
+      context: { gdpr: { isConsentGiven: false } },
+    });
+    expect([page, track]).toEqual(original);
+    expect(page.context.gdpr?.isConsentGiven).toBe(true);
   });
 
   it('forwards every caller-built event once event consent is granted', async () => {
     const runtime = createRuntime();
-    runtime.consent({ events: true });
     const fetch = vi
       .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockResolvedValue({ nodes: [] } as never);
     const track = runtime.eventBuilder.buildTrack({ event: 'purchase' });
+    const original = globalThis.structuredClone(track);
+    runtime.consent({ events: true });
 
     await runtime.fetchExperience(
       {
@@ -697,12 +705,16 @@ describe('Web ContentfulExperiences consent on pre-built events', () => {
       },
       { config: { components: {} } }
     );
+    expect(track).toEqual(original);
+    expect(track.context.gdpr?.isConsentGiven).toBe(false);
 
     expect(fetch).toHaveBeenCalledWith(
       {
         experienceId: 'personalized',
         extensions: { sourceMap: {} },
-        personalization: serializePersonalization({ events: [track] }),
+        personalization: {
+          events: [{ ...track, context: { ...track.context, gdpr: { isConsentGiven: true } } }],
+        },
       },
       { config: { components: {} } }
     );
