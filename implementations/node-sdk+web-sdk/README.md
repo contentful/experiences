@@ -543,10 +543,13 @@ are described above.
   `scripts/build-browser-implementation-assets.mts` using this app's Vite and dotenv.
   It copies only the installed Web UMD/map and built shared
   module to generated `public/dist`, then uses Vite with `emptyOutDir: false`
-  to build `rich-text.js`. No environment settings or source checkout paths are
-  used as bundle inputs.
-- `scripts/preview.ts`: app-local optional-package entry; the server and browser
-  use binding parsing from the shared `scripts/implementation-preview.mts`.
+  to build `rich-text.js` and `preview.js` from app-owned entries. SDK imports
+  resolve from installed packages; the app's preview-enabled build flag excludes
+  optional preview assets when disabled.
+- `src/preview.ts`: app-local browser entry for the installed Web SDK's isolated
+  `/preview-session-binding` helper and lazy optional-package loader. Node supplies request query parameters;
+  Web reads current browser parameters. Application runtime code consumes only
+  app-local modules and installed packages; shared repository scripts run at build time.
 - `scripts/rich-text.ts`: Contentful Rich Text HTML renderer and the public Web
   `tracking-attributes` helper exports used by the browser renderer.
 - `public/css/theme.css`: local copy of the Experiences Web theme, retaining

@@ -40,6 +40,34 @@ fetching. Resolved plans retain all resolver diagnostics without discarding usab
 content. Its optional `data` and `error` may appear together: a new plan can carry
 an existing source error. Connection status comes from `states.preview`.
 
+For query-based sessions, import `getPreviewSessionBinding` from the Web SDK.
+Its thin wrapper uses Runtime's [query parsing contract](../runtime/README.md#preview-session-query-binding)
+and exports the same `PreviewSessionBinding` type:
+
+```ts
+import { getPreviewSessionBinding } from '@contentful/experiences-web/preview-session-binding';
+
+const binding = getPreviewSessionBinding({ experienceId });
+// Inspect a navigation destination before changing the current location:
+const destinationBinding = getPreviewSessionBinding({ experienceId }, destinationUrl.searchParams);
+```
+
+The argument order is `getPreviewSessionBinding(defaults, searchParams?)`.
+The helper and type are also exported from the package root. The isolated
+`/preview-session-binding` entry avoids loading unrelated SDK state and schemas.
+Omitting the second argument constructs `new URLSearchParams(window.location.search)`
+at each invocation and requires a browser context. Outside a browser, omitting it
+throws an error asking for explicit `searchParams`. Imports read no browser globals;
+explicit parameters override the current location. Defaults contain `experienceId`
+and optional `sessionHost`/`resourceResolution`, with no Session ID or environment
+fallback. Missing or empty Session IDs return `undefined`.
+
+Applications gate helper calls using their deployment policy, then pass
+`binding ? { ...binding, loadImplementation } : undefined` as `livePreview`.
+The helper does not load the optional package, watch navigation or manage session/mode
+lifetime. It is a package export; the UMD constructor surface is unchanged.
+Known IDs can still configure `livePreview` directly, as below:
+
 ```ts
 const sdk = new ContentfulExperiences({
   ...browserConfig,

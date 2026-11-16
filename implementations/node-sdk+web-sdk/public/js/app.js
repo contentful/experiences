@@ -1,4 +1,4 @@
-import { createPreviewInitializer, getPreviewBinding } from '/dist/preview.js';
+import { getPreviewSessionBinding, loadPreviewImplementation } from '/dist/preview.js';
 import { createRoutes } from '/dist/shared.js';
 import { createControlPanel } from './control-panel.js';
 import { renderExperience } from './experiences.js';
@@ -53,7 +53,9 @@ async function activate() {
       preview: environment.LIVE_PREVIEW
         ? { accessToken: environment.LIVE_PREVIEW.accessToken, host: environment.LIVE_PREVIEW.host }
         : undefined,
-      livePreview: createPreviewInitializer(previewBinding),
+      livePreview: previewBinding
+        ? { ...previewBinding, loadImplementation: loadPreviewImplementation }
+        : undefined,
       isPreview: Boolean(previewBinding),
       cookie: { path: '/', sameSite: 'lax', secure: location.protocol === 'https:', expires: 365 },
     });
@@ -269,7 +271,9 @@ function createDestinations(route) {
 // Reference app: fetch route content; generation guards stale work.
 async function renderRoute({ sendPage = false, events, reset = false, focus = false } = {}) {
   if (disposed) return;
-  const nextBinding = getPreviewBinding(environment, location.href);
+  const nextBinding = environment.LIVE_PREVIEW
+    ? getPreviewSessionBinding(environment.LIVE_PREVIEW)
+    : undefined;
   const nextIsPreview = Boolean(nextBinding);
   if (nextIsPreview !== sdk.isPreview) {
     location.reload();
@@ -306,7 +310,10 @@ async function renderRoute({ sendPage = false, events, reset = false, focus = fa
   try {
     if (sdk.isPreview) {
       if (nextBinding && JSON.stringify(nextBinding) !== JSON.stringify(previewBinding)) {
-        await sdk.replaceLivePreview(createPreviewInitializer(nextBinding));
+        await sdk.replaceLivePreview({
+          ...nextBinding,
+          loadImplementation: loadPreviewImplementation,
+        });
         if (!isCurrent()) return;
         previewBinding = nextBinding;
       }

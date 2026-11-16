@@ -2,7 +2,7 @@ import { defineConfig } from 'tsup';
 import packageJson from './package.json';
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/sdk-info.ts'],
+  entry: ['src/index.ts', 'src/sdk-info.ts', 'src/preview-session-binding.ts'],
   format: ['esm', 'cjs'],
   dts: true,
   clean: true,

@@ -327,8 +327,10 @@ uncommitted pending upstream service support. It has no Node server handoff.
   and renders live Rich Text documents. The same tiny ES module also exports the
   installed SDK's pure tracking-attribute helper and clickable constant; the UMD
   constructor distribution is unchanged.
-- `scripts/preview.ts`: app-local optional-package entry; binding parsing and preview
-  configuration construction live in the shared `scripts/implementation-preview.mts`.
+- `src/preview.ts`: app-local browser entry for the installed Web SDK's isolated
+  `/preview-session-binding` helper and lazy optional-package loader. Web reads
+  current browser parameters. Application runtime code consumes only
+  app-local modules and installed packages; shared repository scripts run at build time.
 - `public/index.html` and `public/js/app.js`: common shell, route headers and shared
   content layout. Native templates also supply cards, event rows
   and status messages; `templates.js` clones their markup while the rendering

@@ -1,4 +1,5 @@
 export { getPageProperties, getUserAgent } from './browser-event-context.js';
+export { getPreviewSessionBinding } from './preview-session-binding.js';
 export { ContentfulExperiences } from './contentful-experiences.js';
 export type {
   EventContextProviders,
@@ -66,6 +67,7 @@ export type {
   ResolveDefaults,
   ResolveOptions,
   RuntimeLivePreviewOptions,
+  PreviewSessionBinding,
   RuntimeLivePreviewBinding,
   RuntimeLivePreviewModule,
   RuntimePreviewClient,
