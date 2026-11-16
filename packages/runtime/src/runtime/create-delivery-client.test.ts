@@ -84,10 +84,23 @@ describe('createDeliveryClient', () => {
     });
   });
 
-  it('rejects missing token and proxy host at runtime', () => {
-    expect(() => createDeliveryClient({} as never, identity)).toThrow(
-      'requires accessToken unless an explicit proxy host is provided'
-    );
-    expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
-  });
+  it.each([
+    [
+      'delivery',
+      'delivery requires delivery.accessToken or an explicit trusted proxy delivery.host.',
+    ],
+    [
+      'preview',
+      'preview requires preview.accessToken or an explicit trusted proxy preview.host. ' +
+        'preview.sessionHost does not supply API authentication.',
+    ],
+  ] as const)(
+    'identifies missing %s credentials before constructing the client',
+    (configuration, message) => {
+      expect(() =>
+        createDeliveryClient({} as never, identity, undefined, undefined, configuration)
+      ).toThrow(message);
+      expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
+    }
+  );
 });

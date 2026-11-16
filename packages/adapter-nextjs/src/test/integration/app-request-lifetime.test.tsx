@@ -10,7 +10,7 @@ import {
   PERSISTENCE_CONSENT_CACHE_KEY,
 } from '@contentful/experiences-runtime';
 import { ContentfulExperiences, createWebSnapshotRuntime } from '@contentful/experiences-web';
-import { act, StrictMode } from 'react';
+import { act, startTransition, StrictMode, Suspense } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -288,7 +288,7 @@ describe('request-to-browser lifetime', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('adopts each server preparation once without redundant Web content fetches', async () => {
+  it('adopts each committed server preparation once without redundant Web content fetches', async () => {
     const sdk = new ContentfulExperiences({
       spaceId: 'space',
       environmentId: 'master',
@@ -335,18 +335,31 @@ describe('request-to-browser lifetime', () => {
         },
       },
     });
-    const render = async (value: ReturnType<typeof result>) => {
+    const suspended = vi.fn();
+    const pending = new Promise<void>(() => {});
+    function Suspend(): never {
+      suspended();
+      throw pending;
+    }
+    const render = async (value: ReturnType<typeof result>, suspend = false) => {
       await act(async () =>
-        root.render(
-          <bound.request.ExperiencesRoot sdk={sdk} result={value} pageMode="analytics">
-            <bound.request.Experience result={value}>
-              {(state) => (
-                <output>
-                  {state.error ? 'Unavailable' : String(state.data?.metadata.label ?? 'Waiting')}
-                </output>
-              )}
-            </bound.request.Experience>
-          </bound.request.ExperiencesRoot>
+        startTransition(() =>
+          root.render(
+            <Suspense fallback="Waiting">
+              <bound.request.ExperiencesRoot sdk={sdk} result={value} pageMode="analytics">
+                {suspend && <Suspend />}
+                <bound.request.Experience result={value}>
+                  {(state) => (
+                    <output>
+                      {state.error
+                        ? 'Unavailable'
+                        : String(state.data?.metadata.label ?? 'Waiting')}
+                    </output>
+                  )}
+                </bound.request.Experience>
+              </bound.request.ExperiencesRoot>
+            </Suspense>
+          )
         )
       );
       await act(async () => sdk.flush());
@@ -356,6 +369,13 @@ describe('request-to-browser lifetime', () => {
     expect(container.textContent).toBe('Initial server plan');
     expect(send).toHaveBeenCalledTimes(1);
     await render(JSON.parse(JSON.stringify(initial)));
+    expect(send).toHaveBeenCalledTimes(1);
+    navigation.pathname = '/abandoned';
+    navigation.search = '';
+    window.history.replaceState(null, '', '/abandoned');
+    await render(result('/abandoned', 'abandoned', 'Abandoned server plan'), true);
+    expect(suspended).toHaveBeenCalled();
+    expect(container.textContent).toBe('Initial server plan');
     expect(send).toHaveBeenCalledTimes(1);
     navigation.pathname = '/destination';
     navigation.search = '';

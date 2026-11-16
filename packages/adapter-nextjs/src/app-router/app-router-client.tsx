@@ -61,8 +61,11 @@ export function useAppAutoPageInputs() {
     return { pathname: url.pathname, routeKey, search: url.search };
   }, [routerPathname, search]);
   const [confirmed, setConfirmed] = useState<typeof candidate>();
+  // SSR and initial hydration use router inputs before consulting browser history.
   const browserRoute =
-    typeof window === 'undefined' ? undefined : createRouteKey(window.location.href);
+    confirmed === undefined || typeof window === 'undefined'
+      ? undefined
+      : createRouteKey(window.location.href);
   useEffect(() => {
     if (createRouteKey(window.location.href) === candidate.routeKey)
       setConfirmed((previous) =>

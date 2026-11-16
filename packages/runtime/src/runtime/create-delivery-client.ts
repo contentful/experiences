@@ -36,7 +36,8 @@ export function createDeliveryClient(
   options: DeliveryClientOptions,
   identity: DeliveryClientIdentity,
   defaultHost?: NonNullable<ContentfulViewDeliveryClient.Options['baseUrl']>,
-  defaultHeaders?: Record<string, string>
+  defaultHeaders?: Record<string, string>,
+  configuration: 'delivery' | 'preview' = 'delivery'
 ): ContentfulViewDeliveryClient {
   const { accessToken, host, ...configured } = options;
   const rest =
@@ -45,7 +46,10 @@ export function createDeliveryClient(
       : { ...configured, headers: { ...defaultHeaders, ...configured.headers } };
   if (accessToken === undefined && host === undefined) {
     throw new Error(
-      'Runtime delivery configuration requires accessToken unless an explicit proxy host is provided'
+      `${configuration} requires ${configuration}.accessToken or an explicit trusted proxy ${configuration}.host.` +
+        (configuration === 'preview'
+          ? ' preview.sessionHost does not supply API authentication.'
+          : '')
     );
   }
 

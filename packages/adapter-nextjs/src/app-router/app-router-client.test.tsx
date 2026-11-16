@@ -5,8 +5,8 @@ import {
   type States,
 } from '@contentful/experiences-web';
 import { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { createRoot, hydrateRoot, type Root } from 'react-dom/client';
+import { renderToStaticMarkup, renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RequestPresentation } from '../presentation/router-lifetime.js';
 import {
@@ -82,6 +82,31 @@ describe('native adapter owner', () => {
       search: '?q=changed&tag=c&tag=d',
       query: { q: 'changed', tag: ['c', 'd'] },
     });
+  });
+
+  it('hydrates the router route even when browser history has already changed', async () => {
+    function Route() {
+      const { routeKey } = useAppAutoPageInputs();
+      return <output>{routeKey}</output>;
+    }
+    await act(async () => root.unmount());
+    const browserWindow = window;
+    let html: string;
+    vi.stubGlobal('window', undefined);
+    try {
+      html = renderToString(<Route />);
+    } finally {
+      vi.stubGlobal('window', browserWindow);
+    }
+    container.innerHTML = html;
+    window.history.replaceState(null, '', '/destination?q=changed');
+    const onRecoverableError = vi.fn();
+    await act(async () => {
+      root = hydrateRoot(container, <Route />, { onRecoverableError });
+    });
+    expect(container.innerHTML).toBe(html);
+    expect(container.textContent).toBe('/page?q=hello+world');
+    expect(onRecoverableError).not.toHaveBeenCalled();
   });
 
   it.each(['/selected', 'https://example.com/outside'])(

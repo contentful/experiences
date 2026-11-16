@@ -997,6 +997,13 @@ redirect/not-found decisions; put URL-dependent roots in a page or fresh templat
 not a retained server layout. Optional content uses raw loader decisions followed
 by the appropriate client request root or ordinary/supplied-plan composition.
 
+### Undefined Next Preview overrides (fixed)
+
+Partial browser Preview overrides previously erased configured credentials and
+context when a supplied key was explicitly `undefined`. Next now merges only
+defined values. Active Preview still requires its own credentials or a trusted
+proxy; `sessionHost` alone does not provide API authentication.
+
 ### Managed page consent retry
 
 Web's current-page tracker owns XDA page admission and deduplication. React supplies

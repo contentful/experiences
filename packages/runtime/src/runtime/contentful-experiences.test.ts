@@ -230,7 +230,8 @@ describe('ContentfulExperiences', () => {
       { accessToken: 'preview' },
       { spaceId: 'space', environmentId: 'env' },
       'https://preview.xdn.contentful.com',
-      userAgentHeaders
+      userAgentHeaders,
+      'preview'
     );
     await runtime.resolveExperience(
       { sys: { type: 'Experience' }, nodes: [] },
@@ -426,7 +427,8 @@ describe('ContentfulExperiences', () => {
       },
       { spaceId: 'space', environmentId: 'env' },
       'https://preview.xdn.contentful.com',
-      userAgentHeaders
+      userAgentHeaders,
+      'preview'
     );
   });
 
@@ -453,7 +455,8 @@ describe('ContentfulExperiences', () => {
       },
       { spaceId: 'space', environmentId: 'env' },
       'https://preview.xdn.contentful.com',
-      userAgentHeaders
+      userAgentHeaders,
+      'preview'
     );
   });
 

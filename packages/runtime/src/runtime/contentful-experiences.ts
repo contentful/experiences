@@ -221,7 +221,8 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
         transport,
         identity,
         PREVIEW_HOST,
-        userAgentHeaders
+        userAgentHeaders,
+        'preview'
       );
     }
     this.api = createOptimizationClient({

@@ -110,13 +110,20 @@ describe('managed Next Live Preview', () => {
       window.history.replaceState(null, '', route.path + route.search);
       await act(async () =>
         root.render(
-          <BoundRoot>
+          <BoundRoot
+            preview={
+              configured
+                ? { accessToken: undefined, createClient: undefined, sessionHost: undefined }
+                : undefined
+            }
+          >
             <Probe />
           </BoundRoot>
         )
       );
       expect(sdk.isPreview).toBe(configured);
       expect(sdk.config.preview !== undefined).toBe(configured);
+      if (configured) expect(sdk.config.preview).toMatchObject(options.preview!);
       expect(network).not.toHaveBeenCalled();
     }
   );
