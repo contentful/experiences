@@ -12,11 +12,7 @@ export default function App({
   if (!pageProps.environment) return <Component {...pageProps} />;
   if ('singleExperience' in pageProps) {
     return (
-      <ExperiencesRoot
-        {...pageProps.environment.web}
-        isPreview={false}
-        result={pageProps.experiences}
-      >
+      <ExperiencesRoot {...pageProps.environment.web} result={pageProps.experiences}>
         <Component {...pageProps} />
       </ExperiencesRoot>
     );

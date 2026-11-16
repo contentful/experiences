@@ -95,4 +95,19 @@ describe('Next request presentation inputs', () => {
     expect(override).toHaveBeenCalledTimes(source === 'override' ? 1 : 0);
     expect(buildRoutePayload).toHaveBeenCalledTimes(!waiting && expected === 'route' ? 1 : 0);
   });
+  it('retains explicit root handoff and static page arguments without a request result', () => {
+    const Root = vi.fn((_props: BoundNextjsExperiencesRootProps) => <></>);
+    renderToStaticMarkup(
+      <NextjsRequestPresentation
+        Root={Root}
+        routeKey="/explicit"
+        handoff={result.handoff}
+        initialPagePayload={initialPagePayload}
+        buildRoutePayload={() => ({ properties: { path: '/route' } })}
+      />
+    );
+    const captured = Root.mock.calls[0]![0];
+    expect(captured.handoff).toBe(result.handoff);
+    expect(captured.buildPagePayload?.({ isInitialEmission: true })).toEqual(initialPagePayload);
+  });
 });

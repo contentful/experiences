@@ -1,11 +1,12 @@
 import type { TrackingAttribution } from './attribution.js';
-import type { InteractionKey } from './interaction-detector.js';
+import { toInteractionArgs, type InteractionKey } from './interaction-detector.js';
 import { TRACKING_SCOPES_ATTRIBUTE } from '../tracking-attributes.js';
 
 export const TRACKING_ATTRIBUTION_ATTRIBUTE = 'data-ctfl-attribution';
 
 type AutomaticKey = Extract<InteractionKey, object>;
 const boundaries = new WeakMap<Element, { raw: string; keys: Map<string, AutomaticKey> }>();
+const manualViews = new WeakMap<Element, { signature: string; key: AutomaticKey }>();
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -45,9 +46,9 @@ function parseAttribution(value: unknown): TrackingAttribution | undefined {
 }
 
 /** One weak cache entry per DOM boundary; replacing metadata retires its old keys. */
-export function readAutomaticKeys(element: Element): AutomaticKey[] {
+function readBoundaryKeys(element: Element): Map<string, AutomaticKey> | undefined {
   const boundary = element.closest(`[${TRACKING_ATTRIBUTION_ATTRIBUTE}]`);
-  if (!boundary) return [];
+  if (!boundary) return undefined;
   const raw = boundary.getAttribute(TRACKING_ATTRIBUTION_ATTRIBUTE)!;
   let cached = boundaries.get(boundary);
   if (cached?.raw !== raw) {
@@ -66,7 +67,26 @@ export function readAutomaticKeys(element: Element): AutomaticKey[] {
     cached = { raw, keys };
     boundaries.set(boundary, cached);
   }
+  return cached.keys;
+}
+
+export function readAutomaticKeys(element: Element): AutomaticKey[] {
+  const keys = readBoundaryKeys(element);
   return (element.getAttribute(TRACKING_SCOPES_ATTRIBUTE) ?? '')
     .split(/\s+/)
-    .flatMap((key) => cached.keys.get(key) ?? []);
+    .flatMap((key) => keys?.get(key) ?? []);
+}
+
+/** Each marked root measures only its final raw scope, independently of sibling roots. */
+export function readManualViewKey(element: Element): AutomaticKey | undefined {
+  const localKey = element.getAttribute(TRACKING_SCOPES_ATTRIBUTE)?.trim().split(/\s+/).at(-1);
+  const selected = localKey ? readBoundaryKeys(element)?.get(localKey) : undefined;
+  if (!selected) return undefined;
+  const signature = JSON.stringify(toInteractionArgs(selected.attribution));
+  let cached = manualViews.get(element);
+  if (cached?.signature !== signature) {
+    cached = { signature, key: { ...selected } };
+    manualViews.set(element, cached);
+  }
+  return cached.key;
 }

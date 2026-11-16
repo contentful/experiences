@@ -45,6 +45,18 @@ export function previewBinding(environment: BrowserEnvironment, url: URL) {
     : undefined;
 }
 
+export function primaryExperience(
+  environment: BrowserEnvironment,
+  url: URL,
+  fallbackExperienceId: string
+) {
+  const preview = previewBinding(environment, url);
+  return {
+    experienceId: preview?.experienceId || fallbackExperienceId,
+    ...(preview ? {} : { extensions: { sourceMap: {} } }),
+  };
+}
+
 export function previewConfiguration(binding: ReturnType<typeof previewBinding>) {
   return binding
     ? {

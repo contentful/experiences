@@ -14,7 +14,7 @@ import {
   NEXTJS_EXPERIENCES_REQUEST_URL_HEADER,
 } from '@contentful/experiences-nextjs/server';
 import { getServer } from './config';
-import { routeIds } from './reference';
+import { primaryExperience, routeIds } from './reference';
 import { experienceConfig } from './components/ExperienceContent';
 import { AppBrowserRoot } from './components/BrowserRoot';
 import {
@@ -34,18 +34,30 @@ export const loadServerPage = cache(async () => {
   if (!forwarded) throw new Error('Configure the Experiences middleware before loading this page.');
   const url = new URL(forwarded);
   const serverOnly = url.searchParams.get('mode') === 'server-only';
-  const experience = {
-    experienceId: routeIds(url.pathname, browser.experienceIds)[0],
-    ...(serverPreview(url) ? {} : { extensions: { sourceMap: {} } }),
-  };
+  const experience = primaryExperience(
+    browser,
+    url,
+    routeIds(url.pathname, browser.experienceIds)[0]
+  );
   let comparisons: ServerContent[] = [];
   const binding = bindNextjsAppRouterServerExperiences({
     ...nodeConfig,
     config: experienceConfig,
+    browser: {
+      delivery: browser.web.delivery,
+      ...(browser.web.preview ? { preview: browser.web.preview } : {}),
+    },
     consent: { server: ({ cookies }) => readConsent(cookies) },
-    livePreview: ({ request }) => serverPreview(new URL(request.url)),
+    livePreview: {
+      ...browser.livePreview,
+      enabled: Boolean(browser.livePreview),
+      loadImplementation: () => import('@contentful/experiences-live-preview'),
+    },
     request: {
-      experience,
+      experience: ({ requestUrl }) => {
+        const url = new URL(requestUrl);
+        return primaryExperience(browser, url, routeIds(url.pathname, browser.experienceIds)[0]);
+      },
       initialEvents: ({ requestUrl, headers }) =>
         headers.get('rsc') !== '1' && new URL(requestUrl).searchParams.get('userId') === 'charles'
           ? [{ type: 'identify', userId: 'charles', traits: { identified: true } }]

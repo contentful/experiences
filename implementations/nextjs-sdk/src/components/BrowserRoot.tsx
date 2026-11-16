@@ -1,5 +1,7 @@
 'use client';
 
+export { ManualViewTracking } from '@contentful/experiences-nextjs/client';
+
 import {
   bindNextjsAppRouterClientExperiences,
   useNextAppAutoPageInputs,
@@ -15,12 +17,11 @@ import {
   createContext,
   useContext,
   useEffect,
-  useMemo,
   useState,
   type ComponentType,
   type ReactNode,
 } from 'react';
-import { previewBinding, previewConfiguration, type BrowserEnvironment } from '../reference';
+import { previewBinding, routeIds, type BrowserEnvironment } from '../reference';
 import { browserRegistry } from './browser-registry';
 import { createAttemptLog, type AttemptLog } from './attempt-log';
 import { ConsentMirror } from './ConsentMirror';
@@ -47,7 +48,15 @@ export function AppBrowserRoot({
   ...props
 }: BoundNextjsRequestRootProps & { environment: BrowserEnvironment }) {
   const [app] = useState(() =>
-    bindNextjsAppRouterClientExperiences({ ...environment.web, config: browserRegistry })
+    bindNextjsAppRouterClientExperiences({
+      ...environment.web,
+      config: browserRegistry,
+      livePreview: {
+        ...environment.livePreview,
+        enabled: Boolean(environment.livePreview),
+        loadImplementation: () => import('@contentful/experiences-live-preview'),
+      },
+    })
   );
   const router = useAppRouter();
   const { routeKey } = useNextAppAutoPageInputs();
@@ -77,7 +86,15 @@ export function PagesBrowserRoot({
   ...props
 }: BoundNextjsRequestRootProps & { environment: BrowserEnvironment }) {
   const [pages] = useState(() =>
-    bindNextjsPagesRouterExperiences({ ...environment.web, config: browserRegistry })
+    bindNextjsPagesRouterExperiences({
+      ...environment.web,
+      config: browserRegistry,
+      livePreview: {
+        ...environment.livePreview,
+        enabled: Boolean(environment.livePreview),
+        loadImplementation: () => import('@contentful/experiences-live-preview'),
+      },
+    })
   );
   const router = usePagesRouter();
   const routeKey = router.asPath || props.result?.routeKey || '/pages';
@@ -115,18 +132,17 @@ function ReferenceBrowserRoot({
     AnalyticsRoot: ComponentType<BoundNextjsRequestRootProps>;
   }) {
   const url = new URL(currentRouteKey, 'https://nextjs.invalid');
-  const binding = previewBinding(environment, url);
-  const previewKey = JSON.stringify(binding);
-  const livePreview = useMemo(() => previewConfiguration(binding), [previewKey]);
+  const preview = previewBinding(environment, url);
   const [log] = useState(createAttemptLog);
   const serverOnly = url.searchParams.get('mode') === 'server-only';
   const ExperiencesRoot = serverOnly ? AnalyticsRoot : ContentRoot;
   return (
     <ExperiencesRoot
       {...props}
-      key={previewKey ?? 'ordinary'}
-      isPreview={Boolean(binding)}
-      livePreview={livePreview}
+      livePreview={{
+        enabled: Boolean(environment.livePreview),
+        experienceId: preview?.experienceId ?? routeIds(url.pathname, environment.experienceIds)[0],
+      }}
       onStatesReady={log.onStatesReady}
     >
       <ReferenceContext.Provider

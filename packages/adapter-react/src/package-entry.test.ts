@@ -149,7 +149,7 @@ describe('published package entry points', () => {
           createReactExperiences, useExperiences, useExperiencesContext,
           useExperiencesActions, useConsentState, usePreviewState,
           type OnExperienceNodeRoot, type PortableRenderPlan, type ManagedExperienceResult,
-          Experience as UnboundExperience
+          Experience as UnboundExperience, ManualViewTracking
         } from '@contentful/experiences-react/client';
         import { createExperiencesRootSdkBinding, disposeExperiencesRootSdkBinding }
           from '@contentful/experiences-react/host';
@@ -185,6 +185,8 @@ describe('published package entry points', () => {
           const track: WebExperiencesRuntime['track'] = trackEvent;
           const locale: WebExperiencesRuntime['setLocale'] = setLocale;
           void [consent, preview, context, track, locale, setConsent];
+          const boundary = <ManualViewTracking className="manual"><article /></ManualViewTracking>;
+          void boundary;
           const content = useManagedExperience({ experienceId: 'experience', initialPlan: plan, initialError,
             personalization: { events: [{ type: 'identify', userId: 'visitor' }, { type: 'page' }] } });
           const refresh: () => Promise<void> = content.refresh;

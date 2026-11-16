@@ -14,7 +14,10 @@ import type { NextjsBrowserConfig } from './browser-config.js';
 import type { NextjsCookieConfig } from './cookies.js';
 import type { NextjsCookieReader, NextjsRequestLike } from './request-context.js';
 import type { NextjsRequestResult } from './request-result.js';
+import type { NextjsLivePreviewConfig } from './live-preview.js';
 import { serializeNextjsJsonForHtml, serializeNextjsPlan } from './serialization.js';
+
+export type { NextjsLivePreviewConfig, NextjsLivePreviewOptions } from './live-preview.js';
 
 export interface NextjsServerRequestContext {
   readonly request: NextjsRequestLike;
@@ -58,9 +61,11 @@ export interface NextjsServerExperiencesConfig extends NodeConfig {
     >;
   };
   readonly cookie?: NextjsCookieConfig;
-  readonly livePreview?: (
-    context: NextjsServerRequestContext
-  ) => RuntimeLivePreviewOptions | undefined | Promise<RuntimeLivePreviewOptions | undefined>;
+  readonly livePreview?:
+    | NextjsLivePreviewConfig
+    | ((
+        context: NextjsServerRequestContext
+      ) => RuntimeLivePreviewOptions | undefined | Promise<RuntimeLivePreviewOptions | undefined>);
   readonly request?: NextjsServerRequestPolicy;
 }
 
@@ -107,6 +112,7 @@ export function serializeNextjsRequestResult(
       ...(result.contentError ? { contentError: result.contentError } : {}),
       ...(result.handoff ? { handoff: result.handoff } : {}),
       ...(result.initialPagePayload ? { initialPagePayload: result.initialPagePayload } : {}),
+      ...(result.livePreview === undefined ? {} : { livePreview: result.livePreview }),
     })
   ) as NextjsRequestResult;
 }

@@ -63,24 +63,57 @@
           background: #eee;
         }
       }
+      .control-panel__fields {
+        display: grid;
+        grid-template-columns: max-content minmax(0, 1fr) auto;
+        gap: 0.4rem 1.5rem;
+        align-items: center;
+        width: 100%;
+      }
+      .control-panel__row-value {
+        min-width: 0;
+        overflow-wrap: anywhere;
+        white-space: normal;
+      }
+      .control-panel__row-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+      }
+      @media (max-width: 640px) {
+        .control-panel__fields {
+          grid-template-columns: max-content minmax(0, 1fr);
+          gap: 0.5rem 1rem;
+        }
+        .control-panel__row-actions {
+          grid-column: 1 / -1;
+          margin-bottom: 0.5rem;
+        }
+      }
     </style>
   </head>
   <body>
     <h1>Experiences Node SDK Reference Implementation</h1>
 
     <main>
-      <section>
-        <h2>States</h2>
+      <section class="control-panel" aria-label="Utilities">
+        <h2 class="control-panel__title">Utilities</h2>
 
-        <p>
-          <% if (isPreview) { %>
-            <span>Preview snapshot; no visitor identification</span>
-          <% } else if (identifyRequested) { %>
-            <span>Identify requested</span>
-          <% } else { %>
-            <a href="/?userId=charles">Identify</a>
-          <% } %>
-        </p>
+        <div class="control-panel__fields">
+          <span class="control-panel__row-label">Live Preview</span>
+          <span class="control-panel__row-value"><%= isPreview ? 'Snapshot' : 'Off' %></span>
+          <span class="control-panel__row-actions"></span>
+          <span class="control-panel__row-label">Identify requested</span>
+          <span class="control-panel__row-value"><%= !isPreview && identifyRequested ? 'Yes' : 'No' %></span>
+          <span class="control-panel__row-actions">
+            <% if (!isPreview && !identifyRequested) { %>
+              <a href="/?userId=charles">Identify</a>
+            <% } %>
+          </span>
+        </div>
+        <% if (isPreview) { %>
+          <p class="control-panel__note">Preview snapshot; no visitor identification</p>
+        <% } %>
       </section>
 
       <section id="experiences">

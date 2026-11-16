@@ -326,7 +326,13 @@ describe('published declarations', () => {
           void [facade, primary.plan, primary.error, context.routeKey];
         }
       } });
-      const appClient = bindNextjsAppRouterClientExperiences({ config });
+      declare const previewModule: import('@contentful/experiences-runtime').RuntimeLivePreviewModule;
+      const livePreviewConfig: import('${packageName}/app-router/client').NextjsLivePreviewConfig = {
+        enabled: true, loadImplementation: async () => previewModule,
+      };
+      const appClient = bindNextjsAppRouterClientExperiences({ config, livePreview: livePreviewConfig });
+      bindAppServer({ spaceId: 'space', environmentId: 'master', delivery: { accessToken: 'server' }, config,
+        livePreview: livePreviewConfig, request: { experience: { experienceId: 'home' } } });
       // @ts-expect-error Content identity belongs to Experience, not the shared root.
       appClient.ExperiencesRoot({ experienceId: 'home' });
       // @ts-expect-error Analytics observes the SDK Preview target without a root content ID.
@@ -348,7 +354,7 @@ describe('published declarations', () => {
       };
       const pagesClient = bindNextjsPagesRouterExperiences({
         config, spaceId: 'space', environmentId: 'master',
-        delivery: { accessToken: 'browser' },
+        delivery: { accessToken: 'browser' }, livePreview: livePreviewConfig,
         consent: { clientDefaults: { consent: false, persistenceConsent: false } }
       });
       declare const result: NextjsRequestResult;

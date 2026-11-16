@@ -9,6 +9,8 @@ export type {
   ClientExperienceRendererProps as ExperienceRendererProps,
   ClientExperienceRendererProps,
 } from './rendering/client-renderer.js';
+export { ManualViewTracking } from './tracking/manual-view-tracking.js';
+export type { ManualViewTrackingProps } from './tracking/manual-view-tracking.js';
 export {
   useExperience,
   useContentfulComponent,

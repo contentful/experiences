@@ -8,6 +8,7 @@ import type {
 } from '@contentful/experiences-node';
 import * as server from './server-request.js';
 import { bindNextjsPagesRouterServerExperiences } from './pages-router-server.js';
+import type { NextjsLivePreviewConfig } from './live-preview.js';
 
 const scope = { spaceId: 'space', environmentId: 'master' };
 const plan: PortableRenderPlan = {
@@ -106,6 +107,36 @@ describe('Pages native server response helper', () => {
     context.req.url = url;
     context.locales = ['en-US', 'de-DE'];
     expect((await factory.request.loadExperience(context, options)).routeKey).toBe(routeKey);
+  });
+
+  it('wires active managed preview on data requests without serializing the loader', async () => {
+    const { context, request, bind } = setup({ 'x-nextjs-data': '1' });
+    context.req.url = '/_next/data/build/page.json?preview_session_id=session';
+    request.isPreview = true;
+    const implementation = {} as Awaited<ReturnType<NextjsLivePreviewConfig['loadImplementation']>>;
+    const loadImplementation = vi.fn(() => implementation);
+    const factory = bindNextjsPagesRouterServerExperiences({
+      ...scope,
+      delivery: { accessToken: 'test' },
+      config: { components: {} },
+      origin: 'https://example.com',
+      livePreview: { enabled: true, experienceId: 'fallback', loadImplementation },
+      request: { experience: async () => ({ experienceId: 'home' }) },
+    });
+    const result = await factory.request.loadExperience(context);
+    expect(result.livePreview).toEqual({ enabled: true });
+    expect(loadImplementation).not.toHaveBeenCalled();
+    expect(bind.mock.calls.at(-1)![1].livePreview).toEqual({
+      experienceId: 'home',
+      sessionId: 'session',
+      loadImplementation,
+    });
+    expect(bind.mock.calls.at(-1)![1].isPreview).toBe(true);
+    expect(request.fetchExperience).toHaveBeenCalledExactlyOnceWith(
+      { experienceId: 'home' },
+      { config: { components: {} } }
+    );
+    expect(request.fetchExperienceForHandoff).not.toHaveBeenCalled();
   });
 
   it('composes the raw primary on the same facade before final identity persistence', async () => {

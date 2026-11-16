@@ -32,7 +32,8 @@
     "@contentful/rich-text-types": "17.2.7",
     "next": "15.5.28",
     "server-only": "0.0.1",
-    "dotenv": "17.4.2"
+    "dotenv": "17.4.2",
+    "html-react-parser": "6.1.9"
   },
   "devDependencies": {
     "typescript": "5.9.3",

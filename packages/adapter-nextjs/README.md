@@ -248,6 +248,15 @@ For opaque server content, use the client `request.ExperiencesAnalyticsRoot`
 preserving the handoff. The application owns server rendering and round-trips.
 Analytics-only browser owners still require Delivery configuration.
 
+For manual views, wrap the selected server subtree with `ManualViewTracking` from
+`@contentful/experiences-nextjs/client`. For App RSC, re-export it by name from the
+existing client configuration module, as with the request root components, and
+import that named export in the server component. Its DOM marker survives App RSC and
+Pages HTML serialization. The Web SDK selects attribution and owns registration
+lifecycle; the browser does not take over Experience rendering. Preserve the
+rendered scope/attribution attributes and request a source map. See the
+[React manual-view boundary](../adapter-react/README.md#attributed-rendering-and-dom-roots) for behavior.
+
 Browser credentials are explicit browser-visible credentials. The designated
 public token above must have appropriate scope and endpoint CORS; otherwise use
 `delivery: { host: 'https://your-app.example/api/delivery' }` in the Pages client
@@ -260,9 +269,63 @@ configuration requires the advanced client-module binding described below.
 
 The maintained [Next reference](../../implementations/nextjs-sdk/README.md) shows
 `/single-experience` and `/pages/single-experience` beside its diagnostics.
-Phase 10 is unaccepted and current integrated validation is pending. Optional
-React Router/TanStack integration remains deferred to Phase 11; the broader
+Phases 10 and 11 are complete and accepted; reference parity validation is Phase 12; the broader
 `examples/nextjs` migration remains Phase 14.
+
+## Managed Contentful Live Preview
+
+Install the optional `@contentful/experiences-live-preview` package and configure
+the server and client bindings with a lazy loader. Normal SDK imports and
+declarations remain independent of that package.
+
+```ts
+// lib/live-preview.ts — shared configuration, with no credentials.
+export const livePreview = {
+  enabled: process.env.NEXT_PUBLIC_CONTENTFUL_LIVE_PREVIEW_ENABLED === 'true',
+  loadImplementation: () => import('@contentful/experiences-live-preview'),
+};
+```
+
+For App Router, export the client request root as well as the presentation:
+
+```tsx
+// lib/experience-client.tsx
+'use client';
+import { bindNextjsAppRouterClientExperiences } from '@contentful/experiences-nextjs/app-router/client';
+import { browserRegistry } from './browser-registry';
+import { livePreview } from './live-preview';
+
+const binding = bindNextjsAppRouterClientExperiences({ config: browserRegistry, livePreview });
+export const { ExperiencesRoot, Experience } = binding.request;
+```
+
+Add `livePreview` and `preview: { accessToken: process.env.CONTENTFUL_PREVIEW_TOKEN! }`
+to the existing App server configuration. Set an explicitly browser-visible
+`browser.preview` token separately; the frozen Preview Session helper requires
+one even when Delivery uses a trusted proxy. Use the server load/serialization and
+client request components shown in the browser-managed composition above; server
+`request.Experience` retains `ServerExperienceRenderer`. Keep context-forwarding
+middleware on the request-aware routes.
+
+For Pages, add the same `livePreview` and private Preview token to the server
+binder; add `livePreview` and the separately designated browser Preview token to
+`bindNextjsPagesRouterExperiences`. GSSP, `_app` and `<Experience result={result} />`
+stay as shown above. Both server families carry only loader-free configuration
+in the existing result; browser roots retain their client loader and derive the
+primary ID and nonempty trimmed `preview_session_id` from the descriptor and route.
+Result-backed roots infer the Preview target from their result. Advanced Web-owned
+Preview can supply `livePreview.experienceId`; shared roots have no content-ID prop.
+Optional `sessionHost` and `resourceResolution` belong to the configuration.
+
+Disabled policy or a missing session selects ordinary mode. Active sessions load
+the optional implementation, retain initial server plans without a startup refetch,
+and use existing `replaceLivePreview` for session changes. Mode entry/exit replaces
+the owned SDK below the request-history guard. No consumer preview wrapper, hook
+or key is needed. Errors appear in `states.preview`; analytics roots observe
+revisions for server refresh without browser resolution. This controls Contentful
+Live Preview content and event suppression, independently of XPAPI preflight.
+Explicit preview options and application resolvers remain available; injected SDK lifetime stays
+application-owned and does not accept managed configuration.
 
 ## Explicit supplied-plan rendering
 
@@ -424,7 +487,7 @@ The App server `request` family memoizes one primary Experience result for
 `loadExperience`, `Experience`, `ExperiencesRoot` and `ExperiencesAnalyticsRoot`.
 Request roots and presentations receive one JSON-safe `result: NextjsRequestResult`:
 `requestId`, `routeKey`, event-free `experience`, optional `plan`, `handoff`,
-`contentError` string and `initialPagePayload`. `requestId` distinguishes fresh results;
+`contentError` string, `initialPagePayload` and optional loader-free `livePreview` configuration. `requestId` distinguishes fresh results;
 request presentations accept no descriptor or seed overlays. App's `request.loadExperience` also
 retains server-local `experienceId` and raw `error`; browser projection excludes
 those fields and sanitizes the optional plan. Analytics roots omit that plan for
@@ -545,9 +608,10 @@ Both routers use `createNextjsRouteKey`: hash-only and Pages shallow changes do 
 own a page, while committed path/query changes and back/forward do. Canceled
 transitions create no new intent. Startup data is not readopted after leaving its
 initial route; existing React/SDK reset handles the current visitor. Remove old
-attributed DOM before Reset. Preview sessions deliberately replace the browser
-owner; ordinary navigation retains it. Require deployment enablement plus a
-trimmed URL session and pass `isPreview: false` in inactive cases. Browser preview
+attributed DOM before Reset. Managed Live Preview replaces the browser owner on mode entry/exit and switches
+sessions through its existing replacement API; ordinary navigation retains it.
+The managed configuration requires deployment enablement plus a trimmed URL
+session and supplies inactive `isPreview: false` internally. Browser preview
 credentials are separately designated; server implementation loaders are never serialized.
 
 ## Public cache conveniences

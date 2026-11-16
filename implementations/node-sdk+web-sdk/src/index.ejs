@@ -130,34 +130,39 @@ function content(server) { %>
             <h2 class="control-panel__title">Utilities</h2>
             <div class="control-panel__fields">
               <span class="control-panel__row-label">SDK status</span>
-              <span class="control-panel__row-value" id="browser-status" role="status" style="grid-column: 2 / -1; white-space: normal">Browser activation has not completed. Server content is ready.</span>
-              <span hidden></span>
+              <span class="control-panel__row-value" id="browser-status" role="status">Browser activation has not completed. Server content is ready.</span>
+              <span class="control-panel__row-actions"></span>
               <span class="control-panel__row-label">SDK profile</span>
               <span class="control-panel__row-value" data-testid="profile-status">Not connected</span>
-              <span></span>
+              <span class="control-panel__row-actions"></span>
               <span class="control-panel__row-label">Event consent</span>
               <span class="control-panel__row-value" data-testid="consent-status">Not connected</span>
-              <span>
+              <span class="control-panel__row-actions">
                 <button type="button" class="btn btn--sm btn--secondary" data-testid="consent-button" disabled>Grant</button>
                 <button type="button" class="btn btn--sm btn--secondary" data-testid="unconsent-button" disabled>Revoke</button>
               </span>
               <span class="control-panel__row-label">Persistence consent</span>
               <span class="control-panel__row-value" data-testid="persistence-consent-status">Not connected</span>
-              <span></span>
+              <span class="control-panel__row-actions"></span>
               <span class="control-panel__row-label">Identify requested</span>
               <span class="control-panel__row-value" data-testid="identified-status"><%= identifyRequested ? 'Yes' : 'No' %></span>
-              <span>
+              <span class="control-panel__row-actions">
                 <button type="button" class="btn btn--sm btn--secondary" data-testid="identify-button" disabled>Identify</button>
                 <button type="button" class="btn btn--sm btn--danger" data-testid="reset-button" disabled>Reset</button>
               </span>
+              <span class="control-panel__row-label">Content retry</span>
+              <span class="control-panel__row-value" role="status"></span>
+              <span class="control-panel__row-actions">
+                <button type="button" class="btn btn--sm btn--secondary" data-testid="retry-content-button" disabled>Retry content</button>
+              </span>
+              <section class="control-panel__row" aria-label="Custom event" data-custom-action <% if (path !== '/page-two') { %>hidden<% } %>>
+                <span class="control-panel__row-label">Custom event</span>
+                <span class="control-panel__row-value" role="status"></span>
+                <span class="control-panel__row-actions">
+                  <button type="button" class="btn btn--sm btn--secondary" data-testid="track-custom-action-button" disabled>Record custom action</button>
+                </span>
+              </section>
             </div>
-            <div class="control-panel__actions">
-              <button type="button" class="btn btn--sm btn--secondary" data-testid="retry-content-button" disabled>Retry content</button>
-            </div>
-            <section class="control-panel__actions" aria-label="Custom event" data-custom-action <% if (path !== '/page-two') { %>hidden<% } %>>
-              <button type="button" class="btn btn--sm btn--secondary" data-testid="track-custom-action-button" disabled>Record custom action</button>
-              <p class="control-panel__note" role="status"></p>
-            </section>
             <p class="control-panel__note">Grant/Revoke changes event and persistence consent together. The SDK allows identify and page events before event consent. Identify requested describes URL intent, not confirmed audience membership.</p>
           </section>
           <div id="route-content"><% content(true); %></div>
