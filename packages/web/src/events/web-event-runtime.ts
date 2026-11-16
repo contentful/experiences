@@ -8,11 +8,13 @@ import type { BuiltFetchOptions, PendingFetchOptions } from './fetch-personaliza
 import {
   AnalyticsDelivery,
   PersonalizationDelivery,
-  EventProfileSchema,
   hasEventConsent,
   hasEventTypeConsent,
   methodForEventType,
   warnMissingEventProfile,
+  emitPersonalizationEvent,
+  emitAnalyticsEvent,
+  type AnalyticsEventOwner,
   withEventConsent,
   type validatePreparedEvents,
   type Config as RuntimeConfig,
@@ -21,10 +23,7 @@ import {
   type BlockedEvent,
   type ConsentState,
   type EventEmissionResult,
-  type EventMethod,
   type EventMethods,
-  type PersonalizationEventMethod,
-  type AnalyticsEventMethod,
   type resolveQueuePolicy,
 } from '@contentful/experiences-runtime';
 import {
@@ -48,106 +47,78 @@ export abstract class WebEventRuntime<
   protected abstract readonly analyticsQueue: AnalyticsDelivery;
   protected abstract readonly allowedEventTypes: readonly AllowedEventType[];
   protected abstract readonly onEventBlocked: Config['onEventBlocked'];
-  readonly identify: EventMethods['identify'] = async (args) => {
-    const skipped = this.#skipEvent('identify', args);
-    if (skipped) return skipped;
-    return this.#sendPersonalizationEvent(
+  readonly #eventOwner: AnalyticsEventOwner = {
+    isActive: () => !this.destroyed,
+    getIsPreview: () => this.isPreview,
+    getConsent: () => this.getEventConsent(),
+    getAllowedEventTypes: () => this.allowedEventTypes,
+    reportBlockedEvent: (event) => this.reportBlockedEvent(event),
+    getProfile: () => profileSignal.value,
+    onMissingProfile: warnMissingEventProfile,
+  };
+
+  readonly identify: EventMethods['identify'] = (args) =>
+    emitPersonalizationEvent(
+      this.#eventOwner,
       'identify',
       args,
-      this.eventBuilder.buildIdentify({ ...args })
+      (input) => this.eventBuilder.buildIdentify(input),
+      (event) => this.personalizationQueue.send(event)
     );
-  };
 
-  readonly page: EventMethods['page'] = async (args = {}) => {
-    const skipped = this.#skipEvent('page', args);
-    if (skipped) return skipped;
-    return this.#sendPersonalizationEvent(
+  readonly page: EventMethods['page'] = (args = {}) =>
+    emitPersonalizationEvent(
+      this.#eventOwner,
       'page',
       args,
-      this.eventBuilder.buildPageView({ ...args })
+      (input) => this.eventBuilder.buildPageView(input),
+      (event) => this.personalizationQueue.send(event)
     );
-  };
 
-  readonly track: EventMethods['track'] = async (args) => {
-    const skipped = this.#skipEvent('track', args);
-    if (skipped) return skipped;
-    return this.#sendPersonalizationEvent('track', args, this.eventBuilder.buildTrack({ ...args }));
-  };
+  readonly track: EventMethods['track'] = (args) =>
+    emitPersonalizationEvent(
+      this.#eventOwner,
+      'track',
+      args,
+      (input) => this.eventBuilder.buildTrack(input),
+      (event) => this.personalizationQueue.send(event)
+    );
 
-  readonly trackView: EventMethods['trackView'] = async (args) => {
-    const skipped = this.#skipEvent('trackView', args);
-    if (skipped) return skipped;
-    if (!this.#admit('trackView', [args])) return { accepted: false };
-    return this.#sendAnalyticsEvent('trackView', args, this.eventBuilder.buildView({ ...args }));
-  };
+  readonly trackView: EventMethods['trackView'] = (args) =>
+    emitAnalyticsEvent(
+      this.#eventOwner,
+      'trackView',
+      args,
+      (input) => this.eventBuilder.buildView(input),
+      (event, profile) => this.analyticsQueue.send(event, profile)
+    );
 
-  readonly trackClick: EventMethods['trackClick'] = async (args) => {
-    const skipped = this.#skipEvent('trackClick', args);
-    if (skipped) return skipped;
-    return this.#sendAnalyticsEvent('trackClick', args, this.eventBuilder.buildClick({ ...args }));
-  };
+  readonly trackClick: EventMethods['trackClick'] = (args) =>
+    emitAnalyticsEvent(
+      this.#eventOwner,
+      'trackClick',
+      args,
+      (input) => this.eventBuilder.buildClick(input),
+      (event, profile) => this.analyticsQueue.send(event, profile)
+    );
 
-  readonly trackHover: EventMethods['trackHover'] = async (args) => {
-    const skipped = this.#skipEvent('trackHover', args);
-    if (skipped) return skipped;
-    return this.#sendAnalyticsEvent('trackHover', args, this.eventBuilder.buildHover({ ...args }));
-  };
+  readonly trackHover: EventMethods['trackHover'] = (args) =>
+    emitAnalyticsEvent(
+      this.#eventOwner,
+      'trackHover',
+      args,
+      (input) => this.eventBuilder.buildHover(input),
+      (event, profile) => this.analyticsQueue.send(event, profile)
+    );
 
-  readonly trackFlagView: EventMethods['trackFlagView'] = async (args) => {
-    const skipped = this.#skipEvent('trackFlagView', args);
-    if (skipped) return skipped;
-    return this.#sendAnalyticsEvent(
+  readonly trackFlagView: EventMethods['trackFlagView'] = (args) =>
+    emitAnalyticsEvent(
+      this.#eventOwner,
       'trackFlagView',
       args,
-      this.eventBuilder.buildFlagView({ ...args })
+      (input) => this.eventBuilder.buildFlagView(input),
+      (event, profile) => this.analyticsQueue.send(event, profile)
     );
-  };
-
-  #skipEvent(method: EventMethod, args: unknown): EventEmissionResult | undefined {
-    if (!this.eventEmissionActive) return { accepted: false };
-    if (!this.isPreview) return undefined;
-    this.reportBlockedEvent({ reason: 'preview', method, args: [args] });
-    return { accepted: false, reason: 'preview' };
-  }
-
-  #admit(method: EventMethod, args: readonly unknown[]): boolean {
-    if (hasEventConsent(method, this.getEventConsent(), this.allowedEventTypes)) return true;
-    this.reportBlockedEvent({ reason: 'consent', method, args });
-    return false;
-  }
-
-  async #sendPersonalizationEvent(
-    method: PersonalizationEventMethod,
-    args: unknown,
-    event: Parameters<PersonalizationDelivery['send']>[0]
-  ): Promise<EventEmissionResult> {
-    if (!this.#admit(method, [args])) return { accepted: false };
-    return this.personalizationQueue.send(
-      withEventConsent(event, this.getEventConsent().events === true)
-    );
-  }
-
-  async #sendAnalyticsEvent(
-    method: AnalyticsEventMethod,
-    args: unknown,
-    event: Parameters<AnalyticsDelivery['send']>[0]
-  ): Promise<EventEmissionResult> {
-    if (!this.#admit(method, [args])) return { accepted: false };
-    const profile = EventProfileSchema.safeParse(profileSignal.value);
-    if (!profile.success) {
-      warnMissingEventProfile();
-      return { accepted: true };
-    }
-    const admitted = await this.analyticsQueue.send(
-      withEventConsent(event, this.getEventConsent().events === true),
-      profile.data
-    );
-    return { accepted: admitted !== false };
-  }
-
-  protected get eventEmissionActive(): boolean {
-    return !this.destroyed;
-  }
 
   /** Whether event consent or the configured allowlist admits this method/type. */
   hasConsent(name: string): boolean {

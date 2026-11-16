@@ -8,6 +8,7 @@ export default defineConfig({
           name: 'node',
           globals: true,
           environment: 'node',
+          // The shared boundary file gates its SSR/client suites by environment.
           include: ['src/**/*.{test,spec}.{ts,tsx}'],
         },
       },

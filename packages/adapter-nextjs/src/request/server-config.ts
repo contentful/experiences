@@ -1,6 +1,7 @@
 import {
   ExperienceFetchError,
   isNotFoundError,
+  isPreviewSessionFetchError,
   type ConsentInput,
   type PreviewConfig,
   type Config as NodeConfig,
@@ -98,9 +99,13 @@ export async function resolveServerValue<T>(
     : value;
 }
 
-/** Only expected Delivery failures are content results; preparation and control flow propagate. */
+/** Expected acquisition failures are content results; preparation and control flow propagate. */
 export function isContentError(error: unknown): boolean {
-  return error instanceof ExperienceFetchError || isNotFoundError(error);
+  return (
+    error instanceof ExperienceFetchError ||
+    isNotFoundError(error) ||
+    isPreviewSessionFetchError(error)
+  );
 }
 
 /** The explicit browser config is the only credential source for built-in client roots. */

@@ -50,18 +50,14 @@ describe('useManagedExperience', () => {
     </RuntimeContext.Provider>
   );
 
-  it('rejects raw selectors before a seed can bypass normalization and fetching', () => {
+  it.each([
+    { experienceId: 'home', destinationId: 'site', path: '/' },
+    { destinationId: 'site', path: '/', parameters: {} },
+    { destinationId: 'site', nodeId: 'node', extensions: {} },
+  ])('validates raw selectors before seeded presentation (%j)', (selector) => {
     const source = sourceSdk();
     expect(() =>
-      renderToStaticMarkup(
-        content(source, {
-          experienceId: 'home',
-          destinationId: 'site',
-          path: '/',
-          config,
-          initialPlan: plan(),
-        } as never)
-      )
+      renderToStaticMarkup(content(source, { ...selector, config, initialPlan: plan() } as never))
     ).toThrow(TypeError);
     expect(source.fetchExperience).not.toHaveBeenCalled();
     expect(source.subscribeToPreview).not.toHaveBeenCalled();
@@ -94,6 +90,27 @@ describe('useManagedExperience', () => {
       )
     );
     expect(replacement).not.toHaveBeenCalled();
+  });
+
+  it('presents redirect callback failures as content errors without repeating navigation', async () => {
+    const source = sourceSdk();
+    source.fetchExperience.mockResolvedValue({ redirect: { path: '/new' } });
+    const error = new TypeError('Unsupported redirect');
+    const onRedirect = vi.fn(() => {
+      throw error;
+    });
+    const onExperienceError = vi.fn();
+    const options = { destinationId: 'site', path: '/old', config, onRedirect, onExperienceError };
+    const tree = content(source, options);
+    await act(async () => root.render(tree));
+    await act(async () => root.render(tree));
+    expect(result.status).toBe('error');
+    expect(result.error).toBe(error);
+    expect(result.redirect).toBeUndefined();
+    expect(result.data).toBeUndefined();
+    expect(onRedirect).toHaveBeenCalledOnce();
+    expect(onExperienceError).toHaveBeenCalledExactlyOnceWith(error, result);
+    expect(source.fetchExperience).toHaveBeenCalledOnce();
   });
 
   it('starts fetch only after the parent layout guard is installed, without a content-readiness gate', async () => {

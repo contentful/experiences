@@ -92,6 +92,11 @@ export class SourceController {
     return this.active && this.snapshot === snapshot;
   }
 
+  rejectRedirect(error: unknown): void {
+    this.requestStatus = 'error';
+    this.publish({ status: 'error', data: undefined, error: toError(error) });
+  }
+
   setSnapshotListener(listener: ((snapshot: ManagedExperienceSnapshot) => void) | undefined): void {
     this.listener = listener;
   }

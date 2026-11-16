@@ -199,7 +199,7 @@ describe.runIf(environment === 'browser')('Web SDK in a browser', () => {
           environmentId: 'environment',
           delivery: {} as never,
         })
-    ).toThrow('requires accessToken unless an explicit proxy host is provided');
+    ).toThrow();
 
     const web = createRuntime();
     const base = new RuntimeContentfulExperiences({

@@ -45,11 +45,6 @@ import {
   type OptimizationConfig,
 } from './create-optimization-client.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from '../sdk-info.js';
-import {
-  createEventMethods,
-  type DirectEventBindings,
-  type EventMethods,
-} from '../events/event-methods.js';
 
 export type ResolveOptions = {
   config: ResolverConfig;
@@ -213,12 +208,9 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
     const library = { ...DEFAULT_EVENT_CONTEXT_LIBRARY, ...config.eventBuilder.library };
     const userAgentHeaders = createUserAgentHeaders(library, config.eventBuilder.app);
     const identity = { spaceId: config.spaceId, environmentId: config.environmentId };
-    this.#deliveryClient = createDeliveryClient(
-      config.delivery,
-      identity,
-      undefined,
-      userAgentHeaders
-    );
+    this.#deliveryClient = createDeliveryClient(config.delivery, identity, {
+      defaultHeaders: userAgentHeaders,
+    });
     if (config.preview !== undefined) {
       const {
         sessionHost: _sessionHost,
@@ -226,12 +218,11 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
         createClient: _createClient,
         ...transport
       } = config.preview;
-      this.#previewClient = createDeliveryClient(
-        transport,
-        identity,
-        PREVIEW_HOST,
-        userAgentHeaders
-      );
+      this.#previewClient = createDeliveryClient(transport, identity, {
+        defaultHost: PREVIEW_HOST,
+        defaultHeaders: userAgentHeaders,
+        configuration: 'preview',
+      });
     }
     this.api = createOptimizationClient({
       spaceId: config.spaceId,
@@ -261,13 +252,6 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
   /** Pure lookup in caller-owned changes; no state is retained or exposure emitted. */
   getFlag(name: string, changes?: readonly unknown[]): Json | undefined {
     return resolveFlagChange(name, changes)?.value;
-  }
-
-  protected createEventMethods(bindings: DirectEventBindings): EventMethods {
-    return createEventMethods(this.api, this.eventBuilder, {
-      getLocale: () => this.locale,
-      ...bindings,
-    });
   }
 
   resolveExperience(

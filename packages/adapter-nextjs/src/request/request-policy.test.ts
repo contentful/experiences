@@ -41,6 +41,29 @@ describe('Next primary request policy', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it.each([
+    { destinationId: 'site', path: '/', parameters: {} },
+    { destinationId: 'site', nodeId: 'node', extensions: {} },
+  ])('validates the managed descriptor before preparation callbacks (%j)', async (selector) => {
+    const prepare = vi.fn();
+    await expect(
+      resolvePolicy(
+        config,
+        {
+          experience: selector as never,
+          initialEvents: prepare,
+          pagePayload: prepare,
+          resolveOptions: prepare,
+          composeRequest: prepare,
+        },
+        context
+      ).then((resolved) => loadPrimary(request, resolved, context, config))
+    ).rejects.toBeInstanceOf(TypeError);
+    expect(prepare).not.toHaveBeenCalled();
+    expect(fetchExperience).not.toHaveBeenCalled();
+    expect(fetchExperienceForHandoff).not.toHaveBeenCalled();
+  });
+
+  it.each([
     { mode: 'ssr' as const, experience: { experienceId: 'missing' } },
     { mode: 'hybrid' as const, experience: { destinationId: 'site', path: '/missing' } },
   ])(
@@ -253,10 +276,21 @@ describe('Next primary request policy', () => {
     ]);
   });
 
-  it('keeps preview evaluation event-free without SSR ownership', async () => {
+  it.each([false, true])('keeps Preview results isolated (failed=%s)', async (failed) => {
+    const error = Object.assign(
+      new Error('private session details', { cause: new NotFoundError() }),
+      {
+        name: 'PreviewSessionFetchError',
+      }
+    );
+    if (failed) fetchExperience.mockRejectedValueOnce(error);
+    const composeRequest = vi.fn();
     const initialEvents = vi.fn();
     const pagePayload = vi.fn();
-    const options = { ...config, request: { ...config.request!, initialEvents, pagePayload } };
+    const options = {
+      ...config,
+      request: { ...config.request!, initialEvents, pagePayload, composeRequest },
+    };
     const resolved = await resolvePolicy(options, { mode: 'ssr' }, context);
     const result = await loadPrimary(
       { ...request, isPreview: true } as RequestRuntime,
@@ -273,5 +307,17 @@ describe('Next primary request policy', () => {
     expect(result.initialPagePayload).toBeUndefined();
     expect(result.handoff).toBeUndefined();
     expect(result.initialPageOwner).toBeUndefined();
+    expect(result.notFound).toBeUndefined();
+    expect(composeRequest).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ isPreview: true }),
+      result,
+      context
+    );
+    if (failed)
+      expect(result).toMatchObject({
+        error,
+        contentError:
+          'Preview Session content unavailable. Retry, or reopen preview if the session has expired.',
+      });
   });
 });

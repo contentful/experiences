@@ -95,7 +95,9 @@ function App({
 The managed component and hook accept exactly one selector: `{ experienceId }`,
 `{ destinationId, path }`, or `{ destinationId, nodeId }`. Every selector accepts
 `locale` and builder-or-built `personalization.events`. Destination selectors
-resolve in master and do not accept by-ID `parameters` or `extensions`. For example:
+resolve in master. Defined by-ID `parameters` or `extensions`, including empty
+objects, are invalid on destination selectors; `undefined` is treated as absent.
+For example:
 
 ```tsx
 <Experience destinationId={destinationId} path={pathname} locale="en-US" />
@@ -122,6 +124,8 @@ Use the exported `isNotFoundError(error)` in `errorFallback` to distinguish a
 missing Experience, Destination, path or node from other fetch failures. It
 recognizes Delivery's `NotFoundError` and numeric `statusCode: 404`, including
 errors seeded from a Next server result. Preview Session failures remain distinct.
+Use `isPreviewSessionFetchError(error)` for direct acquisition errors; Next server
+results instead carry a safe message. See the [Preview error contract](../runtime/README.md#optional-runtime-live-preview).
 
 Both the hook and `Experience` accept committed presentation notifications,
 exported together as the `ExperienceNotifications` type from `/client`:
@@ -154,6 +158,10 @@ for that presentation: default rendering shows no loading/error fallback, and
 `refresh()`/`retry()` are inert. Custom `children(result)` still receives the redirect
 result. Pending page fallback and later consent retry for the abandoned presentation
 stop; events already submitted remain submitted.
+
+If `onRedirect` throws, the presentation instead reports the failure through
+`error`, `onExperienceError` and `errorFallback`. It does not repeat navigation
+automatically; an explicit `retry()` can fetch the content again without events.
 
 Generic React leaves navigation to the application. Set a shared callback through
 `createExperiences({ config, onRedirect: ({ path }) => navigate(path) })`, or pass

@@ -18,6 +18,7 @@ import {
   useRequestRedirect,
 } from '../presentation/router-lifetime.js';
 import { ServerPreviewRefresh } from './server-preview-refresh.js';
+import { getRedirectError } from '../presentation/redirect-path.js';
 
 import type {
   BoundRootProps,
@@ -60,8 +61,11 @@ export function useAppAutoPageInputs() {
     return { pathname: url.pathname, routeKey, search: url.search };
   }, [routerPathname, search]);
   const [confirmed, setConfirmed] = useState<typeof candidate>();
+  // SSR and initial hydration use router inputs before consulting browser history.
   const browserRoute =
-    typeof window === 'undefined' ? undefined : createRouteKey(window.location.href);
+    confirmed === undefined || typeof window === 'undefined'
+      ? undefined
+      : createRouteKey(window.location.href);
   useEffect(() => {
     if (createRouteKey(window.location.href) === candidate.routeKey)
       setConfirmed((previous) =>
@@ -104,6 +108,8 @@ export function bindAppRouterClientExperiences(options: ClientConfig) {
     const router = useRouter();
     return useCallback(
       (target: { path: string }) => {
+        const error = getRedirectError(target.path);
+        if (error) throw error;
         router.replace(target.path);
       },
       [router]

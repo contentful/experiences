@@ -19,6 +19,7 @@ import {
 import type { BoundRootProps, RequestResult } from './request-result.js';
 
 import { resolvePreview, mergePreview } from '../request/preview.js';
+import { getRedirectError } from './redirect-path.js';
 
 const InitialDataContext = createContext<(requestId: string | undefined) => boolean>(() => true);
 const RequestResultContext = createContext<{ result?: RequestResult } | undefined>(undefined);
@@ -73,19 +74,19 @@ export function useRequestOptions(supplied?: RequestResult) {
   const canAdopt = useInitialData(result?.requestId);
   const error = result?.contentError;
   const notFound = result?.notFound;
-  const initialError = useMemo(
-    () =>
-      error === undefined && !notFound
-        ? undefined
-        : Object.assign(
-            new Error(error ?? 'Experience content not found.'),
-            notFound ? { statusCode: 404 } : {}
-          ),
-    [error, notFound]
-  );
+  const initialError = useMemo(() => {
+    const redirectError = result?.redirect && getRedirectError(result.redirect.path);
+    if (redirectError) return redirectError;
+    return error === undefined && !notFound
+      ? undefined
+      : Object.assign(
+          new Error(error ?? 'Experience content not found.'),
+          notFound ? { statusCode: 404 } : {}
+        );
+  }, [error, notFound, result?.redirect]);
   return {
     result,
-    initialRedirect: canAdopt ? result?.redirect : undefined,
+    initialRedirect: canAdopt && !initialError ? result?.redirect : undefined,
     initialPlan: canAdopt ? result?.plan : undefined,
     initialError: canAdopt ? initialError : undefined,
     resolveOptions: result?.plan && {

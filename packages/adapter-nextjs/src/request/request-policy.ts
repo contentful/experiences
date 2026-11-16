@@ -1,5 +1,7 @@
 import {
+  assertExperienceSelector,
   isNotFoundError,
+  isPreviewSessionFetchError,
   parseExperiencesHandoffEnvelope,
   type ExperiencesHandoff,
   type RequestRuntime,
@@ -29,6 +31,7 @@ export async function resolveRequestPolicy(
   if (mode !== 'ssr' && mode !== 'hybrid')
     throw new TypeError('request.mode must be ssr or hybrid.');
   const descriptor = await resolveServerValue(policy.experience, context);
+  assertExperienceSelector(descriptor);
   if (
     descriptor.personalization?.events !== undefined &&
     (policy.initialEvents !== undefined || policy.pagePayload !== undefined)
@@ -140,7 +143,13 @@ export async function loadPrimaryExperience(
     ...(output.plan?.experienceId ? { experienceId: output.plan.experienceId } : {}),
     ...(!request.isPreview && mode === 'ssr' ? { initialPageOwner: 'server' as const } : {}),
     ...(initialPagePayload ? { initialPagePayload } : {}),
-    ...(output.error !== undefined ? { contentError: 'Experience content unavailable.' } : {}),
+    ...(output.error !== undefined
+      ? {
+          contentError: isPreviewSessionFetchError(output.error)
+            ? 'Preview Session content unavailable. Retry, or reopen preview if the session has expired.'
+            : 'Experience content unavailable.',
+        }
+      : {}),
     ...(isNotFoundError(output.error) ? { notFound: true as const } : {}),
   };
   await policy.composeRequest?.(request, primary, context);

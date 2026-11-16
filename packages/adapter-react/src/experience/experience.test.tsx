@@ -581,15 +581,14 @@ describe('Experience', () => {
 });
 
 it('validates raw selectors before using a seed and accepts undefined supplied content', () => {
-  expect(() =>
-    renderToStaticMarkup(
-      <Experience
-        {...({ path: '/', config, initialPlan: plan() } as unknown as Parameters<
-          typeof Experience
-        >[0])}
-      />
-    )
-  ).toThrow(TypeError);
+  for (const selector of [
+    { path: '/' },
+    { destinationId: 'site', path: '/', parameters: {} },
+    { destinationId: 'site', nodeId: 'node', extensions: {} },
+  ]) {
+    const props = { ...selector, config, initialPlan: plan() } as unknown as ManagedExperienceProps;
+    expect(() => renderToStaticMarkup(<Experience {...props} />)).toThrow(TypeError);
+  }
   const unselected = { config, initialPlan: plan() } as unknown as Parameters<typeof Experience>[0];
   expect(() => renderToStaticMarkup(<Experience {...unselected} />)).toThrow(TypeError);
   expect(renderToStaticMarkup(<Experience config={config} experience={undefined} />)).toBe('');

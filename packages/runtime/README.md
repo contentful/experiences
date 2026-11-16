@@ -2,7 +2,7 @@
 
 > **Internal package.** The public Node and Web SDKs consume this shared runtime. Framework adapters re-export its `EventBuilder` API but do not construct the runtime.
 
-Runtime owns the shared `ContentfulExperiences` base, the complete `EventBuilder` implementation and argument schemas, event metadata, runtime-only Delivery and Preview client construction, direct Optimization transport, direct request event methods, and the current Node-to-Web handoff contract. Node binds request-local state; Web owns browser locale, context, and persisted profile state. Runtime itself does not retain those per-request or browser values.
+Runtime owns the shared `ContentfulExperiences` base, the complete `EventBuilder` implementation and argument schemas, event metadata, runtime-only Delivery and Preview client construction, Optimization clients and delivery queues, shared event-call preparation, and the current Node-to-Web handoff contract. Node binds request-local state; Web owns browser locale, context, and persisted profile state. Runtime itself does not retain those per-request or browser values.
 
 Web exposes
 its browser state through `states` observables and owns the module signals and
@@ -30,24 +30,41 @@ Delivery and Preview options accept a token or token supplier. A tokenless trust
 
 The base owns one `EventBuilder`, configured with a default library identity of `@contentful/experiences-runtime` when a leaf does not supply one. Node and Web supply their own library metadata. The builder's schemas, defaults, IDs, timestamps, context assembly, consent metadata, and event construction are colocated here. `identify`, `page`, and `track` use Personalization; view, click, hover, and flag-view events use Analytics. Node prepares one noncommitting request handoff batch. Web uses the Runtime-owned `PersonalizationDelivery` sender for ordinary online/offline events and imperative prepared-batch admission.
 
-`createEventMethods(api, eventBuilder, bindings)` accepts `DirectEventBindings`
-and returns `EventMethods` for direct request transport. The protected base
-factory binds the configured clients and builder. There is no custom-dispatch
-overload, exported `EventBindings`/`EventDispatch` strategy, or `requireProfile`
-option. Direct Analytics requires a complete profile and throws
-`EventProfileRequiredError` when it is missing. Web implements its browser event
-policy on the SDK receiver through an internal inherited emitter and uses
-Runtime's `warnMissingEventProfile` helper for its warning/drop policy.
+Runtime's internal `emitPersonalizationEvent` and `emitAnalyticsEvent` helpers
+share the Node/Web call sequence: lifecycle and Preview refusal, initial consent
+admission, argument/context construction, consent rechecking and stamping, and complete Analytics profile
+validation. They read leaf-owned state at the point it is needed and retain no
+request or browser state. They are package integration helpers, not consumer
+configuration or a custom-dispatch API.
 
-Event methods build and validate arguments before consent admission or a
-missing-profile drop. `trackView` follows Optimization's early consent guard
-before its view-specific validation. Node and Web run event interceptors after the original consent gate and before
+Node owns its direct event factory, request transport, interception and response
+adoption. Web keeps bound methods on the browser SDK receiver and delivers through
+its existing queues, which own interception, final admission and publication.
+Node throws `EventProfileRequiredError` without a complete Analytics profile;
+Web uses `warnMissingEventProfile` and drops the event with `{ accepted: false }`.
+This refusal does not report a consent block or enqueue work for later delivery.
+
+The former Runtime direct-event factory and `DirectEventBindings` now live in
+Node's internal implementation; the Runtime base no longer exposes that factory.
+Consumers use Node request methods or Web instance methods. Their call signatures
+are unchanged. There is no `requireProfile`
+option or exported custom-dispatch strategy.
+
+All direct event methods check consent before reading application context or
+building arguments. Denied calls return `{ accepted: false }` without validation;
+permitted calls still reject invalid arguments. Consent is checked again after
+construction because application context providers can change it. Node and Web run event interceptors after construction and before
 wire-event revalidation. Valid transformed events pass a second gate using their
 final type and current consent before publication, transport, or queue admission.
 Invalid output is a schema failure rather than a consent refusal. Post-hook
 blocks report the transformed method/type; every event method returns `{ accepted: false }`. Node sends
 directly. `BlockedEvent.method` is typed as `string`, matching
 Optimization's public event payload contract.
+
+The early gate for every direct method and Web's missing-profile refusal are
+intentional DX differences from the Optimization reference, intended for later
+porting there. They make denied calls predictable and reserve acceptance for work
+that enters delivery; acceptance still does not guarantee transport success.
 
 XDA plans retain the complete response profile in `plan.personalization.profile`.
 Core mirrors Delivery's profile shape without adding a runtime dependency. Node and Web
@@ -121,9 +138,11 @@ retry after acquisition failure; Web shares only in-flight snapshot acquisition.
 Managed views retain existing usable content while pending or failed. Web subscriptions
 use the same identity check; payloads without an ID are never broadcast to arbitrary
 Experiences. Snapshot HTTP errors surface through the fetch or managed result;
-all snapshot acquisition failures, including HTTP 404, use the existing
-`PreviewSessionFetchError` wrapper with the original error as `cause`. A missing
-session is distinct from missing Delivery content for `isNotFoundError` checks.
+all snapshot acquisition failures, including HTTP 404, retain the
+`PreviewSessionFetchError` wrapper with the original error as `cause`.
+`isPreviewSessionFetchError(error)` recognizes it without the optional Preview package. A missing session is distinct from missing Delivery content for
+`isNotFoundError` checks. Retry acquisition or reopen preview if the session has
+expired; preview event suppression remains active during failure and recovery.
 `states.preview` reports connection/update state and errors.
 `createPreviewClient` evaluates token suppliers and passes the session options
 to the configured factory, without requiring
@@ -288,7 +307,9 @@ Malformed selectors reject with `TypeError` before Preview acquisition or event
 preparation. Required selector fields must be nonempty strings; paths start with
 `/`, and selector families cannot be combined. Values are not normalized.
 All selectors accept `locale` and Runtime's builder-or-built `personalization.events`.
-Destinations are master-only and do not accept by-ID `parameters` or `extensions`.
+Destinations are master-only. Defined by-ID `parameters` or `extensions` on a
+destination selector, including empty objects, reject with `TypeError` at the same
+early validation boundary; `undefined` is treated as absent.
 `plan.experienceId`, when present, comes from the acquired payload's actual `sys.id`.
 No destination lookup cache or second by-ID fetch is introduced.
 
@@ -485,7 +506,7 @@ consent withdrawal, supersession or destroy cannot admit or publish stale visito
 
 ## Personalization delivery
 
-`PersonalizationDelivery` shares one low-level Personalization transport with direct event methods. Ordinary online calls send directly and return response data; ordinary offline calls are accepted into an in-memory queue and may have no data yet. At capacity, the offline queue refuses a new ordinary event before publication, without evicting accepted events, matching the active Optimization baseline. Prepared batches are admitted whole or refused before publication; the queue never splits them. Prepared batches are validated again and admitted whole at an event-count capacity of 100 by default. The prepared-batch limit stays at 100 even with a larger configured queue; a smaller queue or insufficient remaining capacity can reject an otherwise valid batch. Admission returns before HTTP settles. Prepared batches keep their event bodies, IDs, captured transport locale, and selected target identity through retry. Ordinary queued events keep their event bodies and use the current SDK request locale when sent; explicit event locales never select the transport locale. Direct online calls do not wait behind them. Concurrent `flush()` calls, including forced calls, join the active drain until that attempt settles. Completion does not guarantee delivery or wait for scheduled future retries; forcing bypasses connectivity/backoff/circuit gates but never starts a second concurrent drain. The retry policy follows Optimization's backoff and circuit defaults without a periodic Personalization timer. `reset()` invalidates queued work and late publications, including an active destroy drain; `destroy()` refuses new work, then makes one best-effort attempt to drain queued batches in order without publishing late state or scheduling retries. A failed request stops the drain. This is neither durable persistence nor an exactly-once guarantee. Runtime event methods enforce event consent and persistence policy at their owning leaves; consent is also included as event metadata where supported.
+`PersonalizationDelivery` uses the same Personalization API as Node's direct event methods. Ordinary online calls send directly and return response data; ordinary offline calls are accepted into an in-memory queue and may have no data yet. At capacity, the offline queue refuses a new ordinary event before publication, without evicting accepted events, matching the active Optimization baseline. Prepared batches are admitted whole or refused before publication; the queue never splits them. Prepared batches are validated again and admitted whole at an event-count capacity of 100 by default. The prepared-batch limit stays at 100 even with a larger configured queue; a smaller queue or insufficient remaining capacity can reject an otherwise valid batch. Admission returns before HTTP settles. Prepared batches keep their event bodies, IDs, captured transport locale, and selected target identity through retry. Ordinary queued events keep their event bodies and use the current SDK request locale when sent; explicit event locales never select the transport locale. Direct online calls do not wait behind them. Concurrent `flush()` calls, including forced calls, join the active drain until that attempt settles. Completion does not guarantee delivery or wait for scheduled future retries; forcing bypasses connectivity/backoff/circuit gates but never starts a second concurrent drain. The retry policy follows Optimization's backoff and circuit defaults without a periodic Personalization timer. `reset()` invalidates queued work and late publications, including an active destroy drain; `destroy()` refuses new work, then makes one best-effort attempt to drain queued batches in order without publishing late state or scheduling retries. A failed request stops the drain. This is neither durable persistence nor an exactly-once guarantee. Node and Web event methods enforce event consent and persistence policy at their owning leaves; consent is also included as event metadata where supported.
 
 Owner bindings may supply fixed `getIsPreview` intent. Shared event methods check it before
 building or profile lookup and return `{ accepted: false, reason: 'preview' }`; request/browser

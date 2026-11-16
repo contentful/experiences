@@ -5,8 +5,8 @@ import {
   type States,
 } from '@contentful/experiences-web';
 import { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { createRoot, hydrateRoot, type Root } from 'react-dom/client';
+import { renderToStaticMarkup, renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RequestPresentation } from '../presentation/router-lifetime.js';
 import {
@@ -84,45 +84,113 @@ describe('native adapter owner', () => {
     });
   });
 
-  it('uses native navigation for the managed destination hook', async () => {
-    const binding = bindAppRouterClientExperiences({ config: { components: {} } });
-    const { sdk, fetchExperience } = sdkFixture();
-    fetchExperience.mockResolvedValue({ redirect: { path: '/selected' } });
-    function Destination() {
-      binding.useManagedExperience({ destinationId: 'site', path: '/page' });
-      return null;
+  it('hydrates the router route even when browser history has already changed', async () => {
+    function Route() {
+      const { routeKey } = useAppAutoPageInputs();
+      return <output>{routeKey}</output>;
     }
-    await act(async () =>
-      root.render(
-        <binding.ExperiencesRoot sdk={sdk}>
-          <Destination />
-        </binding.ExperiencesRoot>
-      )
-    );
-    expect(navigation.router.replace).toHaveBeenCalledExactlyOnceWith('/selected');
-    expect(fetchExperience).toHaveBeenCalledOnce();
+    await act(async () => root.unmount());
+    const browserWindow = window;
+    let html: string;
+    vi.stubGlobal('window', undefined);
+    try {
+      html = renderToString(<Route />);
+    } finally {
+      vi.stubGlobal('window', browserWindow);
+    }
+    container.innerHTML = html;
+    window.history.replaceState(null, '', '/destination?q=changed');
+    const onRecoverableError = vi.fn();
+    await act(async () => {
+      root = hydrateRoot(container, <Route />, { onRecoverableError });
+    });
+    expect(container.innerHTML).toBe(html);
+    expect(container.textContent).toBe('/page?q=hello+world');
+    expect(onRecoverableError).not.toHaveBeenCalled();
   });
 
-  it('navigates a terminal destination result without resolving or replaying it', async () => {
-    const binding = bindAppRouterClientExperiences({ config: { components: {} } });
-    const fetch = vi.fn();
-    vi.stubGlobal('fetch', fetch);
-    await act(async () =>
-      root.render(
-        <binding.request.Experience
-          result={{
-            requestId: 'redirect',
-            routeKey: '/page?q=hello+world',
-            experience: { destinationId: 'site', path: '/page' },
-            redirect: { path: '/target' },
-          }}
-        />
-      )
-    );
-    expect(navigation.router.replace).toHaveBeenCalledExactlyOnceWith('/target');
-    expect(fetch).not.toHaveBeenCalled();
-    expect(container.textContent).toBe('');
-  });
+  it.each([
+    ['/selected', false],
+    ['https://example.com/outside', false],
+    ['https://example.com/outside', true],
+  ] as const)(
+    'uses native or application-owned destination navigation (%s, custom=%s)',
+    async (path, custom) => {
+      const binding = bindAppRouterClientExperiences({ config: { components: {} } });
+      const { sdk, fetchExperience } = sdkFixture();
+      fetchExperience.mockResolvedValue({ redirect: { path } });
+      const onRedirect = custom ? vi.fn() : undefined;
+      function Destination() {
+        const result = binding.useManagedExperience({
+          destinationId: 'site',
+          path: '/page',
+          onRedirect,
+        });
+        return <output>{result.status}</output>;
+      }
+      await act(async () =>
+        root.render(
+          <binding.ExperiencesRoot sdk={sdk}>
+            <Destination />
+          </binding.ExperiencesRoot>
+        )
+      );
+      if (custom) {
+        expect(onRedirect).toHaveBeenCalledExactlyOnceWith(
+          { path },
+          expect.objectContaining({ status: 'redirect' })
+        );
+        expect(navigation.router.replace).not.toHaveBeenCalled();
+        expect(container.textContent).toBe('redirect');
+      } else if (path === '/selected') {
+        expect(navigation.router.replace).toHaveBeenCalledExactlyOnceWith(path);
+        expect(container.textContent).toBe('redirect');
+      } else {
+        expect(container.textContent).toBe('error');
+        expect(navigation.router.replace).not.toHaveBeenCalled();
+      }
+      expect(fetchExperience).toHaveBeenCalledOnce();
+    }
+  );
+
+  it.each(['/target', '//example.com/outside'])(
+    'presents a terminal destination result without resolving or replaying it: %s',
+    async (path) => {
+      const binding = bindAppRouterClientExperiences({ config: { components: {} } });
+      const { sdk, fetchExperience, hydrateAndTrackCurrentPage } = sdkFixture();
+      const fetch = vi.fn();
+      vi.stubGlobal('fetch', fetch);
+      const result = {
+        requestId: 'redirect',
+        routeKey: '/page?q=hello+world',
+        experience: { destinationId: 'site', path: '/page' },
+        redirect: { path },
+        handoff: {
+          spaceId: 'space',
+          environmentId: 'master',
+          cache: { scope: 'private-request' as const },
+        },
+      };
+      await act(async () =>
+        root.render(
+          <binding.request.ExperiencesRoot sdk={sdk} result={result}>
+            <binding.request.Experience
+              errorFallback={({ error }) => <output>{error?.message}</output>}
+            />
+          </binding.request.ExperiencesRoot>
+        )
+      );
+      if (path === '/target')
+        expect(navigation.router.replace).toHaveBeenCalledExactlyOnceWith(path);
+      else expect(navigation.router.replace).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
+      expect(fetchExperience).not.toHaveBeenCalled();
+      expect(hydrateAndTrackCurrentPage).not.toHaveBeenCalled();
+      expect(container.textContent).toBe(
+        path === '/target' ? '' : 'Destination redirect must be a local absolute path.'
+      );
+    }
+  );
 
   it('passes client configuration and prop overrides to the shared request presentation', async () => {
     const configured = vi.fn(() => ({ properties: { path: '/configured' } }));

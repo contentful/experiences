@@ -19,6 +19,7 @@ export {
   ExperienceFetchError,
   NotFoundError,
   isNotFoundError,
+  isPreviewSessionFetchError,
   PREVIEW_HOST,
 } from '@contentful/experiences-client';
 export type {

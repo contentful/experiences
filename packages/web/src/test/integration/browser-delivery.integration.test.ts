@@ -585,16 +585,16 @@ describe('browser discovery ownership', () => {
 
       runtime.tracking.disable('views');
       click(hero);
-      // Analytics rejects an id-only profile, so the click under the continuation ID is
-      // admitted but not sent.
+      // A continuation ID is insufficient for Analytics; the click is refused, not queued.
       await vi.waitFor(() => expect(trackClick).toHaveBeenCalledOnce());
-      await expect(trackClick.mock.results[0]!.value).resolves.toEqual({ accepted: true });
+      await expect(trackClick.mock.results[0]!.value).resolves.toEqual({ accepted: false });
       expect(sendBatchEvents).not.toHaveBeenCalled();
 
       finishReplay({ profile: completeProfile('committed-profile') });
       await vi.waitFor(() => expect(runtime.states.profile.current?.id).toBe('committed-profile'));
       click(hero);
       await vi.waitFor(() => expect(trackClick).toHaveBeenCalledTimes(2));
+      await expect(trackClick.mock.results[1]!.value).resolves.toEqual({ accepted: true });
       await runtime.flush();
 
       const [[batch]] = sendBatchEvents.mock.calls as unknown as [

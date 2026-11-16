@@ -37,7 +37,11 @@ result list, identity reconciliation or additional cache/controller/barrier.
 
 `request.experience` accepts exactly one selector: `{ experienceId }`,
 `{ destinationId, path }`, or `{ destinationId, nodeId }`. Destination paths name
-content lookup paths; route keys retain the browser pathname and query. For example:
+content lookup paths; route keys retain the browser pathname and query. Defined
+`parameters` or `extensions` on a destination selector, including empty objects,
+throw `TypeError` before Delivery, Preview acquisition or event preparation;
+`undefined` is treated as absent. Raw server selector props follow this validation
+before normalization. For example:
 
 ```ts
 request: {
@@ -48,20 +52,36 @@ request: {
 },
 ```
 
+When migrating shared selector defaults, remove `parameters` and `extensions`
+from destination descriptors, including defaults such as `{}`. Supply these
+options only with `experienceId`; explicit `undefined` remains absent.
+
 The fetched plan carries the actual `experienceId` from the selected payload.
 Destination redirects remain `{ redirect: { path } }` on raw request results.
-App server convenience roots and presentations invoke Next's native redirect
+For valid local targets, App server convenience roots and presentations invoke Next's native redirect
 before rendering or browser adoption. Pages callers return a native GSSP redirect
 before passing props. A terminal redirect does not replay its handoff or emit a
 fallback page on the destination route. Browser managed components and hooks use
 native router navigation by default; an explicit `onRedirect` overrides it.
+SDK-owned navigation requires a root-relative path. External URLs,
+protocol-relative URLs, backslashes and tab/newline characters become managed
+content errors instead of navigating: browser presentations expose the error
+through `errorFallback`, and server request conveniences retain `contentError`.
+Server-only presentations without a plan render no content. Rejected redirects
+still suppress handoff replay and fallback page emission.
+Raw loaders and custom browser `onRedirect` callbacks retain application-owned policy.
 
 Missing Experiences, Destinations, paths and nodes produce `notFound: true` on
 raw request results. App server convenience roots/presentations and the explicit
 server `Experience` invoke Next's native `notFound()`; Pages callers return
 `{ notFound: true }` from GSSP. Other content failures retain `contentError`, and
 successful empty Experiences remain valid content. Preview Session acquisition
-failures are session errors, not route 404s. When a raw missing-content result is
+failures, including HTTP 404, return a safe session-specific `contentError` without
+`notFound`. Raw errors and causes remain server-local. Browser-managed presentations can use
+`errorFallback` and the existing event-free `retry()`; server-rendered presentations
+can retry through a server refresh, and matching live updates can restore content.
+Preview event suppression remains active and failures never silently substitute
+published content. When a raw missing-content result is
 presented in the browser, its seeded error retains a numeric `statusCode: 404`
 for `isNotFoundError(error)` in the existing React `errorFallback`.
 
@@ -69,8 +89,10 @@ for `isNotFoundError(error)` in the existing React `errorFallback`.
 
 Export named components from `binding.request` in the binding modules, then import
 and render those names in pages (`<ExperiencesRoot>` and `<Experience>`). Bind the
-configuration once. The default server binding renders content on the server and uses
-the built-in browser root:
+configuration once. These server request components own the primary route's redirect
+and not-found outcomes. Mount URL-dependent roots in a page or fresh template rather
+than a retained server layout. The default server binding renders content on the server
+and uses the built-in browser root:
 
 ```tsx
 // lib/experience-server.tsx
@@ -304,8 +326,9 @@ Preserve complete results without overlays.
 Private configuration, raw errors and unapproved metadata remain server-local.
 
 App server roots and injected presentations share render-local memoization of both
-the primary evaluation and its sanitized browser result. Place roots that need fresh
-handoffs in a rerendering page or template; retained layouts do not reevaluate.
+the primary evaluation and its sanitized browser result. For optional Experience
+content, use raw loader decisions and a client request root or ordinary/supplied-plan
+composition rather than the route-owning server request conveniences.
 Next owns prefetching and caching. Extend the context middleware matcher to all
 App request-aware routes. Pages maps the native GSSP context instead.
 
@@ -368,6 +391,12 @@ Preview transport; the browser’s synchronous package factory stays in the clie
 module. Continue using the server load/serialization and injected client root shown
 above. Client callbacks are never copied from the server. For Pages, supply the same context options to the server binder and
 `bindPagesRouterExperiences`, retaining the existing GSSP and `_app` composition.
+
+Partial browser `preview` overrides inherit configured values for omitted or
+explicitly `undefined` fields; only defined values replace them. `undefined`
+cannot clear configured credentials or context. Active browser Preview still
+requires its own `accessToken` or trusted proxy `host`; `sessionHost` alone does
+not provide API authentication.
 
 Preview activates only when configuration is present and the current URL contains
 a trimmed, nonempty `preview_session_id`. Browser owners read the current browser URL;
@@ -639,7 +668,7 @@ caller intent; do not combine them with `request.initialEvents` or `request.page
 
 The explicit server `Experience` accepts a supplied plan or a public/static
 Experience or destination selector with explicit cache policy; it reads no framework context.
-Destination redirects use native Next navigation before rendering. Existing
+Valid local Destination redirects use native Next navigation before rendering. Existing
 explicit Node host helpers remain available for custom request boundaries.
 Server functions and credentials stay outside client props.
 The server request `Experience` defaults to `ServerExperienceRenderer`. The optional
@@ -704,8 +733,8 @@ App `request.loadExperience` retains the raw `ServerRequestResult` for
 server composition. Its bound request roots/presentations project automatically;
 explicit hosts can use `serializeRequestResult(result, { metadataKeys? })`
 when assembling their own browser boundary. Preparation, configuration, callback
-and unexpected errors propagate; expected Delivery failures can coexist with a
-usable plan/handoff and a browser-safe `contentError`.
+and unexpected errors propagate; expected Delivery and Preview Session acquisition
+failures can coexist with a usable plan/handoff and a browser-safe `contentError`.
 
 Both bindings infer each loader result from its selected Experience, including async
 selectors and per-call overrides. By-ID selections retain definite server result IDs;

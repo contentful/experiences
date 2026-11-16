@@ -16,6 +16,7 @@ import {
   useRequestRedirect,
 } from '../presentation/router-lifetime.js';
 import { mergePreview, resolvePreviewSession } from '../request/preview.js';
+import { getRedirectError } from '../presentation/redirect-path.js';
 import type { ClientConfig } from '../app-router/app-router-client.js';
 import type {
   BoundRootProps,
@@ -49,6 +50,8 @@ export function bindPagesRouterExperiences(config: PagesRouterConfig) {
     const router = useRouter();
     return useCallback(
       (target: { path: string }) => {
+        const error = getRedirectError(target.path);
+        if (error) throw error;
         void router.replace(target.path);
       },
       [router]

@@ -214,7 +214,7 @@ describe('WebEventRuntime direct events', () => {
     consent.value = true;
     const warn = vi.spyOn(logger, 'warn');
     const send = vi.spyOn(runtime.analyticsQueue, 'send');
-    await expect(runtime.trackClick(entity)).resolves.toEqual({ accepted: true });
+    await expect(runtime.trackClick(entity)).resolves.toEqual({ accepted: false });
     expect(warn).toHaveBeenCalledExactlyOnceWith(
       'Experiences:Events',
       'Attempting to emit an event without a complete Optimization profile'
@@ -223,29 +223,11 @@ describe('WebEventRuntime direct events', () => {
     expect(profile.value).toBeUndefined();
     expect(runtime.continuationId).toBe('server-profile');
     expect(emittedEvent.value).toBeUndefined();
+    expect(runtime.onEventBlocked).not.toHaveBeenCalled();
   });
 
-  it('checks trackView consent before construction and suppresses preview before building any event', async () => {
-    const runtime = new TestEventRuntime([]);
-    const buildView = vi.spyOn(runtime.eventBuilder, 'buildView');
-    await expect(
-      runtime.trackView({ ...entity, viewId: 'v', viewDurationMs: -1 })
-    ).resolves.toEqual({ accepted: false });
-    expect(buildView).not.toHaveBeenCalled();
-    expect(runtime.onEventBlocked).toHaveBeenLastCalledWith({
-      reason: 'consent',
-      method: 'trackView',
-      args: [{ ...entity, viewId: 'v', viewDurationMs: -1 }],
-    });
-    await expect(runtime.track({ event: 'blocked' })).resolves.toEqual({ accepted: false });
-    expect(runtime.onEventBlocked).toHaveBeenLastCalledWith({
-      reason: 'consent',
-      method: 'track',
-      args: [{ event: 'blocked' }],
-    });
-    const invalidClick = { ...entity, entityKind: 'invalid' };
-    // @ts-expect-error Preserve runtime validation before the ordinary Analytics consent gate.
-    await expect(runtime.trackClick(invalidClick)).rejects.toThrow();
+  it('refuses preview and destroyed calls before building or queueing', async () => {
+    const runtime = new TestEventRuntime();
     runtime.preview = true;
     const buildTrack = vi.spyOn(runtime.eventBuilder, 'buildTrack');
     await expect(runtime.track({ event: 'preview' })).resolves.toEqual({
@@ -778,7 +760,7 @@ it('drops Analytics while its first profile request is pending and accepts track
   const pending = runtime.page();
   await expect(
     runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
-  ).resolves.toEqual({ accepted: true });
+  ).resolves.toEqual({ accepted: false });
   response.resolve({
     profile: completeProfile('issued-profile'),
     changes: [],
@@ -787,7 +769,9 @@ it('drops Analytics while its first profile request is pending and accepts track
   await pending;
   await runtime.flush();
   expect(analytics).not.toHaveBeenCalled();
-  await runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' });
+  await expect(
+    runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
+  ).resolves.toEqual({ accepted: true });
   await runtime.flush();
   expect(analytics).toHaveBeenCalledWith([
     expect.objectContaining({ profile: completeProfile('issued-profile') }),

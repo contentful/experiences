@@ -31,6 +31,7 @@ export type PreviewSessionOptions = Pick<
   'sessionId' | 'resourceResolution'
 > & { sessionHost?: string };
 export type PreviewConfig = DeliveryClientOptions & {
+  /** Session connection endpoint; API authentication still requires accessToken or a proxy host. */
   sessionHost?: string;
   resourceResolution?: string;
   /** Pass createLivePreviewClient from @contentful/experiences-live-preview. */

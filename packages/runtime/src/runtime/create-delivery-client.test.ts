@@ -43,11 +43,11 @@ describe('createDeliveryClient', () => {
   });
 
   it('uses the preview default only when host and generated environment are absent', () => {
-    createDeliveryClient({ accessToken: 'preview-token' }, identity, PREVIEW_HOST);
+    createDeliveryClient({ accessToken: 'preview-token' }, identity, { defaultHost: PREVIEW_HOST });
     createDeliveryClient(
       { accessToken: 'preview-token', environment: 'https://environment.example' },
       identity,
-      PREVIEW_HOST
+      { defaultHost: PREVIEW_HOST }
     );
     expect(ContentfulViewDeliveryClient).toHaveBeenNthCalledWith(1, {
       token: 'preview-token',
@@ -69,8 +69,12 @@ describe('createDeliveryClient', () => {
         headers: { 'x-custom': 'value', 'x-shared': 'caller' },
       },
       identity,
-      undefined,
-      { 'X-Contentful-User-Agent': 'sdk experiences-node/0.6.0;', 'x-shared': 'default' }
+      {
+        defaultHeaders: {
+          'X-Contentful-User-Agent': 'sdk experiences-node/0.6.0;',
+          'x-shared': 'default',
+        },
+      }
     );
     expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith({
       token: 'token-123',
@@ -84,10 +88,21 @@ describe('createDeliveryClient', () => {
     });
   });
 
-  it('rejects missing token and proxy host at runtime', () => {
-    expect(() => createDeliveryClient({} as never, identity)).toThrow(
-      'requires accessToken unless an explicit proxy host is provided'
-    );
-    expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
-  });
+  it.each([
+    [
+      'delivery',
+      'delivery requires delivery.accessToken or an explicit trusted proxy delivery.host.',
+    ],
+    [
+      'preview',
+      'preview requires preview.accessToken or an explicit trusted proxy preview.host. ' +
+        'preview.sessionHost does not supply API authentication.',
+    ],
+  ] as const)(
+    'identifies missing %s credentials before constructing the client',
+    (configuration, message) => {
+      expect(() => createDeliveryClient({} as never, identity, { configuration })).toThrow(message);
+      expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
+    }
+  );
 });

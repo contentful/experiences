@@ -1,569 +1,308 @@
-import { analyticsProfileFixture as completeProfile } from '../test/fixtures/profile.js';
-import type { InsightsApiClientRequestOptions as AnalyticsApiClientRequestOptions } from '@contentful/optimization-api-client';
 import { describe, expect, it, vi } from 'vitest';
-
-import type { AllowedEventType, BlockedEvent, ConsentState } from './consent.js';
-import EventBuilder from './event-builder.js';
-import type { EventInterceptors } from './event-interceptors.js';
+import { analyticsProfileFixture } from '../test/fixtures/profile.js';
+import type { ConsentState } from './consent.js';
+import EventBuilder, {
+  type ClickBuilderArgs,
+  type UniversalEventBuilderArgs,
+} from './event-builder.js';
 import {
-  createEventMethods,
-  EventProfileRequiredError,
-  EventProfileSchema,
-  type EventOptimizationData,
-  type EventProfile,
-  type PersonalizationRequestOptions,
-  type DirectEventBindings,
-  type EventApi,
+  emitAnalyticsEvent,
+  emitPersonalizationEvent,
+  type AnalyticsEventOwner,
 } from './event-methods.js';
 
-const interaction = {
-  entityId: 'experience-1',
-  entityKind: 'Experience' as const,
-  optimizationId: 'optimization-1',
-  variantId: 'variant-1',
-};
+const builder = new EventBuilder({
+  channel: 'server',
+  library: { name: 'test', version: 'test' },
+});
+const interaction: ClickBuilderArgs = { entityId: 'experience', entityKind: 'Experience' };
 
-const visitor = completeProfile('visitor');
-
-function optimizationData(profileId: string): EventOptimizationData {
+function owner(overrides: Partial<AnalyticsEventOwner> = {}): AnalyticsEventOwner {
   return {
-    changes: [],
-    profile: completeProfile(profileId),
-    selectedOptimizations: [],
-  } as unknown as EventOptimizationData;
-}
-
-function createFixture(
-  options: {
-    profile?: ReturnType<DirectEventBindings['getProfile']>;
-    eventInterceptors?: EventInterceptors;
-    consent?: ConsentState;
-    allowedEventTypes?: readonly AllowedEventType[];
-    onEventBlocked?: (event: BlockedEvent) => void;
-    sendResult?: boolean;
-    analyticsOptions?: AnalyticsApiClientRequestOptions;
-    personalizationOptions?: PersonalizationRequestOptions;
-    isActive?: () => boolean;
-  } = {}
-) {
-  let profile = options.profile;
-  const upsertProfile = vi.fn().mockResolvedValue(optimizationData('profile-from-api'));
-  const sendBatchEvents = vi.fn().mockResolvedValue(options.sendResult ?? true);
-  const api: EventApi = {
-    personalization: { upsertProfile },
-    analytics: { sendBatchEvents },
-  };
-  const eventBuilder = new EventBuilder({
-    channel: 'server',
-    library: { name: '@contentful/experiences-node', version: 'test' },
-  });
-  let revision = 0;
-  const setProfile = vi.fn((nextProfile: EventProfile) => {
-    profile = nextProfile;
-  });
-  const bindings: DirectEventBindings = {
-    getProfile: () => profile,
-    getEventContext: () => ({ locale: 'de-DE' }),
-    getLocale: () => 'en-US',
-    getConsent: () => options.consent,
-    allowedEventTypes: options.allowedEventTypes,
-    getAnalyticsOptions: () => options.analyticsOptions,
-    getPersonalizationOptions: () => options.personalizationOptions,
-    setProfile,
-    eventInterceptors: options.eventInterceptors,
-    getProfileRevision: () => revision,
-    isActive: options.isActive,
-    onEventBlocked: options.onEventBlocked,
-  };
-  const methods = createEventMethods(api, eventBuilder, bindings);
-
-  return {
-    methods,
-    sendBatchEvents,
-    upsertProfile,
-    setProfile,
-    invalidateProfile: () => {
-      revision++;
-    },
+    isActive: () => true,
+    getIsPreview: () => false,
+    getConsent: () => ({ events: true }),
+    getAllowedEventTypes: () => undefined,
+    reportBlockedEvent: vi.fn(),
+    getProfile: vi.fn(() => analyticsProfileFixture('visitor')),
+    onMissingProfile: vi.fn(),
+    ...overrides,
   };
 }
 
-describe('EventMethods', () => {
-  it('drops a direct request disposed during its async hook before transport', async () => {
-    let active = true;
-    const run = vi.fn<EventInterceptors['run']>(async (event) => {
-      active = false;
-      return event;
+describe('shared event preparation', () => {
+  it('returns before preview, context, and construction for an inactive owner', async () => {
+    const policy = owner({
+      isActive: () => false,
+      getIsPreview: vi.fn(() => true),
+      getEventContext: vi.fn(),
     });
-    const f = createFixture({
-      consent: { events: true },
-      profile: completeProfile('visitor'),
-      isActive: () => active,
-      eventInterceptors: { run },
+    const build = vi.fn(() => builder.buildPageView());
+    const send = vi.fn();
+
+    await expect(emitPersonalizationEvent(policy, 'page', {}, build, send)).resolves.toEqual({
+      accepted: false,
     });
-    await expect(f.methods.page()).resolves.toEqual({ accepted: false });
-    active = true;
-    await expect(f.methods.trackClick(interaction)).resolves.toEqual({ accepted: false });
-    expect(f.upsertProfile).not.toHaveBeenCalled();
-    expect(f.sendBatchEvents).not.toHaveBeenCalled();
+    expect(policy.getIsPreview).not.toHaveBeenCalled();
+    expect(policy.getEventContext).not.toHaveBeenCalled();
+    expect(policy.reportBlockedEvent).not.toHaveBeenCalled();
+    expect(build).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
   });
 
-  it('preserves successful Personalization acceptance without publishing after request disposal', async () => {
-    let active = true;
-    const f = createFixture({ isActive: () => active });
-    f.upsertProfile.mockImplementationOnce(async () => {
-      active = false;
-      return optimizationData('late');
-    });
-    await expect(f.methods.page()).resolves.toEqual({
-      accepted: true,
-      data: optimizationData('late'),
-    });
-    expect(f.setProfile).not.toHaveBeenCalled();
-  });
-
-  it('preserves successful Analytics acceptance after request disposal', async () => {
-    let active = true;
-    const f = createFixture({
-      consent: { events: true },
-      profile: completeProfile('visitor'),
-      isActive: () => active,
-    });
-    f.sendBatchEvents.mockImplementationOnce(async () => {
-      active = false;
-      return true;
-    });
-    await expect(f.methods.trackClick(interaction)).resolves.toEqual({ accepted: true });
-    expect(f.sendBatchEvents).toHaveBeenCalledTimes(1);
-  });
-
-  describe('direct event interception', () => {
-    const builder = new EventBuilder({
-      channel: 'server',
-      library: { name: '@contentful/experiences-node', version: 'test' },
-    });
-
-    it('keeps the original consent gate before invoking hooks', async () => {
-      const run = vi.fn<EventInterceptors['run']>(async (event) => event);
-      const f = createFixture({ consent: { events: false }, eventInterceptors: { run } });
-      await expect(f.methods.track({ event: 'purchase' })).resolves.toEqual({ accepted: false });
-      expect(run).not.toHaveBeenCalled();
-      expect(f.upsertProfile).not.toHaveBeenCalled();
-    });
-
-    it('blocks a valid final Personalization type and reports that type even when the callback throws', async () => {
-      const rewritten = builder.buildTrack({ event: 'purchase' });
-      const onEventBlocked = vi.fn(() => {
-        throw new Error('logger failed');
-      });
-      const run = vi.fn<EventInterceptors['run']>().mockResolvedValue(rewritten);
-      const f = createFixture({
-        consent: { events: false },
-        eventInterceptors: { run },
-        onEventBlocked,
-      });
-
-      await expect(f.methods.page()).resolves.toEqual({ accepted: false });
-      expect(run).toHaveBeenCalledOnce();
-      expect(onEventBlocked).toHaveBeenCalledExactlyOnceWith({
-        reason: 'consent',
-        method: 'track',
-        args: [rewritten],
-      });
-      expect(f.upsertProfile).not.toHaveBeenCalled();
-      expect(f.setProfile).not.toHaveBeenCalled();
-    });
-
-    it('blocks a rewritten Analytics type with an accurate view admission result', async () => {
-      const rewritten = builder.buildClick(interaction);
-      const onEventBlocked = vi.fn();
-      const run = vi.fn<EventInterceptors['run']>().mockResolvedValue(rewritten);
-      const f = createFixture({
-        consent: { events: false },
-        allowedEventTypes: ['component'],
-        profile: visitor,
-        eventInterceptors: { run },
-        onEventBlocked,
-      });
-
-      await expect(
-        f.methods.trackView({ ...interaction, viewId: 'view', viewDurationMs: 100 })
-      ).resolves.toEqual({ accepted: false });
-      expect(onEventBlocked).toHaveBeenCalledExactlyOnceWith({
-        reason: 'consent',
-        method: 'trackClick',
-        args: [rewritten],
-      });
-      expect(f.sendBatchEvents).not.toHaveBeenCalled();
-    });
-
-    it.each(['personalization', 'analytics'] as const)(
-      'rejects invalid %s rewrites before final consent reporting',
-      async (transport) => {
-        const run = vi.fn<EventInterceptors['run']>().mockResolvedValue({ type: 'track' });
-        const onEventBlocked = vi.fn();
-        const f = createFixture({
-          profile: visitor,
-          allowedEventTypes: ['page', 'component'],
-          eventInterceptors: { run },
-          onEventBlocked,
-        });
-        const sending =
-          transport === 'personalization'
-            ? f.methods.page()
-            : f.methods.trackView({ ...interaction, viewId: 'view', viewDurationMs: 100 });
-        await expect(sending).rejects.toThrow();
-        expect(onEventBlocked).not.toHaveBeenCalled();
-        expect(f.upsertProfile).not.toHaveBeenCalled();
-        expect(f.sendBatchEvents).not.toHaveBeenCalled();
-      }
-    );
-
-    it('propagates hook errors without transport or profile publication', async () => {
-      const error = new Error('hook failed');
-      const run = vi.fn<EventInterceptors['run']>().mockRejectedValue(error);
-      const f = createFixture({ eventInterceptors: { run } });
-      await expect(f.methods.page()).rejects.toBe(error);
-      expect(f.upsertProfile).not.toHaveBeenCalled();
-      expect(f.setProfile).not.toHaveBeenCalled();
-    });
-
-    it('captures the profile revision before awaiting hooks', async () => {
-      let release!: (event: unknown) => void;
-      const run = vi.fn<EventInterceptors['run']>(
-        () =>
-          new Promise((resolve) => {
-            release = resolve;
-          })
-      );
-      const f = createFixture({ profile: { id: 'visitor' }, eventInterceptors: { run } });
-      const sending = f.methods.page();
-      f.invalidateProfile();
-      release(builder.buildPageView());
-
-      await expect(sending).resolves.toMatchObject({ accepted: true });
-      expect(f.upsertProfile.mock.calls[0]?.[0].profileId).toBe('visitor');
-      expect(f.setProfile).not.toHaveBeenCalled();
-      expect(f.methods.profile).toEqual({ id: 'visitor' });
-    });
-
-    it('preserves immediate transport start with an empty registry', async () => {
-      const run = vi.fn<EventInterceptors['run']>(async (event) => event);
-      const f = createFixture({ eventInterceptors: { run, count: () => 0 } });
-      const sending = f.methods.page();
-      expect(f.upsertProfile).toHaveBeenCalledOnce();
-      expect(run).not.toHaveBeenCalled();
-      await sending;
-    });
-  });
-
-  it('sends profile-producing events through Personalization and retains the returned profile', async () => {
-    const onEventBlocked = vi.fn();
-    const { methods, upsertProfile } = createFixture({
-      consent: { events: true },
-      onEventBlocked,
-    });
-
-    await expect(methods.page()).resolves.toMatchObject({
-      accepted: true,
-      data: { profile: { id: 'profile-from-api' } },
-    });
-    await methods.identify({ userId: 'user-1', locale: 'fr-FR' });
-    await methods.track({ event: 'checkout' });
-
-    expect(upsertProfile).toHaveBeenNthCalledWith(
-      1,
-      {
-        profileId: undefined,
-        events: [
-          expect.objectContaining({
-            type: 'page',
-            context: expect.objectContaining({
-              gdpr: { isConsentGiven: true },
-              locale: 'de-DE',
-            }),
-          }),
-        ],
-      },
-      { locale: 'en-US' }
-    );
-    expect(upsertProfile).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        profileId: 'profile-from-api',
-        events: [
-          expect.objectContaining({
-            type: 'identify',
-            context: expect.objectContaining({ locale: 'fr-FR' }),
-          }),
-        ],
-      }),
-      { locale: 'en-US' }
-    );
-    expect(upsertProfile).toHaveBeenNthCalledWith(
-      3,
-      expect.objectContaining({
-        profileId: 'profile-from-api',
-        events: [expect.objectContaining({ type: 'track', event: 'checkout' })],
-      }),
-      { locale: 'en-US' }
-    );
-    expect(methods.profile).toEqual(completeProfile('profile-from-api'));
-    expect(onEventBlocked).not.toHaveBeenCalled();
-  });
-
-  it('does not publish a direct response after the owner changes its profile revision', async () => {
-    let resolve!: (value: EventOptimizationData) => void;
-    const response = new Promise<EventOptimizationData>((settle) => {
-      resolve = settle;
-    });
-    const f = createFixture({ profile: { id: 'current-profile' } });
-    f.upsertProfile.mockReturnValueOnce(response);
-    const result = f.methods.page();
-    f.invalidateProfile();
-    resolve(optimizationData('stale-profile'));
-
-    await expect(result).resolves.toMatchObject({ accepted: true });
-    expect(f.methods.profile).toEqual({ id: 'current-profile' });
-    expect(f.setProfile).not.toHaveBeenCalled();
-  });
-
-  it('propagates direct Personalization transport errors', async () => {
-    const error = new Error('Personalization transport failed');
-    const { methods, upsertProfile } = createFixture({ profile: { id: 'current-profile' } });
-    upsertProfile.mockRejectedValue(error);
-
-    await expect(methods.page()).rejects.toBe(error);
-    expect(methods.profile).toEqual({ id: 'current-profile' });
-  });
-
-  it('sends each interaction immediately through Analytics and reports admission even when the transport fails', async () => {
-    const { methods, sendBatchEvents } = createFixture({
-      consent: { events: true },
-      profile: completeProfile('profile-1'),
-      sendResult: false,
-    });
+  it('reports preview with original arguments before context, construction, or profile lookup', async () => {
+    const policy = owner({ getIsPreview: () => true, getEventContext: vi.fn() });
+    const build = vi.fn(() => builder.buildClick(interaction));
+    const send = vi.fn();
 
     await expect(
-      methods.trackView({ ...interaction, viewId: 'view-1', viewDurationMs: 100 })
-    ).resolves.toEqual({ accepted: true });
-    await methods.trackClick(interaction);
-    await methods.trackHover({ ...interaction, hoverId: 'hover-1', hoverDurationMs: 50 });
-    await methods.trackFlagView({ componentId: 'flag-1' });
-
-    expect(sendBatchEvents).toHaveBeenCalledTimes(4);
-    expect(sendBatchEvents.mock.calls.map(([[batch]]) => batch.events[0].type)).toEqual([
-      'exo_node_view',
-      'exo_node_click',
-      'exo_node_hover',
-      'component',
-    ]);
-    for (const [[batch]] of sendBatchEvents.mock.calls) {
-      expect(batch.profile).toEqual(completeProfile('profile-1'));
-      expect(batch.events).toHaveLength(1);
-    }
+      emitAnalyticsEvent(policy, 'trackClick', interaction, build, send)
+    ).resolves.toEqual({
+      accepted: false,
+      reason: 'preview',
+    });
+    expect(policy.reportBlockedEvent).toHaveBeenCalledExactlyOnceWith({
+      reason: 'preview',
+      method: 'trackClick',
+      args: [interaction],
+    });
+    expect(policy.getEventContext).not.toHaveBeenCalled();
+    expect(build).not.toHaveBeenCalled();
+    expect(policy.getProfile).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
   });
 
-  it.each([undefined, { id: 'profile-1' }])(
-    'requires a complete profile for stateless Analytics with profile %j',
-    async (profile) => {
-      const { methods, sendBatchEvents } = createFixture({ consent: { events: true }, profile });
-      await expect(methods.trackClick(interaction)).rejects.toMatchObject({
-        name: 'EventProfileRequiredError',
-        method: 'trackClick',
-      } satisfies Partial<EventProfileRequiredError>);
-      await expect(
-        methods.trackView({ ...interaction, viewId: 'view-1', viewDurationMs: 100 })
-      ).rejects.toBeInstanceOf(EventProfileRequiredError);
-      expect(sendBatchEvents).not.toHaveBeenCalled();
+  it('copies arguments over owner context with caller fields taking precedence', async () => {
+    const context = { locale: 'de-DE', campaign: { name: 'Owner' } };
+    const args = { locale: 'fr-FR', campaign: { source: 'Caller' } };
+    const policy = owner({ getEventContext: () => context });
+    const build = vi.fn((values: UniversalEventBuilderArgs) => builder.buildPageView(values));
+
+    await emitPersonalizationEvent(policy, 'page', args, build, vi.fn());
+
+    expect(build).toHaveBeenCalledExactlyOnceWith(args);
+    const received = build.mock.calls[0]![0];
+    expect(received).not.toBe(args);
+    expect(received.campaign).toBe(args.campaign);
+    expect(context.campaign).toEqual({ name: 'Owner' });
+
+    await emitPersonalizationEvent(policy, 'page', {}, build, vi.fn());
+    expect(build).toHaveBeenLastCalledWith(context);
+  });
+
+  it.each([
+    'identify',
+    'page',
+    'track',
+    'trackView',
+    'trackClick',
+    'trackHover',
+    'trackFlagView',
+  ] as const)(
+    'refuses %s before context, construction, or profile lookup when consent is denied',
+    async (method) => {
+      const policy = owner({
+        getConsent: () => ({ events: false }),
+        getAllowedEventTypes: () => [],
+        getEventContext: vi.fn(),
+      });
+      const build = vi.fn(() => {
+        throw new Error('invalid arguments');
+      });
+      const send = vi.fn();
+
+      const emission =
+        method === 'identify' || method === 'page' || method === 'track'
+          ? emitPersonalizationEvent(policy, method, {}, build, send)
+          : emitAnalyticsEvent(policy, method, {}, build, send);
+      await expect(emission).resolves.toEqual({
+        accepted: false,
+      });
+      expect(policy.reportBlockedEvent).toHaveBeenCalledExactlyOnceWith({
+        reason: 'consent',
+        method,
+        args: [{}],
+      });
+      expect(policy.getEventContext).not.toHaveBeenCalled();
+      expect(build).not.toHaveBeenCalled();
+      expect(policy.getProfile).not.toHaveBeenCalled();
+      expect(send).not.toHaveBeenCalled();
     }
   );
 
-  describe('id-only profiles', () => {
-    const idOnly = { id: 'profile-1' };
+  it('propagates construction errors for permitted calls', async () => {
+    const policy = owner();
+    const error = new Error('invalid arguments');
+    const build = () => {
+      throw error;
+    };
+    const send = vi.fn();
 
-    it('requires complete profile state while accepting id-only request profiles', () => {
-      expect(EventProfileSchema.safeParse(completeProfile('profile-1')).success).toBe(true);
-      expect(EventProfileSchema.safeParse(idOnly).success).toBe(false);
-      expect(createFixture({ profile: idOnly }).methods.profile).toEqual(idOnly);
-      expect(EventProfileSchema.safeParse({}).success).toBe(false);
-    });
-
-    it('keeps the extra fields of an incomplete profile instead of narrowing it to its id', () => {
-      const stored = { id: 'profile-1', traits: { plan: 'pro' }, audiences: ['a'] };
-
-      expect(createFixture({ profile: stored }).methods.profile).toEqual(stored);
-    });
-
-    it('keeps sending Personalization events with an id-only profile', async () => {
-      const { methods, upsertProfile } = createFixture({
-        consent: { events: true },
-        profile: idOnly,
-      });
-
-      await methods.page();
-
-      expect(upsertProfile.mock.calls[0]?.[0].profileId).toBe('profile-1');
-    });
+    await expect(emitPersonalizationEvent(policy, 'track', {}, build, send)).rejects.toBe(error);
+    await expect(emitAnalyticsEvent(policy, 'trackClick', {}, build, send)).rejects.toBe(error);
+    expect(policy.reportBlockedEvent).not.toHaveBeenCalled();
+    expect(policy.getProfile).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
   });
 
-  it('forwards request-scoped Analytics options with a direct Analytics send', async () => {
-    const beacon = vi.fn(() => true);
-    const { methods, sendBatchEvents } = createFixture({
-      consent: { events: true },
-      profile: completeProfile('profile-1'),
-      analyticsOptions: { beacon },
+  it('rechecks consent after application context changes during construction', async () => {
+    let consent: ConsentState = { events: true };
+    const policy = owner({
+      getConsent: () => consent,
+      getEventContext: () => {
+        consent = { events: false };
+        return {};
+      },
     });
+    const args = { ...interaction, viewId: 'view', viewDurationMs: 10 };
+    const build = vi.fn(() => {
+      return builder.buildView(args);
+    });
+    const send = vi.fn();
 
-    await methods.trackClick(interaction);
-
-    expect(sendBatchEvents).toHaveBeenCalledWith(expect.any(Array), { beacon });
+    await expect(emitAnalyticsEvent(policy, 'trackView', args, build, send)).resolves.toEqual({
+      accepted: false,
+    });
+    expect(build).toHaveBeenCalledOnce();
+    expect(policy.reportBlockedEvent).toHaveBeenCalledExactlyOnceWith({
+      reason: 'consent',
+      method: 'trackView',
+      args: [args],
+    });
+    expect(policy.getProfile).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
   });
 
-  it('validates arguments before consent and profile checks, except the early view consent guard', async () => {
-    const onEventBlocked = vi.fn();
-    const { methods, sendBatchEvents, upsertProfile } = createFixture({
-      consent: { events: false },
-      onEventBlocked,
-    });
+  it.each([true, false])(
+    'stamps current consent %s without mutating the built event',
+    async (events) => {
+      let consent: ConsentState = { events: !events };
+      const policy = owner({ getConsent: () => consent });
+      const event = builder.buildPageView();
+      const original = globalThis.structuredClone(event);
+      const send = vi.fn();
 
-    await expect(methods.track({ event: 123 as unknown as string })).rejects.toThrow();
-    await expect(
-      methods.trackClick({ ...interaction, entityId: 123 as unknown as string })
-    ).rejects.toThrow();
-    expect(onEventBlocked).not.toHaveBeenCalled();
-
-    await expect(
-      methods.trackView({ ...interaction, viewId: 'view-1', viewDurationMs: -1 })
-    ).resolves.toEqual({ accepted: false });
-    expect(onEventBlocked).toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'trackView', reason: 'consent' })
-    );
-    expect(upsertProfile).not.toHaveBeenCalled();
-    expect(sendBatchEvents).not.toHaveBeenCalled();
-  });
-
-  describe('consent gating', () => {
-    it('emits only allowed event types while event consent is undecided or denied', async () => {
-      for (const consent of [undefined, { events: false }] as const) {
-        const { methods, upsertProfile, sendBatchEvents } = createFixture({
-          consent,
-          profile: { id: 'visitor' },
-        });
-
-        await methods.page();
-        await expect(methods.track({ event: 'purchase' })).resolves.toEqual({ accepted: false });
-        await expect(
-          methods.trackClick({ entityId: 'entry', entityKind: 'Experience' })
-        ).resolves.toEqual({ accepted: false });
-
-        expect(upsertProfile).toHaveBeenCalledTimes(1);
-        expect(sendBatchEvents).not.toHaveBeenCalled();
-      }
-    });
-
-    it('honors a custom allowedEventTypes list', async () => {
-      const { methods, upsertProfile } = createFixture({
-        consent: { events: false },
-        allowedEventTypes: ['track'],
-        profile: { id: 'visitor' },
-      });
-
-      await expect(methods.page()).resolves.toEqual({ accepted: false });
-      await methods.track({ event: 'purchase' });
-
-      expect(upsertProfile).toHaveBeenCalledTimes(1);
-    });
-
-    it('emits everything once event consent is granted', async () => {
-      const { methods, upsertProfile, sendBatchEvents } = createFixture({
-        consent: { events: true },
-        profile: visitor,
-      });
-
-      await methods.track({ event: 'purchase' });
-      await methods.trackClick({ entityId: 'entry', entityKind: 'Experience' });
-
-      expect(upsertProfile).toHaveBeenCalledTimes(1);
-      expect(sendBatchEvents).toHaveBeenCalledTimes(1);
-    });
-
-    it('maps interaction methods to their own selectors', async () => {
-      const profile = visitor;
-      const cases = [
-        ['trackView', 'component'],
-        ['trackClick', 'component_click'],
-        ['trackHover', 'component_hover'],
-      ] as const;
-
-      for (const [method, selector] of cases) {
-        const allowed = createFixture({ allowedEventTypes: [selector], profile });
-        const denied = createFixture({ allowedEventTypes: [], profile });
-        const args = {
-          trackView: { ...interaction, viewId: 'view-1', viewDurationMs: 100 },
-          trackClick: interaction,
-          trackHover: { ...interaction, hoverId: 'hover-1', hoverDurationMs: 50 },
-        }[method];
-        // The argument shape differs per method; each is valid for its own method here.
-        const [admitted, blocked] = [{ accepted: true }, { accepted: false }];
-        await expect(allowed.methods[method](args as never)).resolves.toEqual(admitted);
-        await expect(denied.methods[method](args as never)).resolves.toEqual(blocked);
-        expect(allowed.sendBatchEvents).toHaveBeenCalledTimes(1);
-        expect(denied.sendBatchEvents).not.toHaveBeenCalled();
-      }
-    });
-
-    it('admits flag views through the narrower flag selector or through component', async () => {
-      const profile = visitor;
-      const args = { componentId: 'flag-1' };
-
-      for (const allowedEventTypes of [['flag'], ['component']] as const) {
-        const { methods, sendBatchEvents } = createFixture({ allowedEventTypes, profile });
-        await expect(methods.trackFlagView(args)).resolves.toEqual({ accepted: true });
-        expect(sendBatchEvents).toHaveBeenCalledTimes(1);
-      }
-      const { methods, sendBatchEvents } = createFixture({
-        allowedEventTypes: ['component_click'],
-        profile,
-      });
-      await expect(methods.trackFlagView(args)).resolves.toEqual({ accepted: false });
-      expect(sendBatchEvents).not.toHaveBeenCalled();
-    });
-
-    it('reports each blocked event to onEventBlocked, and survives a throwing callback', async () => {
-      const onEventBlocked = vi.fn();
-      const { methods } = createFixture({ onEventBlocked, profile: { id: 'visitor' } });
-
-      await methods.track({ event: 'purchase' });
-      expect(onEventBlocked).toHaveBeenCalledWith({
-        reason: 'consent',
-        method: 'track',
-        args: [{ event: 'purchase' }],
-      });
-
-      onEventBlocked.mockImplementation(() => {
-        throw new Error('logger down');
-      });
-      await expect(methods.track({ event: 'again' })).resolves.toEqual({ accepted: false });
-    });
-  });
-
-  describe('trackView acceptance result', () => {
-    const view = { ...interaction, viewId: 'view-1', viewDurationMs: 100 };
-
-    it('resolves { accepted: false } for a consent-blocked view and reports it', async () => {
-      const onEventBlocked = vi.fn();
-      const { methods, sendBatchEvents } = createFixture({
-        consent: { events: false },
-        profile: { id: 'visitor' },
-        onEventBlocked,
-      });
-
-      await expect(methods.trackView(view)).resolves.toEqual({ accepted: false });
-      expect(sendBatchEvents).not.toHaveBeenCalled();
-      expect(onEventBlocked).toHaveBeenCalledWith(
-        expect.objectContaining({ reason: 'consent', method: 'trackView' })
+      await emitPersonalizationEvent(
+        policy,
+        'page',
+        {},
+        () => {
+          consent = { events };
+          return event;
+        },
+        send
       );
+
+      expect(send).toHaveBeenCalledWith({
+        ...event,
+        context: { ...event.context, gdpr: { isConsentGiven: events } },
+      });
+      expect(event).toEqual(original);
+      expect(send.mock.calls[0]![0]).not.toBe(event);
+    }
+  );
+
+  it.each([
+    ['trackView', 'component'],
+    ['trackClick', 'component_click'],
+    ['trackHover', 'component_hover'],
+    ['trackFlagView', 'flag'],
+    ['trackFlagView', 'component'],
+  ] as const)('admits %s through %s and refuses unrelated selectors', async (method, selector) => {
+    const args = {
+      ...interaction,
+      viewId: 'view',
+      viewDurationMs: 10,
+      hoverId: 'hover',
+      hoverDurationMs: 10,
+      componentId: 'flag',
+    };
+    const build = () =>
+      ({
+        trackView: () => builder.buildView(args),
+        trackClick: () => builder.buildClick(args),
+        trackHover: () => builder.buildHover(args),
+        trackFlagView: () => builder.buildFlagView(args),
+      })[method]();
+    const policy = owner({ getConsent: () => ({}), getAllowedEventTypes: () => [selector] });
+    const send = vi.fn();
+    await expect(emitAnalyticsEvent(policy, method, args, build, send)).resolves.toEqual({
+      accepted: true,
+    });
+    policy.getAllowedEventTypes = () => ['track'];
+    await expect(emitAnalyticsEvent(policy, method, args, build, send)).resolves.toEqual({
+      accepted: false,
+    });
+    expect(send).toHaveBeenCalledOnce();
+    expect(policy.reportBlockedEvent).toHaveBeenCalledExactlyOnceWith({
+      reason: 'consent',
+      method,
+      args: [args],
     });
   });
+
+  it.each([{}, { events: false }])(
+    'honors a custom Personalization allowlist under consent %j',
+    async (consent) => {
+      const policy = owner({ getConsent: () => consent, getAllowedEventTypes: () => ['track'] });
+      const send = vi.fn().mockResolvedValue({ accepted: true });
+      await expect(
+        emitPersonalizationEvent(
+          policy,
+          'track',
+          {},
+          () => builder.buildTrack({ event: 'purchase' }),
+          send
+        )
+      ).resolves.toEqual({ accepted: true });
+      await expect(
+        emitPersonalizationEvent(policy, 'page', {}, () => builder.buildPageView(), send)
+      ).resolves.toEqual({ accepted: false });
+      expect(send).toHaveBeenCalledOnce();
+      expect(policy.reportBlockedEvent).toHaveBeenCalledExactlyOnceWith({
+        reason: 'consent',
+        method: 'page',
+        args: [{}],
+      });
+    }
+  );
+});
+
+describe('event delivery owners', () => {
+  it.each([undefined, { id: 'visitor' }])(
+    'delegates incomplete Analytics profile %j to owner policy',
+    async (profile) => {
+      const policy = owner({ getProfile: () => profile });
+      const build = () => builder.buildClick(interaction);
+      const send = vi.fn();
+      await expect(
+        emitAnalyticsEvent(policy, 'trackClick', interaction, build, send)
+      ).resolves.toEqual({ accepted: false });
+      expect(policy.onMissingProfile).toHaveBeenCalledExactlyOnceWith('trackClick');
+      expect(send).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([undefined, false] as const)(
+    'maps Analytics sender result %s to admission and forwards a validated profile',
+    async (result) => {
+      const profile = analyticsProfileFixture('visitor');
+      const policy = owner({ getProfile: () => profile });
+      const event = builder.buildClick(interaction);
+      const original = globalThis.structuredClone(event);
+      const send = vi.fn().mockResolvedValue(result);
+
+      await expect(
+        emitAnalyticsEvent(policy, 'trackClick', interaction, () => event, send)
+      ).resolves.toEqual({ accepted: result !== false });
+      expect(send).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          context: expect.objectContaining({ gdpr: { isConsentGiven: true } }),
+        }),
+        profile
+      );
+      expect(policy.onMissingProfile).not.toHaveBeenCalled();
+      expect(event).toEqual(original);
+    }
+  );
 });

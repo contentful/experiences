@@ -92,11 +92,14 @@ beforeEach(() => {
 });
 
 describe('App Router request family', () => {
-  it('preserves conflicting selector fields for validation by the Node boundary', async () => {
+  it.each([
+    { experienceId: 'home', destinationId: 'site', path: '/' },
+    { destinationId: 'site', path: '/', parameters: {} },
+    { destinationId: 'site', nodeId: 'node', extensions: {} },
+  ])('rejects raw selectors before projecting fetch options: %j', async (selector) => {
     const binding = bindAppRouterServerExperiences(config);
-    const selector = { experienceId: 'home', destinationId: 'site', path: '/' };
-    await binding.Experience(selector as never);
-    expect(doubles.fetch.mock.calls[0]![0]).toMatchObject(selector);
+    await expect(binding.Experience(selector as never)).rejects.toBeInstanceOf(TypeError);
+    expect(doubles.fetch).not.toHaveBeenCalled();
   });
 
   it('routes an explicit missing selection to native notFound', async () => {
@@ -145,10 +148,10 @@ describe('App Router request family', () => {
       path: '/lookup',
       as: 'section',
     });
-    expect(element.props.experience).toBe(plan);
-    expect(element.props.as).toBe('section');
-    expect(element.props).not.toHaveProperty('destinationId');
-    expect(element.props).not.toHaveProperty('path');
+    expect(element?.props.experience).toBe(plan);
+    expect(element?.props.as).toBe('section');
+    expect(element?.props).not.toHaveProperty('destinationId');
+    expect(element?.props).not.toHaveProperty('path');
     expect(doubles.fetch).toHaveBeenCalledExactlyOnceWith(
       {
         destinationId: 'site',
@@ -165,24 +168,44 @@ describe('App Router request family', () => {
     expect(doubles.destroy).toHaveBeenCalledTimes(2);
   });
 
-  it('keeps raw destination redirects while convenience components redirect before adoption', async () => {
-    const redirect = { path: '/target' };
-    doubles.transfer.mockResolvedValueOnce({ redirect, handoff });
-    const composeRequest = vi.fn();
-    const binding = bindAppRouterServerExperiences({
-      ...config,
-      request: { experience: { destinationId: 'site', path: '/' }, composeRequest },
-    });
-    expect(await binding.request.loadExperience()).toMatchObject({ redirect, handoff });
-    await expect(binding.request.Experience({})).rejects.toThrow('NEXT_REDIRECT:/target');
-    await expect(binding.request.ExperiencesRoot({})).rejects.toThrow('NEXT_REDIRECT:/target');
-    await expect(binding.request.ExperiencesAnalyticsRoot({})).rejects.toThrow(
-      'NEXT_REDIRECT:/target'
-    );
-    expect(doubles.transfer).toHaveBeenCalledOnce();
-    expect(composeRequest).toHaveBeenCalledOnce();
-    expect(doubles.destroy).toHaveBeenCalledOnce();
-  });
+  it.each(['/target', '//example.com/outside'])(
+    'keeps raw redirects and validates convenience navigation: %s',
+    async (path) => {
+      const redirect = { path };
+      doubles.transfer.mockResolvedValueOnce({ redirect, handoff });
+      const composeRequest = vi.fn();
+      const binding = bindAppRouterServerExperiences({
+        ...config,
+        browser: { delivery: { accessToken: 'browser-token' } },
+        request: { experience: { destinationId: 'site', path: '/' }, composeRequest },
+      });
+      expect(await binding.request.loadExperience()).toMatchObject({ redirect, handoff });
+      if (path === '/target') {
+        await expect(binding.request.Experience({})).rejects.toThrow('NEXT_REDIRECT:/target');
+        await expect(binding.request.ExperiencesRoot({})).rejects.toThrow('NEXT_REDIRECT:/target');
+        await expect(binding.request.ExperiencesAnalyticsRoot({})).rejects.toThrow(
+          'NEXT_REDIRECT:/target'
+        );
+      } else {
+        expect(await binding.request.Experience({})).toBeNull();
+        const root = await binding.request.ExperiencesRoot({});
+        const analytics = await binding.request.ExperiencesAnalyticsRoot({});
+        for (const element of [root, analytics]) {
+          expect(element.props.result).toMatchObject({
+            redirect,
+            contentError: 'Destination redirect must be a local absolute path.',
+          });
+          expect(element.props.result).not.toHaveProperty('notFound');
+        }
+        doubles.fetch.mockResolvedValueOnce({ redirect });
+        await expect(binding.Experience({ destinationId: 'site', path: '/' })).resolves.toBeNull();
+        expect(await binding.request.loadExperience()).toMatchObject({ redirect, handoff });
+      }
+      expect(doubles.transfer).toHaveBeenCalledOnce();
+      expect(composeRequest).toHaveBeenCalledOnce();
+      expect(doubles.destroy).toHaveBeenCalledTimes(path === '/target' ? 1 : 2);
+    }
+  );
 
   it('wires active managed preview from the primary and projects only browser options', async () => {
     doubles.headers.mockResolvedValue(
@@ -253,7 +276,7 @@ describe('App Router request family', () => {
   it('explicit/static rendering reads no framework request state', async () => {
     const binding = bindAppRouterServerExperiences(config);
     const rendered = await binding.Experience({ experience: plan });
-    expect(rendered.props.experience).toBe(plan);
+    expect(rendered?.props.experience).toBe(plan);
     expect(doubles.headers).not.toHaveBeenCalled();
     expect(doubles.cookies).not.toHaveBeenCalled();
     expect(doubles.bind).not.toHaveBeenCalled();
@@ -346,7 +369,7 @@ describe('App Router request family', () => {
       request: { ...config.request, mode },
     });
     const rendered = await binding.Experience({ experience: plan, renderError, renderUnknown });
-    expect(rendered.props).toMatchObject({ renderError, renderUnknown });
+    expect(rendered?.props).toMatchObject({ renderError, renderUnknown });
     const requestRendered = await binding.request.Experience({ renderError, renderUnknown });
     expect(requestRendered?.props).toMatchObject({ renderError, renderUnknown });
     expect((await binding.request.loadExperience()).initialPageOwner).toBe('server');

@@ -16,7 +16,11 @@ The primary fetch + resolve entry point. Fetches an Experience payload and resol
 - **By destination node id**: `{ spaceId, destinationId, nodeId }`.
 - **By Experience id**: `{ spaceId, environmentId, experienceId, … }`. Use it when you already hold an id.
 
-The destination forms are space-scoped (no `environmentId`, `parameters` or `extensions`) and accept `locale` and `personalization`; supplying personalization sends a POST instead of the cacheable GET. Locale is forwarded as a query value on GET and POST. They return `PortableRenderPlan | DestinationRedirectResult`: a redirect node resolves to `{ redirect: { path } }`, which you follow instead of rendering.
+The destination forms are space-scoped (no `environmentId`, `parameters` or `extensions`) and accept `locale` and `personalization`; supplying personalization sends a POST instead of the cacheable GET. Locale is forwarded as a query value on GET and POST. Defined `parameters` or `extensions` on a destination selector reject with `TypeError` before transport, including empty objects; `undefined` is treated as absent. They return `PortableRenderPlan | DestinationRedirectResult`: a redirect node resolves to `{ redirect: { path } }`, which you follow instead of rendering.
+
+When migrating shared fetch defaults, remove `parameters` and `extensions` from
+destination descriptors, including defaults such as `{}`. Supply these options
+only with `experienceId`; explicit `undefined` remains absent.
 
 ```ts
 const result = await fetchExperience(
@@ -217,6 +221,13 @@ try {
 ```
 
 The full delivery-client error namespace is also re-exported as `ContentfulViewDelivery` (`UnauthorizedError`, `ForbiddenError`, `ConflictError`, `UnprocessableEntityError`, `InternalServerError`, `ContentfulViewDeliveryError`, `ContentfulViewDeliveryTimeoutError`).
+
+### `isPreviewSessionFetchError(error)`
+
+Recognizes Runtime-owned Preview Session acquisition failures, including HTTP 404,
+without installing the optional Live Preview package. These failures retain their
+original `cause` and are distinct from missing Delivery content. See the
+[Runtime Preview contract](../runtime/README.md#optional-runtime-live-preview).
 
 ### `ContentfulViewDeliveryClient`
 

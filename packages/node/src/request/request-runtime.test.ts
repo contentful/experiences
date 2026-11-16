@@ -9,7 +9,6 @@ import {
   type RequestContext,
 } from '../contentful-experiences.js';
 import {
-  EventProfileRequiredError,
   type PreviewSessionOptions,
   InterceptorManager,
   type OptimizationEventStreamEvent,
@@ -594,16 +593,6 @@ describe('request facade', () => {
       { locale: 'en-US' }
     );
     expect(request.profile).toEqual(completeProfile('updated-profile'));
-  });
-
-  it('requires a request-local profile before delegating Analytics events', async () => {
-    const { runtime, sendBatchEvents } = createEventRuntime();
-    const request = runtime.forRequest({ consent: true });
-
-    await expect(
-      request.trackClick({ entityId: 'entry', entityKind: 'Experience' })
-    ).rejects.toBeInstanceOf(EventProfileRequiredError);
-    expect(sendBatchEvents).not.toHaveBeenCalled();
   });
 
   it('rejects invalid preflight without replacing it with the request default', async () => {

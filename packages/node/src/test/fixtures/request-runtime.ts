@@ -1,7 +1,8 @@
+import type { DirectEventBindings } from '../../request/event-methods.js';
 import { vi } from 'vitest';
 import { RequestBoundExperiences } from '../../request/request-runtime.js';
 import type { RequestContext, ConsentPolicy } from '../../request/types.js';
-import type { DirectEventBindings, EventMethods } from '@contentful/experiences-runtime';
+import type { EventMethods } from '@contentful/experiences-runtime';
 import {
   EventBuilder,
   InterceptorManager,

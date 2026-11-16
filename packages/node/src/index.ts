@@ -8,6 +8,8 @@ export type {
   RequestContext,
 } from './contentful-experiences.js';
 export { EXPERIENCES_NODE_SDK_NAME, EXPERIENCES_NODE_SDK_VERSION } from './sdk-info.js';
+/** @internal */
+export { assertExperienceSelector } from '@contentful/experiences-client';
 
 export {
   ContentfulViewDelivery,
@@ -15,6 +17,7 @@ export {
   ExperienceFetchError,
   NotFoundError,
   isNotFoundError,
+  isPreviewSessionFetchError,
   PREVIEW_HOST,
 } from '@contentful/experiences-client';
 export type {
