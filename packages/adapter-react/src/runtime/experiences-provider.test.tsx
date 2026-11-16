@@ -2,6 +2,7 @@
 
 import {
   act,
+  startTransition,
   StrictMode,
   Suspense,
   useCallback,
@@ -327,23 +328,103 @@ describe('React runtime ownership and activation', () => {
     }
   );
 
-  it('keeps the static builder stable across rerenders and forwards it to the handoff owner', async () => {
+  it.each(['static', 'builder'] as const)(
+    'retains pending and completed handoff work across inline %s payload updates',
+    async (kind) => {
+      const pending = deferred();
+      runtime.hydrateAndTrackCurrentPage.mockReturnValue(pending.promise);
+      const suppliedHandoff = handoff();
+      const tree = (value: string) => (
+        <ExperiencesProvider
+          sdk={inject(runtime)}
+          handoff={suppliedHandoff}
+          {...(kind === 'static'
+            ? { initialPagePayload: { properties: { value } } }
+            : { buildPagePayload: () => ({ properties: { value } }) })}
+        >
+          <Probe />
+        </ExperiencesProvider>
+      );
+      render(tree('initial'));
+      const options = runtime.hydrateAndTrackCurrentPage.mock.calls[0]![1];
+      render(tree('pending'));
+      expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(1);
+      expect(options.isCurrent!()).toBe(true);
+      expect(options.buildPayload?.({ isInitialEmission: true })?.properties?.value).toBe(
+        'pending'
+      );
+      await act(async () => pending.resolve());
+      const settledRenderCount = captures.length;
+      render(tree('completed'));
+      expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(1);
+      expect(captures.slice(settledRenderCount).every((state) => state.isContentReady)).toBe(true);
+      expect(options.isCurrent!()).toBe(true);
+      expect(options.buildPayload?.({ isInitialEmission: false })?.properties?.value).toBe(
+        'completed'
+      );
+    }
+  );
+
+  it('restarts handoff work when payload capability is added or removed', () => {
+    runtime.hydrateAndTrackCurrentPage.mockReturnValue(deferred().promise);
     const suppliedHandoff = handoff();
-    const initialPagePayload = { properties: { source: 'static' } };
-    const tree = () => (
-      <ExperiencesProvider
-        sdk={inject(runtime)}
-        handoff={suppliedHandoff}
-        initialPagePayload={initialPagePayload}
-      >
+    const tree = (payload: Partial<ExperiencesProviderProps> = {}) => (
+      <ExperiencesProvider sdk={inject(runtime)} handoff={suppliedHandoff} {...payload}>
         <Probe />
       </ExperiencesProvider>
     );
-    await act(async () => view.render(tree()));
+    const options = () => runtime.hydrateAndTrackCurrentPage.mock.calls.at(-1)![1];
+    render(tree());
+    expect(options().buildPayload).toBeUndefined();
+    const absent = options();
+    render(tree({ initialPagePayload: { properties: { source: 'static' } } }));
+    expect(absent.isCurrent!()).toBe(false);
+    const enabled = options();
+    expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(2);
+    expect(enabled.buildPayload).toEqual(expect.any(Function));
+    render(tree({ buildPagePayload: () => ({ properties: { source: 'builder' } }) }));
+    expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(2);
+    expect(enabled.buildPayload?.({ isInitialEmission: true })).toEqual({
+      properties: { source: 'builder' },
+    });
+    render(tree());
+    expect(enabled.isCurrent!()).toBe(false);
+    expect(options().buildPayload).toBeUndefined();
+    expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps retained payload readers on committed props during an abandoned update', async () => {
+    runtime.hydrateAndTrackCurrentPage.mockReturnValue(deferred().promise);
+    const suppliedHandoff = handoff();
+    const suspended = vi.fn();
+    const pending = new Promise<void>(() => {});
+    function Suspend(): never {
+      suspended();
+      throw pending;
+    }
+    const tree = (value: string, suspend = false) => (
+      <Suspense fallback="waiting">
+        <ExperiencesProvider
+          sdk={inject(runtime)}
+          handoff={suppliedHandoff}
+          buildPagePayload={() => ({ properties: { value } })}
+        >
+          {suspend ? <Suspend /> : <Probe />}
+        </ExperiencesProvider>
+      </Suspense>
+    );
+    render(tree('committed'));
     const options = runtime.hydrateAndTrackCurrentPage.mock.calls[0]![1];
-    expect(options.buildPayload?.({ isInitialEmission: true })).toBe(initialPagePayload);
-    await act(async () => view.render(tree()));
+    await act(async () => startTransition(() => view.render(tree('abandoned', true))));
+    expect(suspended).toHaveBeenCalled();
+    expect(options.buildPayload?.({ isInitialEmission: true })?.properties?.value).toBe(
+      'committed'
+    );
+    render(tree('replacement'));
     expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(1);
+    expect(options.buildPayload?.({ isInitialEmission: true })?.properties?.value).toBe(
+      'replacement'
+    );
   });
 
   it('uses the latest static payload after a standalone callback and on consent retry', async () => {
@@ -363,6 +444,7 @@ describe('React runtime ownership and activation', () => {
       </ExperiencesProvider>
     );
     render(tree('/initial', { properties: { route: 'home' } }));
+    render(tree('/next', { properties: { route: 'intermediate' } }));
     const next = { properties: { route: 'next' } };
     render(tree('/next', next));
     runtime.trackCurrentPage.mockResolvedValueOnce({ accepted: false });
@@ -373,11 +455,13 @@ describe('React runtime ownership and activation', () => {
     expect(
       runtime.trackCurrentPage.mock.calls[0]![0].buildPayload({ isInitialEmission: true })
     ).toBe(next);
+    const retry = { properties: { route: 'retry' } };
+    render(tree('/next', retry));
     await act(async () => runtime.consent({ events: true }));
     expect(runtime.trackCurrentPage).toHaveBeenCalledTimes(2);
     expect(
       runtime.trackCurrentPage.mock.calls[1]![0].buildPayload({ isInitialEmission: false })
-    ).toBe(next);
+    ).toBe(retry);
     expect(runtime.fetchExperience).not.toHaveBeenCalled();
   });
 
