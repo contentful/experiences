@@ -5,7 +5,8 @@ SDK operations in the public runtime and justify every departure from that examp
 
 Standalone apps: [Node](./node-sdk/README.md), [Web](./web-sdk/README.md), and
 [Node + Web](./node-sdk+web-sdk/README.md), plus the
-[React reference](./react-sdk/README.md). Root `npm run implementation:install`
+[React reference](./react-sdk/README.md) and
+[Next.js server reference](./nextjs-sdk/README.md). Root `npm run implementation:install`
 prepares all registered implementations through their existing Nx setup targets; stop running apps with
 their scoped lifecycle targets before refreshing dependencies.
 
@@ -27,7 +28,7 @@ Reference-only later IDs use ordinary event-free fetch. See the
 [canonical Runtime contract](../packages/runtime/README.md#xda-preflight-and-profile-finalization).
 Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and
 acceptance review are recorded in the implementation plan. Earlier remedy
-checks/review remain historical. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is in progress; phases 9–13 have not started; the Phase 6 gate is satisfied.
+checks/review remain historical. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is in progress; phases 10–13 have not started; the Phase 6 gate is satisfied.
 
 Browser handoff operations preserve live-profile/provider/handoff identity capture
 before hydration and ordinary provider-first policy under Optimization PR #549 at
@@ -65,7 +66,7 @@ Phase 7 owns managed React roots/loaders/page bindings and the React reference;
 adapt Optimization source/presentation ports to XDA-built events without requiring
 `beforeInitialPage` direct emission. Preserve Optimization's page consent-retry
 exception in that managed flow. Phase 6 is complete and explicitly
-accepted on 2026-11-02. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is in progress; phases 9–13 have not started; the Phase 6 gate is satisfied.
+accepted on 2026-11-02. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is in progress; phases 10–13 have not started; the Phase 6 gate is satisfied.
 Add focused maintained no-network unit/contract tests for optional-page replay,
 consent/preview/schema, content failure, Retry retention, full aggregate ownership
 and stale/reset/destroy guards, without MSW, E2E or server simulations.
@@ -83,6 +84,15 @@ replacement/final exit, retaining them for BFCache. Preview content must not wri
 identity cookies. Keep `.env` intact and browser config explicitly allowlisted.
 Build and host both read app-local `LIVE_PREVIEW_ENABLED` from `.env`; preserve
 tarball setup and pack the existing optional preview artifact without rebuilding it.
+Every app retains `LIVE_PREVIEW_ENABLED` and `LIVE_PREVIEW_SESSION_ID` in local
+`.env`; leave both fields blank in `.env.example`. The session ID is an unread
+convenience value for copying into the URL, never a default or browser projection.
+Activate preview only when the flag is exactly `true` and the URL contains a
+nonempty trimmed `preview_session_id`. Missing/empty URL session or a falsy flag
+keeps ordinary event handling, even with a nonempty session parameter. Pass
+`isPreview: false` explicitly to browser owners in inactive cases, overriding
+automatic URL detection. Sidebar attempts remain subject to normal consent and
+identity requirements; they must not be suppressed by an inactive preview URL.
 See each app README and [Runtime limits](../packages/runtime/README.md#shared-limitations).
 
 All reference implementations use the same hard-coded default Experience IDs:

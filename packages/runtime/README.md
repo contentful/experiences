@@ -198,7 +198,7 @@ No journal-specific 64 KiB cap or version field applies to the aggregate or
 
 **Current correction: complete and explicitly accepted on 2026-11-02.** Current
 checks and acceptance review are recorded in the implementation plan.
-Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is in progress; phases 9–13 have not started; the Phase 6 gate is satisfied. Earlier remedy checks and review are historical
+Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is in progress; phases 10–13 have not started; the Phase 6 gate is satisfied. Earlier remedy checks and review are historical
 evidence for a superseded design, not validation of this revision. Phases 1–5
 remain accepted. Current implementation and validation results are recorded there.
 

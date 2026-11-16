@@ -7,7 +7,7 @@ supported product usage or a cross-fetch guarantee.
 **Current Phase 6 correction:** Complete and explicitly accepted on 2026-11-02;
 current checks and acceptance review are recorded in the implementation plan.
 Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification.
-Phase 8 is in progress; phases 9–13 have not started; the Phase 6 gate is satisfied. Earlier remedy
+Phase 8 is complete and accepted on 2026-11-02; Phase 9 is in progress; phases 10–13 have not started; the Phase 6 gate is satisfied. Earlier remedy
 checks/review remain historical; Phase 7 package and live observations are recorded
 in its implementation-plan entry.
 
@@ -147,12 +147,18 @@ cannot be served from the output-only host.
 credential approved and scoped for that use. Do not place management credentials
 or server-only preview tokens in the public allowlist. Configure optional preview with `LIVE_PREVIEW_ENABLED=true` and an explicitly
 browser-approved `BROWSER_PREVIEW_TOKEN`. Optional `BROWSER_PREVIEW_HOST`,
-`LIVE_PREVIEW_EXPERIENCE_ID`, `LIVE_PREVIEW_SESSION_ID`, `LIVE_PREVIEW_SESSION_HOST`
+`LIVE_PREVIEW_EXPERIENCE_ID`, `LIVE_PREVIEW_SESSION_HOST`
 and `LIVE_PREVIEW_RESOURCE_RESOLUTION` map to the supported public SDK preview configuration.
-A blank Experience ID uses the first configured/default ID. The URL can override
-`preview_session_id` and `preview_experience_id`; an explicitly empty
-`?preview_session_id=` selects ordinary mode even when a session default is configured.
-Links preserve that explicit choice. Changing session or fixed preview policy
+A blank Experience ID uses the first configured/default ID. Preview activates only
+when `LIVE_PREVIEW_ENABLED=true` and the URL supplies a nonempty
+`preview_session_id`; optional `preview_experience_id` selects another Experience.
+`LIVE_PREVIEW_SESSION_ID` stays in local `.env` for convenient copying into the URL;
+application/build code never reads it or includes it in browser configuration.
+The two preview fields are blank in `.env.example`. Missing/empty session parameters
+or a falsy flag select ordinary mode, including when a nonempty session parameter
+remains in the URL. The app explicitly passes that policy to the SDK so ordinary
+event handling remains available under normal consent/identity requirements.
+Links preserve URL parameters. Changing session or fixed preview policy
 recreates the document/owner; ordinary navigation retains it. Rebuild and restart
 after changing the deployment flag: Vite replaces `__LIVE_PREVIEW_ENABLED__` at
 build time, excluding the optional preview import/chunk when disabled. Runtime

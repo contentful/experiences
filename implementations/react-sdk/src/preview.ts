@@ -8,9 +8,7 @@ export function getPreviewBinding(environment: PublicEnvironment, href: string) 
   const preview = environment.LIVE_PREVIEW;
   if (!preview) return undefined;
   const url = new URL(href);
-  const sessionId = url.searchParams.has('preview_session_id')
-    ? url.searchParams.get('preview_session_id')?.trim()
-    : preview.sessionId;
+  const sessionId = url.searchParams.get('preview_session_id')?.trim();
   if (!sessionId) return undefined;
   return {
     experienceId: url.searchParams.get('preview_experience_id')?.trim() || preview.experienceId,

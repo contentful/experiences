@@ -38,7 +38,13 @@
         "default": "./dist/server.js"
       }
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./request-handler": {
+      "import": {
+        "types": "./dist/request-handler.d.ts",
+        "default": "./dist/request-handler.js"
+      }
+    }
   },
   "files": [
     "dist",

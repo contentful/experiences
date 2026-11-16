@@ -194,6 +194,19 @@ automatic/manual presentations under one SDK root. Run
 `npx nx run implementation-react-sdk:dev`. Its README covers local configuration,
 consent, navigation/visitor intent, tracking and scoped validation commands.
 
+The [standalone Next.js server reference](./implementations/nextjs-sdk/README.md)
+uses the packed Next/Node/React SDKs with one explicit request facade, server-rendered
+Home/Page Two content and optional Preview Sessions. Run
+`npx nx run implementation-nextjs-sdk:setup`, then
+`npx nx run implementation-nextjs-sdk:dev`. Browser router takeover remains later
+integration work; its README describes the supported server and response boundaries.
+
+All five references activate Live Preview only with `LIVE_PREVIEW_ENABLED=true`
+and a nonempty URL `preview_session_id`. The local `.env` session ID is retained
+only for copying into the URL; code never reads it. Missing/empty parameters or
+a disabled flag keep ordinary event handling, including when a session parameter
+remains in the URL. Their `.env.example` preview flag/session fields are blank.
+
 Root PM2 shortcuts match Optimization: `npm run pm2:list`, `npm run pm2:logs`,
 `npm run pm2:stop:all`, and `npm run pm2:delete:all`. The `all` commands affect
 every process in the selected PM2 home. Use the implementation's scoped stop

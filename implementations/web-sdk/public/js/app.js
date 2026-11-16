@@ -20,6 +20,7 @@ const sdk = new window.ContentfulExperiences({
     ? { accessToken: env.LIVE_PREVIEW.accessToken, host: env.LIVE_PREVIEW.host }
     : undefined,
   livePreview: createPreviewInitializer(previewBinding),
+  isPreview: Boolean(previewBinding),
 });
 const experienceIds = env.EXPERIENCE_IDS;
 // Reference app: these routes and Experience selections form the demonstration.
@@ -113,9 +114,7 @@ async function renderRoute({
 } = {}) {
   if (disposed) return;
   const nextBinding = getPreviewBinding(env, location.href);
-  const nextIsPreview = Boolean(
-    nextBinding || new URL(location.href).searchParams.get('preview_session_id')?.trim()
-  );
+  const nextIsPreview = Boolean(nextBinding);
   if (nextIsPreview !== sdk.isPreview) {
     location.reload();
     return;
