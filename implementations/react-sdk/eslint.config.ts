@@ -14,7 +14,15 @@ export default [
   {
     files: ['src/**/*.ts', 'src/**/*.tsx'],
     languageOptions: {
-      globals: { window: 'readonly', document: 'readonly', HTMLElement: 'readonly' },
+      globals: {
+        window: 'readonly',
+        document: 'readonly',
+        HTMLElement: 'readonly',
+        URL: 'readonly',
+        Element: 'readonly',
+        HTMLDivElement: 'readonly',
+        HTMLAnchorElement: 'readonly',
+      },
     },
   },
 ];

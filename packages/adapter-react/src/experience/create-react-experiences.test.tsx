@@ -18,7 +18,7 @@ describe('createReactExperiences', () => {
       return <article {...props}>Bound registry</article>;
     }
     const config = { components: { probe: Component } };
-    const { ExperienceRenderer } = createReactExperiences({ config });
+    const { ExperienceRenderer, Experience } = createReactExperiences({ config });
     expect(ContentfulExperiences).not.toHaveBeenCalled();
     const plan = await resolveExperience(
       {
@@ -49,6 +49,18 @@ describe('createReactExperiences', () => {
     expect(root).toContain('class="bound-container"');
     expect(html).toContain('Bound registry');
     expect(html).toMatch(/<\/section>$/);
+    const onExperienceResolved = vi.fn();
+    expect(
+      renderToString(
+        <Experience
+          experience={plan}
+          as="section"
+          rootProps={{ id: 'bound-root', className: 'bound-container' }}
+          onExperienceResolved={onExperienceResolved}
+        />
+      )
+    ).toBe(html);
+    expect(onExperienceResolved).not.toHaveBeenCalled();
     expect(ContentfulExperiences).not.toHaveBeenCalled();
   });
 });

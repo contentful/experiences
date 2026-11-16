@@ -1,15 +1,19 @@
 'use client';
 
 import { createContext, useContext } from 'react';
-import type { WebExperiencesRuntime } from '@contentful/experiences-web';
+import type { ContentfulExperiences, WebExperiencesRuntime } from '@contentful/experiences-web';
 
-export interface ExperiencesContextValue {
-  readonly sdk: WebExperiencesRuntime;
+interface ExperiencesPresentationState {
   readonly error: Error | undefined;
-  readonly isLive: boolean;
   /** Activation/state hydration is terminal; this does not assert content or identity success. */
   readonly isContentReady: boolean;
 }
+
+export type ExperiencesContextValue = ExperiencesPresentationState &
+  (
+    | { readonly isLive: true; readonly sdk: ContentfulExperiences }
+    | { readonly isLive: false; readonly sdk: WebExperiencesRuntime }
+  );
 
 export const ExperiencesContext = createContext<ExperiencesContextValue | null>(null);
 

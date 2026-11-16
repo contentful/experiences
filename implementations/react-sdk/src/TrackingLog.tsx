@@ -26,10 +26,9 @@ export function TrackingLog({ log }: { log: AttemptLog }) {
         </span>
       </div>
       <p className="tracking-log__empty">
-        SDK event notifications describe attempts before queue admission or delivery. Interaction
-        notifications follow SDK consent policy and also require an available runtime profile or
-        identity. Granting consent alone does not make interaction attempts appear for a fresh
-        visitor. This reference does not initialize a visitor profile.
+        SDK notifications count event attempts and do not confirm successful delivery. Interaction
+        notifications require consent and an available runtime profile or identity. XDA can return a
+        provisional profile ID without committing its events.
       </p>
       {!rows.length ? (
         <p className="tracking-log__empty" data-testid="no-events-message">

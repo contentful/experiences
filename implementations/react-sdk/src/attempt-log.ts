@@ -27,10 +27,30 @@ function toRow(event: unknown, id: number): AttemptRow | undefined {
   const duration = interval && fields[`${interval}DurationMs`];
   const durationMs = typeof duration === 'number' ? duration : undefined;
   const entity = typeof fields.entityId === 'string' ? fields.entityId : undefined;
+  const properties = fields.properties;
+  const url =
+    properties && typeof properties === 'object' && 'url' in properties
+      ? properties.url
+      : undefined;
+  let path: string | undefined;
+  if (fields.type === 'page' && url) {
+    try {
+      path = new URL(String(url), window.location.origin).pathname;
+    } catch {
+      path = String(url);
+    }
+  }
+  const value = entity
+    ? `${String(fields.entityKind)}: ${entity}`
+    : fields.type === 'identify' && typeof fields.userId === 'string'
+      ? fields.userId
+      : fields.type === 'track' && typeof fields.event === 'string'
+        ? fields.event
+        : (path ?? (typeof fields.componentId === 'string' ? fields.componentId : fields.type));
   return {
     id,
     type: interval ?? (fields.type === 'exo_node_click' ? 'click' : fields.type),
-    value: entity ?? fields.type,
+    value,
     observedAt: Date.now(),
     count: 1,
     intervalKey:
