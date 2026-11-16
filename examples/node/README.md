@@ -14,14 +14,18 @@ browser: Web SDK persists the identity  ──►  ctfl-opt-aid cookie
                                                    │  sent with the next request
 server:  readIdentity(cookie)                      ▼
          forRequest({ profile, consent })  ──►  Node SDK reuses the profile
+         page()  ──►  sends the event and adopts the response profile
          identitySetCookie({ isPreview, canPersistProfile, ... })  ──►  Set-Cookie
-         prepareRequestHandoff()  ──►  handoff carrying the same identity
-browser: Web SDK hydrates the handoff  ──►  the identity continues
+browser: sends the identity cookie with the next request  ──►  the identity continues
 ```
 
 The Node SDK never touches HTTP. It takes the profile and consent from you and answers one
 question: `canPersistProfile`, whether you may keep the identity. Everything about cookies
 lives in [`identity-cookie.ts`](./identity-cookie.ts), which is host code, not SDK API.
+
+The server uses one process-wide SDK and a facade per request. After `request.page()`
+completes, `request.profile?.id` supplies the identity for both the cookie and the JSON
+response. A `finally` block destroys the request facade, including when sending fails.
 
 ## Consent is yours
 
@@ -30,6 +34,9 @@ consent management platform token. **Neither the identity cookie being present n
 the browser's storage is server-side consent**, so a visitor who sent the cookie but has not
 been granted persistence gets it expired, not kept alive. `server.ts` reads a cookie of its
 own (`app-personalization-consent`) to show where that decision belongs; replace it.
+
+The default event allowlist permits `page` even without event consent. Withholding
+persistence consent still prevents the returned identity from being saved in a cookie.
 
 Pass both `request.isPreview` and `request.canPersistProfile` to `identitySetCookie`.
 In Session preview, `canPersistProfile` is false, but the helper skips both writing and
@@ -51,11 +58,12 @@ npm run start          # http://localhost:4100
 ```
 
 Send `Cookie: ctfl-opt-aid=<id>; app-personalization-consent=granted` to see the identity reused
-and the handoff returned. Without the consent cookie the identity is expired.
+and returned as `{ "identity": "<id>" }`. Without the consent cookie the identity cookie is expired.
 
 ## Tested
 
-[`paired-handoff.integration.test.ts`](../../packages/web/src/paired-handoff.integration.test.ts)
-drives these same functions through the whole sequence: the Web SDK persists an identity, the
-next server request carries it, Node reuses the profile, and the handoff continues it in a new
-browser runtime. It also covers withholding, withdrawal and a later grant.
+Run `npm run typecheck` to check this example against the installed Node SDK.
+The SDK's [request tests](../../packages/node/src/contentful-experiences.test.ts) cover
+direct page events, request-local profiles, and consent. The Web SDK's
+[identity-cookie tests](../../packages/web/src/identity-cookie.test.ts) cover browser cookie
+persistence, withdrawal, and legacy-cookie migration.

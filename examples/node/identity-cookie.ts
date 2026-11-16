@@ -85,9 +85,8 @@ function scope(settings: IdentityCookieSettings): string {
 /**
  * The `Set-Cookie` value for a response, or `undefined` when there is nothing to change.
  *
- * Pass the request's `isPreview`, `canPersistProfile` and the handoff's continuation id
- * (`handoff.profileId`), which is what the browser continues. Do not pass the profile the
- * preview evaluated (`request.profile?.id`); it can differ from the visitor's own id.
+ * Pass the request's `isPreview`, `canPersistProfile` and current profile id
+ * (`request.profile?.id`) after the page event completes.
  *
  * Session preview leaves the cookie untouched: it skips both writing and expiry. Otherwise,
  * persistence permission decides: when it is withheld the cookie is expired, in the scope

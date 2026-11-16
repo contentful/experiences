@@ -17,6 +17,7 @@ const sdk = new ContentfulExperiences({
 });
 
 const server = createServer((req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store');
   void (async () => {
     const identity = readIdentity(req.headers.cookie);
     const granted = hasServerConsent(req.headers.cookie);
@@ -27,26 +28,25 @@ const server = createServer((req, res) => {
       consent: { events: granted, persistence: granted },
     });
 
-    // One preview of the page event for this visitor. The handoff it returns carries the
-    // identity on to the browser, which continues it.
-    const { handoff } = await request.prepareRequestHandoff({ routeKey: req.url ?? '/' });
+    try {
+      // Send one page event and retain the response identity on this request only.
+      await request.page();
 
-    // The cookie holds the handoff's continuation id, not the profile the preview evaluated.
-    // They differ when the incoming identity is not the one the API answers with, and the
-    // browser continues the handoff's, so the cookie has to agree with it.
-    const setCookie = identitySetCookie({
-      isPreview: request.isPreview,
-      canPersistProfile: request.canPersistProfile,
-      profileId: handoff.profileId,
-      hadCookie: identity !== undefined,
-    });
-    if (setCookie) res.setHeader('Set-Cookie', setCookie);
+      const profileId = request.profile?.id;
+      const setCookie = identitySetCookie({
+        isPreview: request.isPreview,
+        canPersistProfile: request.canPersistProfile,
+        profileId,
+        hadCookie: identity !== undefined,
+      });
+      if (setCookie) res.setHeader('Set-Cookie', setCookie);
 
-    // A handoff is browser-visible, so it is escaped and never cached. Here it is returned as
-    // JSON for brevity; render it into your page the way your framework escapes data.
-    res.setHeader('Cache-Control', 'private, no-store');
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ identity: handoff.profileId ?? null, handoff }));
+      // Return only the identity for this demo; keep visitor responses private.
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ identity: profileId ?? null }));
+    } finally {
+      request.destroy();
+    }
   })().catch((error: unknown) => {
     res.statusCode = 500;
     res.end(error instanceof Error ? error.message : 'error');

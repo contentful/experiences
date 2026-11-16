@@ -5,7 +5,7 @@ import { PreviewExperiencesRoot } from '@/components/LivePreviewExperience';
 
 export const metadata = {
   title: 'Contentful Experiences — Next.js example',
-  description: 'Demonstrates @contentful/experiences-react with the Next.js App Router.',
+  description: 'Demonstrates @contentful/experiences-nextjs with the Next.js App Router.',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -1,13 +1,15 @@
 'use client';
 
 import { createLivePreviewClient } from '@contentful/experiences-live-preview';
-import { createExperiences, type PortableRenderPlan } from '@contentful/experiences-react/client';
+import { createExperiences, type PortableRenderPlan } from '@contentful/experiences-nextjs/client';
 import { usePathname, useSearchParams } from 'next/navigation';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import { experienceConfig } from '@/lib/experience-config';
 
-const { ExperiencesRoot, Experience } = createExperiences({ config: experienceConfig });
+const { ExperiencesRoot, Experience, ExperienceRenderer } = createExperiences({
+  config: experienceConfig,
+});
 
 export function PreviewExperiencesRoot({
   spaceId,
@@ -42,17 +44,36 @@ export function PreviewExperiencesRoot({
   );
 }
 
-export function LivePreviewExperience({
-  experienceId,
-  initialPlan,
-  metadata,
-  debug,
-}: {
+interface LivePreviewExperienceProps {
   experienceId: string;
   initialPlan: PortableRenderPlan;
   metadata?: Record<string, unknown>;
   debug?: boolean;
-}) {
+}
+
+export function LivePreviewExperience(props: LivePreviewExperienceProps) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  // The layout's Suspense fallback can render the server plan before the SDK root.
+  // Start managed preview only after hydration, when that root is available.
+  return mounted ? (
+    <ManagedLivePreviewExperience {...props} />
+  ) : (
+    <ExperienceRenderer
+      experience={props.initialPlan}
+      metadata={props.metadata}
+      debug={props.debug}
+    />
+  );
+}
+
+function ManagedLivePreviewExperience({
+  experienceId,
+  initialPlan,
+  metadata,
+  debug,
+}: LivePreviewExperienceProps) {
   return (
     <Experience
       experienceId={experienceId}

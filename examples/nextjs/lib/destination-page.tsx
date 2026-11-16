@@ -5,7 +5,7 @@ import {
   NotFoundError,
   ServerExperienceRenderer,
   fetchExperience,
-} from '@contentful/experiences-react';
+} from '@contentful/experiences-nextjs/server';
 
 import { experienceConfig } from '@/lib/experience-config';
 import { buildPagePersonalization } from '@/lib/personalization';

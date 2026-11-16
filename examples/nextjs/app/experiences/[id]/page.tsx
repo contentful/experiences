@@ -1,7 +1,10 @@
 import { ContentfulExperiences } from '@contentful/experiences-node';
 import { headers } from 'next/headers';
 
-import { ServerExperienceRenderer, type ExperienceParameters } from '@contentful/experiences-react';
+import {
+  ServerExperienceRenderer,
+  type ExperienceParameters,
+} from '@contentful/experiences-nextjs/server';
 
 import { LivePreviewExperience } from '@/components/LivePreviewExperience';
 import { RuntimeParametersForm } from '@/components/RuntimeParametersForm';

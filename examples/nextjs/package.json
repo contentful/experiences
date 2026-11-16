@@ -11,7 +11,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@contentful/experiences-react": "*",
+    "@contentful/experiences-nextjs": "*",
     "@contentful/experiences-node": "*",
     "@contentful/experiences-live-preview": "*",
     "@contentful/experiences-web": "*",
