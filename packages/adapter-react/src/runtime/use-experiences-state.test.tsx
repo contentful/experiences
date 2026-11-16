@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'v
 import type { States, Observable, WebExperiencesRuntime } from '@contentful/experiences-web';
 import { RuntimeContext } from './context.js';
 import { createDomTestRoot, type DomTestRoot } from '../test/dom-root.js';
-import { profileFixture } from '../test/profile.js';
+import { profileFixture } from '../test/fixtures/profile.js';
 import * as hooks from './use-experiences-state.js';
 
 const context = (sdk: WebExperiencesRuntime) => ({

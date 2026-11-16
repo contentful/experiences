@@ -13,7 +13,6 @@ import {
   type ManagedExperienceResult,
 } from './use-managed-experience.js';
 import { deferred, plan, previewState, sourceSdk } from '../test/managed-experience.js';
-import { Experience } from './experience.js';
 
 const config = { components: {} };
 let result: ManagedExperienceResult;
@@ -64,20 +63,6 @@ describe('useManagedExperience', () => {
         } as never)
       )
     ).toThrow(TypeError);
-    expect(() =>
-      renderToStaticMarkup(
-        <Experience
-          {...({ path: '/', config, initialPlan: plan() } as unknown as Parameters<
-            typeof Experience
-          >[0])}
-        />
-      )
-    ).toThrow(TypeError);
-    const unselected = { config, initialPlan: plan() } as unknown as Parameters<
-      typeof Experience
-    >[0];
-    expect(() => renderToStaticMarkup(<Experience {...unselected} />)).toThrow(TypeError);
-    expect(renderToStaticMarkup(<Experience config={config} experience={undefined} />)).toBe('');
     expect(source.fetchExperience).not.toHaveBeenCalled();
     expect(source.subscribeToPreview).not.toHaveBeenCalled();
   });

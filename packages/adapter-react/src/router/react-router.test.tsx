@@ -7,7 +7,7 @@ import type { ExperiencesHandoff, Config } from '@contentful/experiences-web';
 import { EventBuilder } from '@contentful/experiences-runtime';
 import { sourceSdk } from '../test/managed-experience.js';
 import { createDomTestRoot, type DomTestRoot } from '../test/dom-root.js';
-import { profileFixture } from '../test/profile.js';
+import { profileFixture } from '../test/fixtures/profile.js';
 import {
   bindReactRouterExperiences,
   type AutoPageEmissionContext,

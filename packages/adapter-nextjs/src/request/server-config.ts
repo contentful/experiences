@@ -1,0 +1,133 @@
+import {
+  ExperienceFetchError,
+  isNotFoundError,
+  type ConsentInput,
+  type PreviewConfig,
+  type Config as NodeConfig,
+  type RequestRuntime,
+  type FetchExperienceOptions,
+  type FetchResolveOptions,
+} from '@contentful/experiences-node';
+import type { Config } from '@contentful/experiences-react/server';
+import type { ExperiencesRootProps } from '@contentful/experiences-react/client';
+import type { BrowserConfig } from '../presentation/browser-config.js';
+import type { CookieConfig } from './cookies.js';
+import type { CookieReader, RequestLike } from './request-context.js';
+import type { RequestResult } from '../presentation/request-result.js';
+import { serializeJsonForHtml, serializePlan } from '../cache/serialization.js';
+
+export type { PreviewConfig } from '@contentful/experiences-node';
+export type { PreviewContext } from './preview.js';
+
+export interface ServerRequestContext {
+  readonly request: RequestLike;
+  readonly cookies: CookieReader;
+  readonly headers: globalThis.Headers;
+  readonly requestUrl: string;
+  readonly routeKey: string;
+}
+
+export type ServerValue<T> = T | ((context: ServerRequestContext) => T | Promise<T>);
+
+export type ServerRequestResult<E extends FetchExperienceOptions = FetchExperienceOptions> =
+  RequestResult<E> & { readonly error?: unknown } & ([E] extends [{ experienceId: string }]
+      ? { readonly experienceId: string }
+      : { readonly experienceId?: string });
+
+export interface ServerRequestPolicy<E extends FetchExperienceOptions = FetchExperienceOptions> {
+  /** SSR commits on the server; hybrid previews there and commits browser replay. */
+  readonly mode?: ServerValue<'ssr' | 'hybrid'>;
+  readonly experience: ServerValue<E>;
+  readonly resolveOptions?: ServerValue<Omit<FetchResolveOptions, 'config'>>;
+  readonly metadataKeys?: readonly string[];
+  readonly initialEvents?: ServerValue<
+    NonNullable<FetchExperienceOptions['personalization']>['events']
+  >;
+  readonly pagePayload?: ServerValue<NonNullable<RequestResult['initialPagePayload']>>;
+  /** Application-owned composition on the same facade, before projection and cleanup. */
+  readonly composeRequest?: (
+    request: RequestRuntime,
+    primary: ServerRequestResult,
+    context: ServerRequestContext
+  ) => void | Promise<void>;
+}
+
+export interface ServerConfig<
+  E extends FetchExperienceOptions = FetchExperienceOptions,
+> extends Omit<NodeConfig, 'preview'> {
+  readonly config: Config;
+  readonly browser?: BrowserConfig;
+  readonly consent?: {
+    readonly server?: ServerValue<ConsentInput>;
+    readonly clientDefaults?: Pick<
+      NonNullable<ExperiencesRootProps['defaults']>,
+      'consent' | 'persistenceConsent'
+    >;
+  };
+  readonly cookie?: CookieConfig;
+  readonly preview?: PreviewConfig;
+  readonly request?: ServerRequestPolicy<E>;
+}
+
+export type ServerRequestOverrides = Partial<ServerRequestPolicy> & {
+  readonly consent?: ConsentInput;
+  readonly locale?: string;
+};
+
+/** Select the call's source, including the bound default when an override is optional. */
+export type SelectedExperience<
+  E extends FetchExperienceOptions,
+  O extends ServerRequestOverrides | undefined,
+> = O extends unknown
+  ? 'experience' extends keyof O
+    ? O extends { experience: ServerValue<infer S extends FetchExperienceOptions> }
+      ? S
+      : | E
+        | (O extends { experience?: ServerValue<infer S extends FetchExperienceOptions> }
+            ? S
+            : never)
+    : E
+  : never;
+
+export async function resolveServerValue<T>(
+  value: ServerValue<T>,
+  context: ServerRequestContext
+): Promise<T> {
+  return typeof value === 'function'
+    ? await (value as (context: ServerRequestContext) => T | Promise<T>)(context)
+    : value;
+}
+
+/** Only expected Delivery failures are content results; preparation and control flow propagate. */
+export function isContentError(error: unknown): boolean {
+  return error instanceof ExperienceFetchError || isNotFoundError(error);
+}
+
+/** The explicit browser config is the only credential source for built-in client roots. */
+export function browserRootConfig(options: ServerConfig): BrowserConfig {
+  if (!options.browser)
+    throw new TypeError('The default request root requires browser configuration.');
+  return JSON.parse(serializeJsonForHtml(options.browser)) as BrowserConfig;
+}
+
+/** Project the whole result for browser adoption, excluding raw errors and private metadata. */
+export function serializeRequestResult<E extends FetchExperienceOptions>(
+  result: ServerRequestResult<E> & { readonly experience: E },
+  options: { readonly metadataKeys?: readonly string[] } = {}
+): RequestResult<E> {
+  return JSON.parse(
+    serializeJsonForHtml({
+      requestId: result.requestId,
+      routeKey: result.routeKey,
+      experience: result.experience,
+      ...(result.redirect ? { redirect: { path: result.redirect.path } } : {}),
+      ...(result.notFound ? { notFound: true } : {}),
+      ...(result.plan ? { plan: serializePlan(result.plan, options) } : {}),
+      ...(result.contentError ? { contentError: result.contentError } : {}),
+      ...(result.handoff ? { handoff: result.handoff } : {}),
+      ...(result.initialPageOwner ? { initialPageOwner: result.initialPageOwner } : {}),
+      ...(result.initialPagePayload ? { initialPagePayload: result.initialPagePayload } : {}),
+      ...(result.preview === undefined ? {} : { preview: result.preview }),
+    })
+  ) as RequestResult<E>;
+}

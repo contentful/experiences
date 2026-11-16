@@ -1,4 +1,4 @@
-import type { PreviewSessionOptions } from './live-preview.js';
+import type { PreviewSessionOptions } from './preview/live-preview.js';
 
 export type PreviewSessionBinding = PreviewSessionOptions & { experienceId: string };
 

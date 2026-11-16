@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { completeProfile as profileFixture } from '../test-fixtures/profile.js';
+import { completeProfile as profileFixture } from '../test/fixtures/profile.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { signals } from '../signals/signals.js';
 import { createSnapshotRuntime } from '../runtime.js';
@@ -59,4 +59,30 @@ describe('SnapshotRuntime', () => {
     expect(liveState()).toEqual(before);
     expect(fetch).not.toHaveBeenCalled();
   });
+});
+
+it('reads snapshot flags and static flag observables without browser state or exposure', async () => {
+  const { createSnapshotRuntime } = await import('../runtime.js');
+  const fetch = vi.spyOn(globalThis, 'fetch');
+  const runtime = createSnapshotRuntime({
+    data: {
+      changes: [
+        {
+          type: 'Variable',
+          key: 'banner',
+          value: { value: [false, 'nested'] },
+          meta: { experienceId: 'experiment', variantIndex: 1 },
+        },
+      ],
+    },
+  });
+  expect(runtime.getFlag('banner')).toEqual([false, 'nested']);
+  const flag = runtime.states.flag('banner');
+  expect(flag.current).toEqual([false, 'nested']);
+  const next = vi.fn();
+  flag.subscribe(next).unsubscribe();
+  expect(next).toHaveBeenCalledExactlyOnceWith([false, 'nested']);
+  expect(runtime.getFlag('missing')).toBeUndefined();
+  expect(fetch).not.toHaveBeenCalled();
+  fetch.mockRestore();
 });

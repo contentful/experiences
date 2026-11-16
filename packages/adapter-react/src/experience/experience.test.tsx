@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { act, StrictMode, Suspense, useEffect, useState, type HTMLAttributes } from 'react';
-import { renderToString } from 'react-dom/server';
+import { renderToStaticMarkup, renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import { RuntimeContext } from '../runtime/context.js';
@@ -578,4 +578,19 @@ describe('Experience', () => {
     expect(rootRef.mock.calls.filter(([element]) => element === null)).toHaveLength(1);
     expect(nodeCleanup).toHaveBeenCalledTimes(1);
   });
+});
+
+it('validates raw selectors before using a seed and accepts undefined supplied content', () => {
+  expect(() =>
+    renderToStaticMarkup(
+      <Experience
+        {...({ path: '/', config, initialPlan: plan() } as unknown as Parameters<
+          typeof Experience
+        >[0])}
+      />
+    )
+  ).toThrow(TypeError);
+  const unselected = { config, initialPlan: plan() } as unknown as Parameters<typeof Experience>[0];
+  expect(() => renderToStaticMarkup(<Experience {...unselected} />)).toThrow(TypeError);
+  expect(renderToStaticMarkup(<Experience config={config} experience={undefined} />)).toBe('');
 });

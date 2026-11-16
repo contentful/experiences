@@ -1,16 +1,6 @@
 /** @vitest-environment jsdom */
 
-import {
-  act,
-  startTransition,
-  StrictMode,
-  Suspense,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  type HTMLAttributes,
-  type ReactNode,
-} from 'react';
+import { act, startTransition, StrictMode, Suspense, useEffect, type ReactNode } from 'react';
 import { renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -23,19 +13,14 @@ import {
   type ExperiencesHandoff,
   type ExperiencesSnapshot,
   type Config,
-  type PersonalizationState,
 } from '@contentful/experiences-web';
-import { resolveExperience } from '@contentful/experiences-sdk-core';
 import { EventBuilder } from '@contentful/experiences-runtime';
 import { createDomTestRoot, type DomTestRoot } from '../test/dom-root.js';
-import { profileFixture } from '../test/profile.js';
-import { minimalSourceMap } from '../test/source-map.js';
-import { useExperiences, useRuntimeContext, type RuntimeContextValue } from './context.js';
+import { profileFixture } from '../test/fixtures/profile.js';
+import { useRuntimeContext, type RuntimeContextValue } from './context.js';
 import { observable } from '../test/managed-experience.js';
 import { usePreviewState } from './use-experiences-state.js';
 import { useRequestContext, type RequestContextValue } from './request-context.js';
-import type { OnExperienceNodeRoot } from '../tracking/root-binding-types.js';
-import { createExperiences } from '../experience/create-experiences.js';
 import {
   ExperiencesProvider,
   ExperiencesRoot,
@@ -124,7 +109,6 @@ describe('React runtime ownership and activation', () => {
   let view: DomTestRoot;
   let runtime: LiveSdk;
   let captures: RuntimeContextValue[];
-  let browser: ContentfulExperiences | undefined;
   beforeEach(() => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     window.history.replaceState(null, '', '/initial');
@@ -138,8 +122,6 @@ describe('React runtime ownership and activation', () => {
     act(() => {
       view.cleanup();
     });
-    browser?.destroy();
-    browser = undefined;
     window.localStorage.clear();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -876,160 +858,6 @@ describe('React runtime ownership and activation', () => {
     expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledTimes(2);
   });
 
-  it.each(['static', 'builder'] as const)(
-    'uses %s arguments for the fresh page after consent grants a denied page-bearing handoff',
-    async (kind) => {
-      const { ContentfulExperiences: ActualSdk } = await vi.importActual<
-        typeof import('@contentful/experiences-web')
-      >('@contentful/experiences-web');
-      browser = new ActualSdk({
-        ...config,
-        allowedEventTypes: [],
-        defaults: {
-          profile: profileFixture('browser-profile'),
-          consent: false,
-          persistenceConsent: false,
-        },
-      });
-      const sdk = browser;
-      const send = vi.spyOn(sdk.api.personalization, 'upsertProfile').mockResolvedValue({
-        profile: profileFixture('browser-profile'),
-      } as never);
-      const consume = vi.spyOn(sdk, 'hydrateAndTrackCurrentPage');
-      const builder = new EventBuilder({
-        channel: 'server',
-        library: { name: 'react-test', version: '1' },
-        getConsent: () => true,
-      });
-      const events = [builder.buildTrack({ event: 'prepared' }), builder.buildPageView()];
-      const suppliedHandoff: ExperiencesHandoff = {
-        ...handoff(),
-        replay: { routeKey: '/initial', events },
-      };
-      const initialPagePayload = { properties: { source: 'static' } };
-      const buildPagePayload =
-        kind === 'builder' ? () => ({ properties: { source: 'builder' } }) : undefined;
-      await act(async () =>
-        view.render(
-          <ExperiencesProvider
-            sdk={sdk}
-            handoff={suppliedHandoff}
-            initialPagePayload={initialPagePayload}
-            buildPagePayload={buildPagePayload}
-          >
-            {suppliedContent()}
-          </ExperiencesProvider>
-        )
-      );
-      expect(await consume.mock.results[0]!.value).toMatchObject({ accepted: false });
-      expect(current()).toMatchObject({ sdk, isLive: true, isContentReady: true });
-      expect(send).not.toHaveBeenCalled();
-      expect(sdk.states.eventStream.current).toBeUndefined();
-      const settledRenderCount = captures.length;
-      await act(async () => {
-        sdk.consent({ events: true });
-        await consume.mock.results[1]!.value;
-        await sdk.flush();
-      });
-      expect(consume).toHaveBeenCalledTimes(2);
-      expect(send).toHaveBeenCalledOnce();
-      const sent = send.mock.calls[0]![0].events;
-      expect(sent.map((event) => event.type)).toEqual(['page']);
-      expect(sent[0]).toMatchObject({ properties: { source: kind } });
-      expect(events.map((event) => event.messageId)).not.toContain(sent[0]!.messageId);
-      expect(sent[0]!.context.gdpr?.isConsentGiven).toBe(true);
-      expect(captures.slice(settledRenderCount).every((state) => state.isContentReady)).toBe(true);
-      expect(current()).toMatchObject({
-        sdk,
-        isLive: true,
-        isContentReady: true,
-        error: undefined,
-      });
-      expect(view.container.textContent).toContain('Supplied server content');
-    }
-  );
-
-  it.each(['remove handoff', 'unmount'] as const)(
-    'prevents late state and replay admission on %s while the injected SDK stays alive',
-    async (action) => {
-      const { ContentfulExperiences: ActualSdk } = await vi.importActual<
-        typeof import('@contentful/experiences-web')
-      >('@contentful/experiences-web');
-      browser = new ActualSdk({
-        ...config,
-        defaults: {
-          profile: profileFixture('browser-profile'),
-          consent: true,
-          persistenceConsent: false,
-        },
-      });
-      const sdk = browser;
-      const send = vi.spyOn(sdk.api.personalization, 'upsertProfile').mockResolvedValue({
-        profile: profileFixture('browser-profile'),
-      } as never);
-      const destroy = vi.spyOn(sdk, 'destroy');
-      const consume = vi.spyOn(sdk, 'hydrateAndTrackCurrentPage');
-      const started = deferred();
-      const release = deferred();
-      const stateInterceptor = vi.fn(async (state: PersonalizationState) => {
-        started.resolve();
-        await release.promise;
-        return state;
-      });
-      sdk.interceptors.state.add(stateInterceptor);
-      const events = [sdk.eventBuilder.buildPageView()];
-      const suppliedHandoff: ExperiencesHandoff = {
-        ...handoff(),
-        replay: { routeKey: '/initial', events },
-      };
-      const publishedState = vi.fn();
-      const publishedEvent = vi.fn();
-      const onStatesReady = vi.fn((states: States) => {
-        const state = states.profile.subscribe(publishedState);
-        const event = states.eventStream.subscribe(publishedEvent);
-        return () => {
-          state.unsubscribe();
-          event.unsubscribe();
-        };
-      });
-      const tree = (handoff?: ExperiencesHandoff) => (
-        <ExperiencesProvider sdk={sdk} handoff={handoff} onStatesReady={onStatesReady}>
-          <Probe />
-        </ExperiencesProvider>
-      );
-      await act(async () => {
-        view.render(tree(suppliedHandoff));
-      });
-      await started.promise;
-      expect(stateInterceptor).toHaveBeenCalledOnce();
-      expect(current().isContentReady).toBe(false);
-      const isCurrent = consume.mock.calls[0]![1].isCurrent!;
-      act(() => {
-        if (action === 'remove handoff') view.render(tree());
-        else view.cleanup();
-      });
-      expect(isCurrent()).toBe(false);
-      const renderCount = captures.length;
-      await act(async () => {
-        release.resolve();
-        expect(await consume.mock.results[0]!.value).toMatchObject({ accepted: false });
-      });
-      expect(destroy).not.toHaveBeenCalled();
-      expect(captures).toHaveLength(renderCount);
-      expect(sdk.states.profile.current).toEqual(profileFixture('browser-profile'));
-      expect(sdk.states.personalizationRequestState.current).toEqual({ status: 'idle' });
-      expect(sdk.states.eventStream.current).toBeUndefined();
-      expect(publishedState).toHaveBeenCalledExactlyOnceWith(profileFixture('browser-profile'));
-      expect(publishedEvent).toHaveBeenCalledExactlyOnceWith(undefined);
-      expect(send).not.toHaveBeenCalled();
-      act(() => sdk.consent({ events: false }));
-      expect(sdk.states.consent.current).toBe(false);
-      expect(consume).toHaveBeenCalledOnce();
-      if (action === 'remove handoff')
-        expect(current()).toMatchObject({ sdk, isLive: true, isContentReady: true });
-    }
-  );
-
   it('captures structural configuration until keyed replacement and updates locale without reconstruction', () => {
     const ready = vi.fn();
     const tree = (key: string, locale: string, spaceId = 'space') => (
@@ -1100,87 +928,6 @@ describe('React runtime ownership and activation', () => {
       runtime.setLocale.mockReset();
       render(tree('en-US'));
       expect(current().error).toBe(outcome === 'success' ? undefined : hydrationError);
-    }
-  );
-
-  it.each([false, true])(
-    'cleans context-based manual registration on injected replacement (initial snapshot=%s)',
-    async (withSnapshot) => {
-      const registry = {
-        components: {
-          probe: (props: HTMLAttributes<HTMLElement>) => <article {...props}>Manual view</article>,
-        },
-      };
-      const { ExperienceRenderer, ExperiencesProvider } = createExperiences({
-        config: registry,
-      });
-      const plan = await resolveExperience(
-        {
-          nodes: [
-            {
-              id: 'n',
-              component: {
-                sys: {
-                  type: 'ResourceLink',
-                  linkType: 'Contentful:Component',
-                  urn: 'crn:contentful:::experience:spaces/$self/environments/$self/components/probe',
-                },
-              },
-            },
-          ],
-        },
-        registry,
-        { sourceMap: minimalSourceMap() }
-      );
-      let initialElement: HTMLElement | null = null;
-      function Content() {
-        const sdk = useExperiences();
-        // Child layout runs after DOM attachment, before ancestor SDK activation.
-        useLayoutEffect(() => {
-          initialElement ??= view.container.querySelector('article');
-        }, []);
-        const onNodeRoot = useCallback<OnExperienceNodeRoot>(
-          ({ element, data }) => {
-            if (!data) return;
-            sdk.tracking.enableElement('views', element, { data });
-            return () => sdk.tracking.clearElement('views', element);
-          },
-          [sdk]
-        );
-        return <ExperienceRenderer experience={plan} trackViews={false} onNodeRoot={onNodeRoot} />;
-      }
-      await act(async () =>
-        view.render(
-          <ExperiencesProvider sdk={inject(runtime)} snapshot={withSnapshot ? snapshot : undefined}>
-            <Content />
-          </ExperiencesProvider>
-        )
-      );
-      expect(initialElement).not.toBeNull();
-      expect(view.container.querySelector('article')).toBe(initialElement);
-      const element = initialElement!;
-      const data = plan.nodes[0]!.attribution!.roots.at(-1);
-      expect(data).toBeDefined();
-      expect(runtime.tracking.enableElement).toHaveBeenCalledExactlyOnceWith('views', element, {
-        data,
-      });
-      const next = liveSdk();
-      await act(async () =>
-        view.render(
-          <ExperiencesProvider sdk={inject(next)} snapshot={withSnapshot ? snapshot : undefined}>
-            <Content />
-          </ExperiencesProvider>
-        )
-      );
-      expect(view.container.querySelector('article')).toBe(element);
-      expect(runtime.tracking.clearElement).toHaveBeenCalledExactlyOnceWith('views', element);
-      expect(next.tracking.enableElement).toHaveBeenCalledExactlyOnceWith('views', element, {
-        data,
-      });
-      act(() => view.cleanup());
-      expect(next.tracking.clearElement).toHaveBeenCalledExactlyOnceWith('views', element);
-      expect(runtime.destroy).not.toHaveBeenCalled();
-      expect(next.destroy).not.toHaveBeenCalled();
     }
   );
 

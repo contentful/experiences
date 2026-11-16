@@ -181,3 +181,36 @@ describe('resolveNodeProps', () => {
     );
   });
 });
+
+it('keeps component and status out of the snapshot', () => {
+  const node = planNode(
+    'component',
+    'card',
+    { content: { title: 'Hi' }, design: { color: 'red' } },
+    { nodeId: 'c1' }
+  );
+  const result = resolveNodeProps(node, {
+    components: { card: defineComponent({ component: Noop, defaults: { title: 'Default' } }) },
+  });
+  expect(result.status).toBe('resolved');
+  if (result.status !== 'resolved') throw new Error('expected card to resolve');
+  const { snapshot } = result;
+
+  expect(snapshot).not.toHaveProperty('component');
+  expect(snapshot).not.toHaveProperty('status');
+  expect(snapshot).toEqual({
+    kind: 'component',
+    id: 'card',
+    nodeId: 'c1',
+    props: { title: 'Hi', color: 'red' },
+    design: { color: 'red' },
+    contentful: {
+      componentId: 'card',
+      nodeId: 'c1',
+      content: { title: 'Hi' },
+      design: {},
+      resolved: undefined,
+      attribution: undefined,
+    },
+  });
+});

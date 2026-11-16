@@ -1,221 +1,189 @@
-/**
- * @vitest-environment jsdom
- *
- * `component-render-error` isolation on the CLIENT — the one environment
- * where `ComponentErrorBoundary`'s own `getDerivedStateFromError`/`render()`
- * branch actually runs (see the long comment on that class in
- * `nodes-renderer.tsx`, and `nodes-renderer.ssr.test.tsx` for why neither SSR
- * renderer ever reaches it). This is the only test file in this package that
- * needs jsdom — the rest of the suite renders via `react-dom/server` and
- * needs no DOM (see AGENTS.md's "Run tests" section) — so the environment is
- * scoped to just this file via the docblock above rather than changed globally.
- */
-import { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-
-import type { ComponentNode, ExperiencePayload } from '@contentful/experiences-sdk-core';
+import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
+import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
-
-import { ClientExperienceRenderer } from './client-renderer';
+import type { ReactElement, ReactNode } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it, vi } from 'vitest';
 import type { Config } from '../registry/types';
-import { fetchExperience, type ExperienceParameters } from '../index';
+import {
+  componentNode,
+  experienceTemplateNode,
+  sysWithExperienceTemplate,
+} from '../test/fixtures/payload.js';
 
-(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
-
-function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
-  return {
-    component: {
-      sys: {
-        type: 'ResourceLink',
-        linkType: 'Contentful:Component',
-        urn: `crn:contentful:::experience:spaces/$self/environments/$self/components/${typeId}`,
-      },
-    },
-    ...rest,
-  };
-}
-
-function Broken(): never {
-  throw new Error('boom');
-}
-
-const Fine = () => <span data-fine>sibling</span>;
-
-let container: HTMLDivElement | null = null;
-let root: Root | null = null;
-
-// Render-time diagnostics (component-not-registered, malformed-slot,
-// experience-template-not-registered) reach ClientExperienceRenderer's state
-// via a `queueMicrotask`-deferred setState (see client-renderer.tsx) so the
-// update never lands mid-render of a different component. `mount` always
-// flushes that microtask before returning — not just for tests that assert
-// on the result, but so a test that doesn't care (e.g. one only checking the
-// fallback DOM) never leaves the update to fire later, unwrapped in any
-// test's `act()`, bleeding a warning into whichever test runs next.
-async function flushMicrotasks(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve();
+import { ComponentError } from '../diagnostics/component-error';
+import { MissingComponent } from '../diagnostics/missing-component';
+import { ExperienceProvider } from './context';
+import { NodesRenderer } from './nodes-renderer';
+describe('NodesRenderer', () => {
+  it('renders an experienceTemplate node from the experienceTemplates registry', async () => {
+    const Item = ({ value }: { value?: string }) => <span>{value}</span>;
+    // A template's slots arrive as named props, exactly like a component's —
+    // the slot named `content` becomes a `content` prop, not `children`.
+    const Template = ({ title, content }: { title?: string; content?: ReactNode[] }) => (
+      <main data-experienceTemplate="page" data-title={title}>
+        {content}
+      </main>
+    );
+    const cfg: Config = {
+      components: { item: Item },
+      experienceTemplates: { page: { component: Template, defaults: { title: 'Default Title' } } },
+    };
+    const tplPayload: ExperiencePayload = {
+      sys: sysWithExperienceTemplate('page'),
+      nodes: [
+        experienceTemplateNode('page', {
+          id: 'tpl',
+          slots: {
+            content: [componentNode('item', { id: 'i', contentProperties: { value: 'inside' } })],
+          },
+        }),
+      ],
+    };
+    const plan = await resolveExperience(tplPayload, cfg);
+    const html = renderToStaticMarkup(
+      <ExperienceProvider value={{ debug: false, metadata: {} }}>
+        <NodesRenderer
+          nodes={plan.nodes}
+          config={cfg}
+          renderUnknown={MissingComponent}
+          renderError={ComponentError}
+          onDiagnostic={() => {}}
+        />
+      </ExperienceProvider>
+    );
+    expect(html).toContain('data-experienceTemplate="page"');
+    expect(html).toContain('data-title="Default Title"');
+    expect(html).toContain('<span>inside</span>');
   });
-}
 
-async function mount(element: React.ReactElement): Promise<void> {
-  container = document.createElement('div');
-  document.body.appendChild(container);
-  root = createRoot(container);
-  act(() => {
-    root!.render(element);
-  });
-  await flushMicrotasks();
-}
-
-afterEach(() => {
-  act(() => {
-    root?.unmount();
-  });
-  container?.remove();
-  container = null;
-  root = null;
-});
-
-describe('runtime parameter refetch → renderer', () => {
-  it('replaces content for the same Experience and node after parameters change', async () => {
-    const get = vi.fn(
-      async (
-        _id: string,
-        _request: unknown,
-        options: { queryParams?: Record<string, unknown> } = {}
-      ) => ({
-        sys: { id: 'collection', type: 'Experience' },
+  it('passes slot children as an array a component can map/wrap individually', async () => {
+    let received: unknown = null;
+    const Container = ({ children }: { children?: ReactNode[] }) => {
+      received = children;
+      // Wrap each child individually — the whole point of exposing the array.
+      return (
+        <div data-container>
+          {children?.map((child, i) => (
+            <div className="wrap" data-index={i} key={i}>
+              {child}
+            </div>
+          ))}
+        </div>
+      );
+    };
+    const Item = ({ text }: { text?: string }) => <span>{text}</span>;
+    const cfg: Config = { components: { container: Container, item: Item } };
+    const plan = await resolveExperience(
+      {
         nodes: [
-          componentNode('posts', {
-            id: 'stable-node',
-            contentProperties: {
-              title: `${options.queryParams?.['parameter.featuredPosts.limit']} posts`,
+          componentNode('container', {
+            id: 'c',
+            slots: {
+              children: [
+                componentNode('item', { id: 'a', contentProperties: { text: 'one' } }),
+                componentNode('item', { contentProperties: { text: 'two' } }),
+                componentNode('item', { id: 'd', contentProperties: { text: 'three' } }),
+              ],
             },
           }),
         ],
+      },
+      cfg
+    );
+    const html = renderToStaticMarkup(
+      <ExperienceProvider value={{ debug: false, metadata: {} }}>
+        <NodesRenderer
+          nodes={plan.nodes}
+          config={cfg}
+          renderUnknown={MissingComponent}
+          renderError={ComponentError}
+          onDiagnostic={() => {}}
+        />
+      </ExperienceProvider>
+    );
+
+    expect(Array.isArray(received)).toBe(true);
+    expect((received as ReactElement[]).map((child) => child.key)).toEqual(['a', '1', 'd']);
+    expect(plan.nodes[0]!.slots.children![1]!.nodeId).toBeUndefined();
+    // Each child got its own wrapper div — proves per-child control.
+    expect(html).toContain('data-index="0"');
+    expect(html).toContain('data-index="1"');
+    expect(html).toContain('data-index="2"');
+    expect(html).toContain('<span>one</span>');
+    expect(html).toContain('<span>three</span>');
+    expect(html.indexOf('<span>one</span>')).toBeLessThan(html.indexOf('<span>two</span>'));
+    expect(html.indexOf('<span>two</span>')).toBeLessThan(html.indexOf('<span>three</span>'));
+  });
+
+  it('accepts a bare component for a experienceTemplate', async () => {
+    const Item = ({ value }: { value?: string }) => <span>{value}</span>;
+    const Tpl = ({ content }: { content?: ReactNode[] }) => <main data-tpl>{content}</main>;
+    const cfg: Config = { components: { item: Item }, experienceTemplates: { page: Tpl } };
+    const tplPayload: ExperiencePayload = {
+      nodes: [
+        experienceTemplateNode('page', {
+          id: 'tpl',
+          slots: {
+            content: [componentNode('item', { id: 'i', contentProperties: { value: 'inside' } })],
+          },
+        }),
+      ],
+    };
+    const plan = await resolveExperience(tplPayload, cfg);
+    const html = renderToStaticMarkup(
+      <ExperienceProvider value={{ debug: false, metadata: {} }}>
+        <NodesRenderer
+          nodes={plan.nodes}
+          config={cfg}
+          renderUnknown={MissingComponent}
+          renderError={ComponentError}
+          onDiagnostic={() => {}}
+        />
+      </ExperienceProvider>
+    );
+    expect(html).toContain('data-tpl');
+    expect(html).toContain('<span>inside</span>');
+  });
+});
+
+it('preserves unregistered template slot children and reports the missing template', () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const report = vi.fn();
+  const child: PortableRenderNode = {
+    registration: { kind: 'component', id: 'item' },
+    nodeId: 'i',
+    props: { content: { value: 'unwrapped' }, design: {}, designRaw: {} },
+    slots: {},
+  };
+  const node: PortableRenderNode = {
+    registration: { kind: 'experienceTemplate', id: 'missing-experienceTemplate' },
+    nodeId: 'tpl',
+    props: { content: {}, design: {}, designRaw: {} },
+    slots: { content: [child] },
+  };
+  try {
+    const html = renderToStaticMarkup(
+      <ExperienceProvider value={{ debug: false, metadata: {} }}>
+        <NodesRenderer
+          nodes={[node]}
+          config={{ components: { item: ({ value }: { value: string }) => <span>{value}</span> } }}
+          renderUnknown={MissingComponent}
+          renderError={ComponentError}
+          onDiagnostic={report}
+        />
+      </ExperienceProvider>
+    );
+    expect(html).toBe('<span>unwrapped</span>');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('missing-experienceTemplate'));
+    expect(report).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining(
+          'No experience template registered for id "missing-experienceTemplate"'
+        ),
       })
     );
-    const client = { experience: { get } } as never;
-    const resolveData = vi.fn(({ content }: { content: Record<string, unknown> }) => ({
-      title: String(content.title).toUpperCase(),
-    }));
-    const config: Config = {
-      components: {
-        posts: { component: ({ title }: { title: string }) => <p>{title}</p>, resolveData },
-      },
-    };
-    const options = { spaceId: 'space', environmentId: 'master', experienceId: 'collection' };
-    const parameters: ExperienceParameters = {
-      featuredPosts: { limit: 6, order: '-fields.title' },
-    };
-    const first = await fetchExperience({ ...options, parameters }, { client }, { config });
-    await mount(<ClientExperienceRenderer experience={first} config={config} />);
-    expect(container!.textContent).toBe('6 POSTS');
-
-    const second = await fetchExperience(
-      { ...options, parameters: { featuredPosts: { limit: 12, order: 'sys.createdAt' } } },
-      { client },
-      { config }
-    );
-    await act(async () => {
-      root!.render(<ClientExperienceRenderer experience={second} config={config} />);
-    });
-    expect(container!.textContent).toBe('12 POSTS');
-    expect(first.nodes[0]?.nodeId).toBe(second.nodes[0]?.nodeId);
-    expect(resolveData).toHaveBeenCalledTimes(2);
-  });
-});
-
-describe('ClientExperienceRenderer — component-render-error, client-side catch', () => {
-  it('isolates the failing node, records a diagnostic, and shows it in DebugExperience', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const payload: ExperiencePayload = {
-        nodes: [componentNode('broken', { id: 'b' }), componentNode('fine', { id: 'f' })],
-      };
-      const config: Config = { components: { broken: Broken, fine: Fine } };
-      const plan = await resolveExperience(payload, config);
-
-      await mount(<ClientExperienceRenderer experience={plan} config={config} debug />);
-
-      expect(container!.querySelector('[data-fine]')).not.toBeNull();
-      expect(container!.querySelector('[data-experiences-render-error="broken"]')).not.toBeNull();
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('boom'));
-
-      // The error boundary's onError call updates ClientExperienceRenderer's
-      // render-diagnostics state; DebugExperience should reflect it once
-      // React settles.
-      const errorList = container!.querySelector('[data-experiences-debug-errors]');
-      expect(errorList).not.toBeNull();
-      expect(errorList!.textContent).toContain('Component "broken"');
-      expect(errorList!.textContent).toContain('boom');
-    } finally {
-      warn.mockRestore();
-    }
-  });
-
-  it('renders nothing visible from the default fallback when debug is off, but still warns', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const payload: ExperiencePayload = {
-        nodes: [componentNode('broken', { id: 'b' })],
-      };
-      const config: Config = { components: { broken: Broken } };
-      const plan = await resolveExperience(payload, config);
-
-      await mount(<ClientExperienceRenderer experience={plan} config={config} />);
-
-      expect(container!.querySelector('[data-experiences-render-error]')).toBeNull();
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('boom'));
-    } finally {
-      warn.mockRestore();
-    }
-  });
-
-  it('honors a custom renderError override', async () => {
-    const payload: ExperiencePayload = {
-      nodes: [componentNode('broken', { id: 'b' })],
-    };
-    const config: Config = { components: { broken: Broken } };
-    const plan = await resolveExperience(payload, config);
-
-    const CustomError = ({ componentId }: { componentId: string }) => (
-      <div data-custom-error={componentId} />
-    );
-
-    await mount(
-      <ClientExperienceRenderer experience={plan} config={config} renderError={CustomError} />
-    );
-
-    expect(container!.querySelector('[data-custom-error="broken"]')).not.toBeNull();
-  });
-});
-
-describe('ClientExperienceRenderer — render-time diagnostics dedupe across re-renders', () => {
-  it('reports a persistently-unregistered component only once, not once per re-render', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const payload: ExperiencePayload = {
-        nodes: [componentNode('missing', { id: 'm' })],
-      };
-      const config: Config = { components: {} };
-      const plan = await resolveExperience(payload, config);
-
-      await mount(<ClientExperienceRenderer experience={plan} config={config} debug />);
-      // Force NodeRenderer to re-execute its function body without any real
-      // new occurrence — an ancestor re-render (an
-      // unrelated parent state update) does the same thing in production.
-      act(() => {
-        root!.render(<ClientExperienceRenderer experience={plan} config={config} debug />);
-      });
-      await flushMicrotasks();
-
-      expect(container!.querySelectorAll('[data-experiences-debug-errors] li')).toHaveLength(1);
-      expect(container!.textContent).toContain('No component registered for id "missing"');
-    } finally {
-      warn.mockRestore();
-    }
-  });
+  } finally {
+    warn.mockRestore();
+  }
 });

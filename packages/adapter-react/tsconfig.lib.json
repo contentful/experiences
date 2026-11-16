@@ -12,6 +12,7 @@
     "**/*.test.ts",
     "**/*.test.tsx",
     "src/test/**",
+    "src/test-fixtures/**",
     "**/*.spec.ts",
     "**/*.spec.tsx",
     "vitest.config.ts",
