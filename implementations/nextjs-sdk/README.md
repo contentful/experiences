@@ -162,10 +162,10 @@ session updates reach only presentations matching the raw payload's Experience I
 `LIVE_PREVIEW_SESSION_ID` is retained in local `.env` only for convenient copying;
 application/build code never reads it. Both preview fields are blank in
 `.env.example`. Missing/empty session parameters and a falsy flag keep the request
-ordinary, even with a nonempty session parameter in the URL. The bound request
-receives an explicit `isPreview: false` in those cases, retaining ordinary event
-handling. The browser owner and sidebar use the same explicit policy, subject to normal
-consent and identity requirements. Active browser preview supplies the public Preview package’s synchronous
+ordinary, even with a nonempty session parameter in the URL. The application supplies Preview configuration only when the deployment flag is
+enabled. Next reads the request/browser URL session and determines `isPreview`,
+retaining ordinary event handling and sidebar notifications under normal consent
+and identity requirements when inactive. Active browser preview supplies the public Preview package’s synchronous
 `createLivePreviewClient` factory through `preview.createClient`. Node owns policy and snapshot loading through ordinary
 `fetchExperience`. Matching session requests omit ordinary locale/source-map fetch
 options. Session snapshots use the configured Preview transport; the optional
@@ -279,10 +279,10 @@ identity reconciliation, resource cache or controller. The Home/Page Two flow
 below continues to use its existing explicit loader.
 
 Next's bindings own Contentful Live Preview Session selection and lifetime through
-`preview: { enabled, createClient, ...transport }`. The server supplies deployment configuration in the result; the client binds
+`preview: { createClient, ...transport }`, present only in enabled deployments. The server supplies deployment configuration in the result; the client binds
 the optional package’s client factory. The SDK infers
-the primary Experience ID, reads the committed URL session, supplies inactive
-`isPreview: false`, switches sessions in place and replaces its owned SDK on mode
+the primary Experience ID, reads the committed URL session, determines preview
+mode, switches sessions in place and replaces its owned SDK on mode
 entry/exit. Consumers need no preview-specific hook, wrapper or React key.
 Request-history guards survive SDK replacement. This configuration controls
 Contentful Live Preview content and event suppression, independently of Personalization API

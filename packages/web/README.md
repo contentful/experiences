@@ -8,10 +8,9 @@ Only one live Experiences Web SDK instance is supported in a JavaScript runtime.
 
 ## Session preview
 
-Set `isPreview: true` to suppress events or `isPreview: false` to select ordinary event policy.
-When omitted, the SDK uses the configured Preview session or a nonempty, trimmed
-`preview_session_id` in the initial browser URL only when `preview` is configured.
-A Session ID alone does not enable preview. The resulting read-only `sdk.isPreview`
+The SDK enters preview when `preview` is configured and the initial browser URL
+contains a nonempty, trimmed `preview_session_id`. Without either, it uses ordinary
+fetching and event policy. The resulting read-only `sdk.isPreview`
 is fixed at construction, before tracking starts.
 All event methods return `{ accepted: false, reason: 'preview' }` and report through
 `onEventBlocked`/`blockedEventStream`, without building, publishing or queueing events.
@@ -23,28 +22,29 @@ and replay are ignored; current-page methods return the same skipped result. Flu
 reconnect, page hide/Beacon and destroy send no preview events. Rendering and Session updates continue.
 
 Mode stays fixed through reset, consent, URL changes and socket failure. Destroy and recreate
-before entering/leaving Session preview in a SPA. CPA configuration alone, per-call `preview: true`
-and `debug` do not select this policy. Static preview without a Session ID is not detected automatically;
-applications may opt in with `isPreview: true`. Raw `sdk.api` calls and standalone free
-fetches remain outside it.
+before entering/leaving Session preview in a SPA. Preview credentials alone and
+`debug` do not select this policy. Raw `sdk.api` calls and standalone free fetches
+remain outside it.
 
 ### Editor session and optional live updates
 
 Web owns one connection for the active editor session. Configure credentials under
 `preview` and pass the optional package’s `createLivePreviewClient` factory as
-`preview.createClient`. The session defaults to the standard
-`preview_session_id` query parameter. An explicit `preview.sessionId` overrides
-the URL; a blank value disables URL inference. `isPreview: false` disables automatic
-session integration. Rendering components and fetches keep their ordinary Experience IDs. `states.preview`
+`preview.createClient`. The session comes from the standard
+`preview_session_id` query parameter. Without a factory, snapshot fetching remains
+available. Connection failure preserves preview policy. Rendering components and fetches keep their ordinary Experience IDs. `states.preview`
 exposes raw session data, error, status and revision.
 
-The package returns one current Experience payload. The SDK uses its actual
-`sys.id` to route snapshots and updates: only matching requests/subscriptions
-receive that payload, and updates without an ID are ignored. Other Experience
-IDs retain their ordinary fetch source and are not overwritten by the session.
-The SDK shares equivalent in-flight
-fetching/resolution while each consumer receives an independent mutable plan;
-the view keeps its existing presentation state.
+The package returns one current Experience payload. Only the current successfully
+acquired raw snapshot's `sys.id` determines whether a fetch uses session content.
+A mismatched or missing ID uses ordinary Delivery; updates without an ID are ignored
+and only matching subscriptions receive identified updates. Acquisition failure
+rejects before identity is known; see Runtime's [acquisition limits](../runtime/README.md#optional-runtime-live-preview).
+Snapshot acquisition is shared only while in flight, allowing later calls to retry.
+The SDK shares equivalent in-flight fetching/resolution while each consumer receives an independent mutable plan;
+the view keeps its existing presentation state, including usable content while
+pending or failed. Snapshot HTTP errors surface through the fetch or managed
+result; connection/update errors appear in `states.preview`.
 
 `subscribeToPreview(experienceId, resolveOptions, listener)` returns a
 `Subscription` and emits only `PreviewUpdate` plan/error updates, without snapshot
@@ -182,7 +182,7 @@ helper. The build tools require Node.js 22.12 or later.
 
 ## Browser transport and preview
 
-This package owns its Delivery and optional Preview clients. It can use the Content Delivery API (CDA) and, when configured, the Content Preview API (CPA). Destination operations remain delivery-only. `fetchByDestinationNode` and `fetchByDestinationPath` accept `personalization` and use the same consent, interceptor and profile handling as by-ID fetches: they send the stored profile id and keep the one XDA returns.
+This package owns its Delivery and optional Preview Session clients. By-ID fetches use matching session content while preview is active; other Experience IDs and destination operations retain their ordinary Delivery source. `fetchByDestinationNode` and `fetchByDestinationPath` accept `personalization` and use the same consent, interceptor and profile handling as by-ID fetches: they send the stored profile id and keep the one XDA returns.
 
 The inherited readonly `api` exposes the full Personalization and Analytics service clients
 through `api.personalization` and `api.analytics`, plus their shared `api.config`; inherited readonly `config` retains the
@@ -200,16 +200,12 @@ const experiences = new ContentfulExperiences({
   spaceId,
   environmentId: 'master',
   delivery: { accessToken: publicDeliveryToken },
-  preview: { accessToken: publicPreviewToken }, // optional direct CPA client
+  preview: { accessToken: publicPreviewToken }, // enables URL-selected Preview Sessions
   locale: 'en-US',
   app: { name: 'storefront', version: '1.0.0' },
 });
 
 const plan = await experiences.fetchExperience({ experienceId }, { config: experienceConfig });
-const draft = await experiences.fetchExperience(
-  { experienceId, preview: true },
-  { config: experienceConfig }
-);
 
 experiences.setLocale('de-DE');
 ```
@@ -232,7 +228,7 @@ client; configure its Personalization and Analytics endpoints through `optimizat
 Treat custom endpoints as sensitive-data destinations and use only trusted HTTPS
 origins outside explicit local development.
 
-Preview here means a direct, by-ID CPA fetch through the shared runtime. It is not a Preview Session: `@contentful/experiences-live-preview` owns Preview Session HTTP loading, WebSocket subscription, and update state. The optional SDK wrapper coordinates those public APIs through the shared source described above; the package retains transport/protocol ownership.
+`@contentful/experiences-live-preview` owns the Preview Session HTTP and WebSocket protocols. The SDK loads session snapshots through Runtime and uses the optional `preview.createClient` factory for live updates through the shared source described above.
 
 ## Delivery diagnostics
 
@@ -275,8 +271,7 @@ for descending order. `ExperienceParameters`, `ExperienceParameterValue`,
 `ExperienceParameterRecord`, and `ExperienceParameterOrder` are public types.
 GET sends `parameter.<id>[.<field>]`; empty Records, personalization, or defined
 extensions select POST with an unprefixed structured map. `locale` stays separate.
-Direct `preview: true` fetches accept the same option. Preview Sessions retain
-server-owned `context.parameters` and WebSocket updates.
+Preview Sessions retain server-owned `context.parameters` and WebSocket updates.
 See the [render/refetch example](../../README.md#runtime-experience-parameters).
 
 ## Personalization
@@ -315,7 +310,7 @@ Ordinary by-ID and destination fetches default supplied
 changes through XDA. An explicit `true` evaluates without commitment; XDA itself
 defaults an omitted value to `true`. Web needs no SSR/hybrid mode setting, and
 direct event methods remain unchanged. This flag is independent of editor
-`isPreview`, CPA and Preview Sessions. A preview-generated ID can be reused by a
+Preview Sessions. A preview-generated ID can be reused by a
 Personalization API POST carrying events through XDA or a direct call; profile-only
 XDA still uses Personalization API GET and can fail before commitment.
 Local adoption and storage do not prove that the returned ID is finalized.
@@ -385,8 +380,7 @@ for a non-nullish value, so `null` does not settle it while `false` does.
 Direct Personalization responses, ordinary XDA fetches (by ID and destination),
 and private handoffs supply current changes through the existing state-interceptor
 and publication path, atomically with profile and request success. Preview Sessions
-update only the preview instance's in-memory flags. Per-call CPA preview fetches on
-ordinary instances return plan-local personalization without adopting browser state. Supplied
+update only the preview instance's in-memory flags. Supplied
 changes replace the snapshot: `[]` clears flags; omitted changes retain them
 unless profile identity changes. Changed values notify flag subscriptions; changed
 attribution can refresh exposure without emitting a duplicate value. A flag-only
@@ -791,7 +785,10 @@ const experiences = new ContentfulExperiences({
 ```
 
 On the server, the host reads the cookie, supplies it through `forRequest({ profile,
-consent })`, and uses `canPersistProfile` to write or expire the response cookie. See the
+consent })`, and first checks `request.isPreview` to skip both cookie writes and
+expiry in preview. Outside preview, it uses `canPersistProfile` to write or expire
+the response cookie. Preview's false `canPersistProfile` does not request cookie
+expiry. See the
 [Node example](../../examples/node/README.md).
 
 ## Interaction tracking
@@ -1147,7 +1144,10 @@ from both the package root and `@contentful/experiences-web/runtime`.
 
 Missing Experiences surface the delivery client's `NotFoundError`; other delivery and resolution errors propagate so the application can apply its normal error policy. Destination operations use the delivery service and return either a resolved plan or a redirect result; route redirects at the application boundary.
 
-For a by-ID fetch, `preview: true` selects the configured CPA client and throws if no preview client was configured. The delivery client's errors, including `NotFoundError`, otherwise propagate. Destination fetches remain delivery-only.
+Preview Session snapshot HTTP errors reject the fetch and appear in managed results;
+connection/update errors are exposed through `states.preview` while preview policy stays active.
+See [Runtime acquisition limits](../runtime/README.md#optional-runtime-live-preview).
+Destination fetches retain their ordinary Delivery source.
 
 ## Current limitations
 

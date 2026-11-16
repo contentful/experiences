@@ -76,9 +76,9 @@ supported product usage or a cross-fetch guarantee.
 - Optional Preview uses the public lazy initializer and ordinary managed rendering.
   Activate only with app-local `LIVE_PREVIEW_ENABLED=true` and a nonempty URL
   `preview_session_id`. Keep `LIVE_PREVIEW_SESSION_ID` only as an unread local
-  convenience value; leave both fields blank in `.env.example`. Explicitly pass
-  `isPreview: false` for all inactive cases, including disabled flag plus session
-  URL, so normal event handling and sidebar notifications remain eligible.
+  convenience value; leave both fields blank in `.env.example`. Configure Preview
+  capability only for enabled deployments and let Web infer the browser URL session
+  and `isPreview`, so inactive URLs retain ordinary events and sidebar notifications.
   Disabled production builds exclude its chunk; enabled configuration exposes only
   browser-approved token/session settings. Use the installed Preview package's
   public exports without bypassing them through private imports.

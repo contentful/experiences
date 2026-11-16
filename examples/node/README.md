@@ -14,7 +14,7 @@ browser: Web SDK persists the identity  ──►  ctfl-opt-aid cookie
                                                    │  sent with the next request
 server:  readIdentity(cookie)                      ▼
          forRequest({ profile, consent })  ──►  Node SDK reuses the profile
-         identitySetCookie({ canPersistProfile, ... })  ──►  Set-Cookie
+         identitySetCookie({ isPreview, canPersistProfile, ... })  ──►  Set-Cookie
          prepareRequestHandoff()  ──►  handoff carrying the same identity
 browser: Web SDK hydrates the handoff  ──►  the identity continues
 ```
@@ -30,6 +30,11 @@ consent management platform token. **Neither the identity cookie being present n
 the browser's storage is server-side consent**, so a visitor who sent the cookie but has not
 been granted persistence gets it expired, not kept alive. `server.ts` reads a cookie of its
 own (`app-personalization-consent`) to show where that decision belongs; replace it.
+
+Pass both `request.isPreview` and `request.canPersistProfile` to `identitySetCookie`.
+In Session preview, `canPersistProfile` is false, but the helper skips both writing and
+expiring the cookie so the visitor's existing identity remains untouched. Outside preview,
+withheld persistence consent still expires an existing cookie.
 
 ## Cookie settings
 

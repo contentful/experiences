@@ -113,8 +113,9 @@ into browser configuration. Missing or empty session parameters, or a disabled
 flag even with a session URL, use ordinary mode and events. Optional
 `LIVE_PREVIEW_RESOURCE_RESOLUTION` is forwarded. Session content updates only
 presentations matching the payload’s own Experience ID; other IDs use Delivery.
-Web passes `preview` and explicit `isPreview: Boolean(previewBinding)` at
-initialization, overriding SDK URL autodetection even when false. It uses
+Web configures `preview` transport and its client factory only when the deployment
+flag is enabled. The SDK reads the session from the browser URL and determines
+`isPreview`; the application does not pass a session or mode override. It uses
 `fetchExperience()` for initial content and Retry. After loading/rendering,
 `subscribeToPreview()` applies new
 plans/errors; `states.preview` exposes connection status for the active session.

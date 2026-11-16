@@ -85,26 +85,30 @@ function scope(settings: IdentityCookieSettings): string {
 /**
  * The `Set-Cookie` value for a response, or `undefined` when there is nothing to change.
  *
- * Pass the request's `canPersistProfile` and the handoff's continuation id
+ * Pass the request's `isPreview`, `canPersistProfile` and the handoff's continuation id
  * (`handoff.profileId`), which is what the browser continues. Do not pass the profile the
  * preview evaluated (`request.profile?.id`); it can differ from the visitor's own id.
  *
- * Persistence permission decides: when it is withheld the cookie is expired, in the scope
+ * Session preview leaves the cookie untouched: it skips both writing and expiry. Otherwise,
+ * persistence permission decides: when it is withheld the cookie is expired, in the scope
  * it was written in, and otherwise the current id is written. The cookie's presence is
  * never taken as permission.
  */
 export function identitySetCookie({
+  isPreview,
   canPersistProfile,
   profileId,
   hadCookie,
   settings = {},
 }: {
+  isPreview: boolean;
   canPersistProfile: boolean;
   profileId: string | undefined;
   /** Whether the request carried the cookie, so an absent one is not expired needlessly. */
   hadCookie: boolean;
   settings?: IdentityCookieSettings;
 }): string | undefined {
+  if (isPreview) return undefined;
   if (!canPersistProfile) {
     return hadCookie
       ? `${ANONYMOUS_ID_COOKIE}=; Expires=${EXPIRED_UTC}${scope(settings)}`

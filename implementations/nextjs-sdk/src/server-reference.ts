@@ -64,7 +64,6 @@ export function createContentRequest(
   profile?: RequestRuntime['profile']
 ) {
   const { sdk, config } = getServer();
-  const preview = serverPreview(url);
   return bindExperiencesRequest(sdk, {
     request: { url: url.toString(), headers },
     cookies,
@@ -72,8 +71,6 @@ export function createContentRequest(
     consent: readConsent(cookies),
     locale: config.locale,
     preflight: false,
-    preview,
-    isPreview: Boolean(preview),
     page: createPageContext({
       path: url.pathname,
       origin: config.origin,
@@ -112,7 +109,6 @@ export async function loadComparisons(
   const comparisons = sdk.forRequest({
     locale: request.locale,
     preflight,
-    isPreview: request.isPreview,
     preview: request.isPreview ? serverPreview(url) : undefined,
   });
   const output: ServerContent[] = [];

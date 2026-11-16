@@ -60,8 +60,8 @@ so an older inherited environment value cannot keep preview enabled.
 Missing or empty session parameters, or a disabled flag even with a session URL,
 use ordinary mode and events. Optional `LIVE_PREVIEW_RESOURCE_RESOLUTION` is forwarded.
 The presentation ID list stays unchanged; other IDs use Delivery.
-`forRequest({ preview, isPreview: Boolean(preview) })` explicitly sets mode,
-including `false` when inactive. Active preview skips page/identify work and fetches
+`forRequest({ preview })` supplies the URL session on the request; configured Preview
+transport plus a nonempty session determines `request.isPreview`. Active preview skips page/identify work and fetches
 the snapshot with the configured Preview transport through ordinary
 `fetchExperience`. Node opens no socket and needs no live-update client.
 `request.destroy()` runs in `finally`. Reload for another snapshot.

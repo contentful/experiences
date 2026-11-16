@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server.js';
-import { describe, expect, expectTypeOf, it, vi } from 'vitest';
-import type { MaybePromise, PreviewSessionOptions } from '@contentful/experiences-node';
-import { createExperiencesContextHandler, type PreviewResolver } from './request-handler.js';
+import { describe, expect, it, vi } from 'vitest';
+import { createExperiencesContextHandler } from './request-handler.js';
 import { configureServerExperiences } from './server-request.js';
 import {
   NEXTJS_EXPERIENCES_REQUEST_HEADER_PREFIX,
@@ -13,6 +12,7 @@ const sdk = () =>
     spaceId: 'space',
     environmentId: 'master',
     delivery: { accessToken: 'test' },
+    preview: { accessToken: 'preview' },
   });
 
 function forwarded(response: NextResponse, name: string): string | null {
@@ -187,36 +187,35 @@ describe('Next context middleware', () => {
     const runtime = sdk();
     const bind = vi.spyOn(runtime, 'forRequest');
     const consent = vi.fn(() => true);
-    const preview = vi.fn(() => undefined);
     expect(
-      await createExperiencesContextHandler({ sdk: runtime, consent, preview })(
+      await createExperiencesContextHandler({ sdk: runtime, consent })(
         new NextRequest('https://example.com'),
         response
       )
     ).toBe(response);
     expect(bind).not.toHaveBeenCalled();
     expect(consent).not.toHaveBeenCalled();
-    expect(preview).not.toHaveBeenCalled();
     expect(response.headers.has(NEXTJS_EXPERIENCES_REQUEST_URL_HEADER)).toBe(false);
   });
 
-  it('resolves preview before binding and never writes or expires visitor identity', async () => {
-    const runtime = sdk();
-    const bind = vi.spyOn(runtime, 'forRequest');
-    const preview = { sessionId: 'session' };
-    const result = await createExperiencesContextHandler({
-      sdk: runtime,
-      consent: true,
-      preview: async ({ request }) => {
-        expect(request.url).toBe('https://example.com/');
-        expect(bind).not.toHaveBeenCalled();
-        return preview;
-      },
-    })(new NextRequest('https://example.com', { headers: { cookie: 'ctfl-opt-aid=visitor' } }));
-    expect(bind.mock.calls[0]![0]).toMatchObject({ preview, profile: undefined });
-    expect(bind.mock.results[0]!.value.isPreview).toBe(true);
-    expect(result.headers.has('set-cookie')).toBe(false);
-  });
+  it.each(['session', ' session '])(
+    'derives preview from the request URL (%s)',
+    async (session) => {
+      const runtime = sdk();
+      const bind = vi.spyOn(runtime, 'forRequest');
+      const result = await createExperiencesContextHandler({ sdk: runtime, consent: true })(
+        new NextRequest('https://example.com/?preview_session_id=' + encodeURIComponent(session), {
+          headers: { cookie: 'ctfl-opt-aid=visitor' },
+        })
+      );
+      expect(bind.mock.calls[0]![0]).toMatchObject({
+        preview: { sessionId: 'session' },
+        profile: undefined,
+      });
+      expect(bind.mock.results[0]!.value.isPreview).toBe(true);
+      expect(result.headers.has('set-cookie')).toBe(false);
+    }
+  );
 
   it('aborts on resolver failure without mutating supplied response', async () => {
     const runtime = sdk();
@@ -226,38 +225,26 @@ describe('Next context middleware', () => {
     await expect(
       createExperiencesContextHandler({
         sdk: runtime,
-        consent: false,
-        preview: () => {
-          throw new Error('preview resolver failed');
+        consent: () => {
+          throw new Error('consent resolver failed');
         },
       })(new NextRequest('https://example.com'), response)
-    ).rejects.toThrow('preview resolver failed');
+    ).rejects.toThrow('consent resolver failed');
     expect(bind).not.toHaveBeenCalled();
     expect(response.headers.get('x-middleware-next')).toEqual(before);
     expect(response.headers.has('x-middleware-override-headers')).toBe(false);
   });
 });
 
-it.each([false, true])(
-  'keeps the existing static isPreview option when preview resolves undefined (%s)',
-  async (isPreview) => {
+it.each(['', '?preview_session_id=', '?preview_session_id=%20'])(
+  'uses ordinary mode without a nonempty URL session (%s)',
+  async (search) => {
     const runtime = sdk();
     const bind = vi.spyOn(runtime, 'forRequest');
-    const preview = vi.fn<PreviewResolver>().mockResolvedValue(undefined);
-    await createExperiencesContextHandler({
-      sdk: runtime,
-      consent: false,
-      isPreview,
-      preview,
-    })(new NextRequest('https://example.com'));
-    expect(preview).toHaveBeenCalledOnce();
-    expect(bind.mock.calls[0]![0]).toMatchObject({ isPreview, preview: undefined });
-    expect(bind.mock.results[0]!.value.isPreview).toBe(isPreview);
+    await createExperiencesContextHandler({ sdk: runtime, consent: false })(
+      new NextRequest('https://example.com/' + search)
+    );
+    expect(bind.mock.calls[0]![0]).toMatchObject({ preview: undefined });
+    expect(bind.mock.results[0]!.value.isPreview).toBe(false);
   }
 );
-
-it('types preview as an application resolver returning an initializer or absence', () => {
-  expectTypeOf<PreviewResolver>().returns.toEqualTypeOf<
-    MaybePromise<PreviewSessionOptions | undefined>
-  >();
-});

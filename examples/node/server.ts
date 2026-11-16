@@ -35,6 +35,7 @@ const server = createServer((req, res) => {
     // They differ when the incoming identity is not the one the API answers with, and the
     // browser continues the handoff's, so the cookie has to agree with it.
     const setCookie = identitySetCookie({
+      isPreview: request.isPreview,
       canPersistProfile: request.canPersistProfile,
       profileId: handoff.profileId,
       hadCookie: identity !== undefined,

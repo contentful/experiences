@@ -105,9 +105,9 @@ into browser configuration. Missing or empty session parameters, or a disabled
 flag even with a session URL, use ordinary mode and events. Optional
 `LIVE_PREVIEW_RESOURCE_RESOLUTION` is forwarded. Session content updates only
 presentations matching the payload’s own Experience ID; other IDs use Delivery. Optional `PREVIEW_HOST` sets the server snapshot endpoint.
-Node uses request-local `preview` and `request.destroy()`. Node and Web both
-pass explicit `isPreview: Boolean(binding)` from the same enabled URL binding,
-overriding SDK URL autodetection even when false. Web retains SSR
+Node uses request-local `preview` and `request.destroy()`. Both configure Preview capability only when the deployment flag is enabled.
+Node receives the URL session in request-local `preview`; Web reads it from the
+browser URL. The SDK determines `isPreview` without an application mode override. Web retains SSR
 markup and serialized `initialPlans`, then attaches `subscribeToPreview()` without
 a startup fetch, page event or visitor handoff. Navigation and Retry use
 `fetchExperience()` before attaching listeners; `states.preview` exposes connection status for the active session.

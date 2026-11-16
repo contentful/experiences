@@ -69,7 +69,13 @@ function configureServer() {
     environmentId: config.environmentId,
     locale: config.locale,
     delivery: { ...config.delivery, fetch: createPrivateFetch() },
-    preview: config.preview,
+    preview: config.preview
+      ? {
+          ...config.preview,
+          sessionHost: config.livePreview?.sessionHost,
+          resourceResolution: config.livePreview?.resourceResolution,
+        }
+      : undefined,
   };
   const browser: BrowserEnvironment = {
     web: {

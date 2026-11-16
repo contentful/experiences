@@ -15,22 +15,23 @@ Pass the incoming URL's Session ID before any event or handoff work:
 ```ts
 const url = new URL(incomingRequest.url);
 const request = sdk.forRequest({
-  isPreview: Boolean(url.searchParams.get('preview_session_id')?.trim()),
+  preview: { sessionId: url.searchParams.get('preview_session_id') ?? '' },
   consent: visitorConsent,
 });
 await request.page(); // { accepted: false, reason: 'preview' } in Session preview
 ```
 
-`isPreview: true` fixes read-only `request.isPreview` for this request, independently
-of consent, CPA configuration and socket status. It defaults to false unless an active Preview Session is configured; the host determines
-other preview intent before calling `forRequest()`. All event calls skip before building or
+A configured SDK `preview` integration plus a nonempty, trimmed request Session ID
+sets read-only `request.isPreview` for this request, independently of consent and
+socket status. Without either input, the request remains in ordinary mode.
+All event calls skip before building or
 profile lookup, report `onEventBlocked` with reason `preview`, and cannot affect other requests.
 Preview fetches omit personalization and do not attach/adopt profiles. Handoff preparation
-returns scope/cache only with `skipped: 'preview'`, without preflight or replay;
-`canPersistProfile` still reflects persistence consent. With consent granted, the documented
-cookie helper leaves an existing identity untouched because the handoff has no profile ID.
-Other preview contexts may explicitly opt in with `isPreview: true`. Raw `sdk.api` calls
-and standalone free fetches remain outside this policy.
+returns scope/cache only, without preflight or replay;
+the request discards supplied visitor profiles and `canPersistProfile` is false.
+Hosts check `request.isPreview` first and skip both visitor-cookie writes and expiry
+for preview requests so existing visitor identity remains untouched.
+Raw `sdk.api` calls and standalone free fetches remain outside this policy.
 
 For session snapshots, configure `preview.accessToken` (or a trusted proxy host) on
 the SDK and pass the active session through the request's `preview` option. Node uses
@@ -68,14 +69,18 @@ try {
 }
 ```
 
-An active session sets preview policy immediately; `isPreview: false` conflicts with
-it. Preview credentials alone do not enable this policy. The request fetches one raw
-session snapshot lazily and resolves it only when its `sys.id` matches the requested
-Experience ID. Other IDs, including payloads with no ID, use the ordinary by-ID source
-and preserve an explicit `preview: true` choice. Each matching call retains its own
-registry and Runtime → request → operation metadata/debug precedence. Optional
-`resourceResolution` and `sessionHost` override constructor Preview defaults; a stable
-constructor `preview.sessionId` can also supply the active session. Destinations retain
+An active request session with configured Preview transport sets preview policy immediately.
+Preview credentials alone do not enable this policy. The request fetches one raw
+session snapshot lazily and resolves it only when the successfully acquired raw
+payload's `sys.id` matches the requested Experience ID. A mismatched or missing ID
+uses the ordinary by-ID source through Delivery. Acquisition failure rejects before
+identity is known, without published-content fallback; see Runtime's
+[acquisition limits](../runtime/README.md#optional-runtime-live-preview).
+A later call can retry a failed acquisition; a successful snapshot is retained for this request.
+Each matching call retains its own registry and Runtime → request → operation
+metadata/debug precedence. Optional
+`resourceResolution` and `sessionHost` override constructor Preview defaults. Session
+identity belongs to the request and cannot be configured on the shared SDK. Destinations retain
 their sources. Node opens no socket. Hosts omit automatic visitor-cookie work for preview.
 `request.destroy()` invalidates unfinished content results and prevents late profile
 writes without affecting sibling requests. Event calls disposed before transport return
@@ -143,7 +148,7 @@ for descending order. `ExperienceParameters`, `ExperienceParameterValue`,
 `ExperienceParameterRecord`, and `ExperienceParameterOrder` are public types.
 GET sends `parameter.<id>[.<field>]`; empty Records, personalization, or defined
 extensions select POST with an unprefixed structured map. `locale` stays separate.
-Direct `preview: true` fetches accept the same option. Preview Sessions retain
+Preview Sessions retain
 server-owned `context.parameters` and WebSocket updates.
 See the [render/refetch example](../../README.md#runtime-experience-parameters).
 
@@ -180,7 +185,7 @@ Ordinary by-ID and destination fetches default supplied personalization to
 `forRequest({ preflight: true })` sets a request-wide XDA default; an explicit
 per-call `personalization.preflight` wins. This optional `RequestContext.preflight`
 does not change direct `identify`, `page`, `track` or Analytics methods, and is
-independent of editor `isPreview`, CPA and Preview Sessions.
+independent of editor Preview Sessions.
 
 Plans can also expose optional `deliveryDiagnostics`, whose public
 `ExperienceDeliveryDiagnostic` records contain only string `fieldPath` and
@@ -256,6 +261,9 @@ handoff state, including `[]` to clear browser flags; omitted changes remain abs
 This uses the same snapshot assumption as
 [Web flag state](../web/README.md#custom-flags), pending live-backend verification.
 Node retains no global flag state. Preview suppresses visitor work.
+In Session preview, content acquisition or resolution failure returns `{ handoff, error }`
+with scope/cache only and no replay or visitor identity. Invalid route/preflight or
+matching Preview overrides still reject, as does unfinished work after request disposal.
 
 Retry of the same Experience is ordinary fetch without events:
 
@@ -329,11 +337,13 @@ dropped, never replayed, and reported to the runtime's `onEventBlocked`. Configu
 `allowedEventTypes` and `onEventBlocked` on the runtime (`allowedEventTypes: []` is strict opt-in);
 consent itself is per request. A boolean `consent` sets event and persistence consent together.
 Consent is scoped to the request facade and is never shared across requests or persisted.
-Check `request.canPersistProfile` before storing the profile id. A host that carries the
-identity in the `ctfl-opt-aid` cookie reads it into `forRequest({ profile })` and uses
-`canPersistProfile` to write or expire the response cookie; the cookie's presence is never
-server-side consent. See the [Node example](../../examples/node/README.md). Events passed in
-`fetchExperience({ personalization: { events } })` are filtered by the same request
+Check `request.isPreview` before any identity-cookie write or expiry: preview requests
+leave the existing cookie untouched even though `request.canPersistProfile` is false.
+Outside preview, check `request.canPersistProfile` before storing the profile id. A host
+that carries identity in the `ctfl-opt-aid` cookie reads it into `forRequest({ profile })`
+and uses `canPersistProfile` to write or expire the response cookie; the cookie's presence
+is never server-side consent. See the [Node example](../../examples/node/README.md).
+Events passed in `fetchExperience({ personalization: { events } })` are filtered by the same request
 consent before the request is sent; the `profileId` still travels. `eventConsent` is a deprecated
 alias for `consent.events`. Personalization methods resolve `{ accepted, data? }`.
 
@@ -431,19 +441,9 @@ retained on the SDK or request facade.
 
 ## Delivery, preview, and destinations
 
-`fetchExperience({ experienceId }, { config: experienceConfig })` uses the delivery client by default. Pass `preview: true` to use the preview client configured on the SDK instance:
-
-```ts
-const draft = await request.fetchExperience(
-  {
-    experienceId,
-    preview: true,
-  },
-  { config: experienceConfig }
-);
-```
-
-Preview is available only for by-id experience fetches. If the SDK instance has no `preview` client, `preview: true` throws an error. The destination endpoints remain delivery-only:
+`fetchExperience({ experienceId }, { config: experienceConfig })` uses Delivery unless
+the request has an active Preview Session whose payload matches the Experience ID.
+The destination endpoints remain delivery-only:
 
 ```ts
 const result = await request.fetchByDestinationPath(
@@ -470,9 +470,8 @@ For token-bearing transports, the bearer token is sent to the configured
 endpoint. `environmentId` is the Contentful environment identifier used by
 by-ID requests; it is not the generated delivery client's optional `environment`
 endpoint setting. An explicit `host` wins over generated-client `environment`,
-which wins over the Delivery or Preview default. Direct CPA preview fetches are
-distinct from Preview Session live updates, which are owned by
-`@contentful/experiences-live-preview`.
+which wins over the Delivery or Preview default. Node fetches Preview Session snapshots;
+browser live updates use `@contentful/experiences-live-preview`.
 
 The runtime owns its Optimization API client. Configure trusted custom
 `personalizationBaseUrl` or `analyticsBaseUrl` endpoints through the
@@ -522,7 +521,7 @@ page, user-agent, consent, or other request-sensitive event state.
 
 ## Architecture boundary
 
-This package is a public Node-specific leaf over the internal `@contentful/experiences-runtime`, `@contentful/experiences-client`, and `@contentful/experiences-sdk-core` packages. Runtime retains only stable configuration, reusable Delivery and Optimization transports, and a base `EventBuilder` configured with an explicit platform channel. Client supplies the generated Delivery boundary and free fetch functions. The Node SDK binds event behavior and volatile profile state to each request facade. `@contentful/experiences-web` is its public sibling over the same lower layers, not a subclass of this Node SDK: it owns browser state while inheriting the shared runtime's trusted transport and direct by-ID preview capabilities.
+This package is a public Node-specific leaf over the internal `@contentful/experiences-runtime`, `@contentful/experiences-client`, and `@contentful/experiences-sdk-core` packages. Runtime retains only stable configuration, reusable Delivery and Optimization transports, and a base `EventBuilder` configured with an explicit platform channel. Client supplies the generated Delivery boundary and free fetch functions. The Node SDK binds event behavior and volatile profile state to each request facade. `@contentful/experiences-web` is its public sibling over the same lower layers, not a subclass of this Node SDK: it owns browser state while inheriting the shared runtime's trusted transport and Preview Session snapshot capabilities.
 
 ## License
 

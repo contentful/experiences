@@ -70,7 +70,6 @@ describe('explicit cache boundaries', () => {
     ).toThrow('key');
     for (const context of [
       { profile: { id: 'id' } },
-      { isPreview: true },
       {
         preview: { sessionId: 'session' },
       },
@@ -82,7 +81,6 @@ describe('explicit cache boundaries', () => {
     for (const fetchOptions of [
       { experienceId: 'home', personalization: { profile: { id: 'id' } } },
       { experienceId: 'home', personalization: { events: [] } },
-      { experienceId: 'home', preview: true },
     ]) {
       expect(() => assertPublicRequestPolicy({ cache: { scope: 'static' }, fetchOptions })).toThrow(
         'Public/static'

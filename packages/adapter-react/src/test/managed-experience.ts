@@ -109,6 +109,9 @@ export function sourceSdk() {
   const sdk = {
     ...snapshot,
     config: {},
+    get isPreview() {
+      return Boolean(preview.state.current?.sessionId);
+    },
     states: {
       ...snapshot.states,
       preview: preview.state,

@@ -94,9 +94,10 @@ element, { data })` after DOM insertion, following Optimization. Use each card's
 - Optional preview uses the README configuration and explicitly allowlisted browser
   settings. Build and host read app-local `LIVE_PREVIEW_ENABLED`; disabled
   deployments exclude the optional package. Preview requires the flag to be exactly
-  `true` and a nonempty trimmed URL `preview_session_id`. Pass explicit
-  `isPreview: Boolean(previewBinding)` even when false; disabled flags never suppress
-  ordinary events. `LIVE_PREVIEW_SESSION_ID` is local convenience storage only;
+  `true` and a nonempty trimmed URL `preview_session_id`. Configure Preview capability
+  only when enabled; Web reads the browser URL session and determines `isPreview`.
+  Disabled flags never suppress ordinary events. `LIVE_PREVIEW_SESSION_ID` is local
+  convenience storage only;
   never read it in runtime/build code or emit it in browser configuration. Branch visitor work on
   `sdk.isPreview`; release content subscriptions on route replacement/final exit,
   retaining them for BFCache. Reload the document when changing sessions

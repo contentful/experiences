@@ -52,13 +52,14 @@ export function AppBrowserRoot({
     bindAppRouterClientExperiences({
       ...environment.web,
       config: browserRegistry,
-      preview: {
-        ...environment.web.preview,
-        sessionHost: environment.livePreview?.sessionHost,
-        resourceResolution: environment.livePreview?.resourceResolution,
-        enabled: Boolean(environment.livePreview),
-        createClient: createLivePreviewClient,
-      },
+      preview: environment.livePreview
+        ? {
+            ...environment.web.preview,
+            sessionHost: environment.livePreview.sessionHost,
+            resourceResolution: environment.livePreview.resourceResolution,
+            createClient: createLivePreviewClient,
+          }
+        : undefined,
     })
   );
   const router = useAppRouter();
@@ -92,13 +93,14 @@ export function PagesBrowserRoot({
     bindPagesRouterExperiences({
       ...environment.web,
       config: browserRegistry,
-      preview: {
-        ...environment.web.preview,
-        sessionHost: environment.livePreview?.sessionHost,
-        resourceResolution: environment.livePreview?.resourceResolution,
-        enabled: Boolean(environment.livePreview),
-        createClient: createLivePreviewClient,
-      },
+      preview: environment.livePreview
+        ? {
+            ...environment.web.preview,
+            sessionHost: environment.livePreview.sessionHost,
+            resourceResolution: environment.livePreview.resourceResolution,
+            createClient: createLivePreviewClient,
+          }
+        : undefined,
     })
   );
   const router = usePagesRouter();
@@ -141,13 +143,7 @@ function ReferenceBrowserRoot({
   const serverOnly = url.searchParams.get('mode') === 'server-only';
   const ExperiencesRoot = serverOnly ? AnalyticsRoot : ContentRoot;
   return (
-    <ExperiencesRoot
-      {...props}
-      preview={{
-        enabled: Boolean(environment.livePreview),
-      }}
-      onStatesReady={log.onStatesReady}
-    >
+    <ExperiencesRoot {...props} onStatesReady={log.onStatesReady}>
       <ReferenceContext.Provider
         value={{
           environment,

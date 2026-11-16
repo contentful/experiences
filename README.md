@@ -128,7 +128,7 @@ One `fetchExperience` call fetches the payload from the Destinations Delivery AP
 
 It throws `NotFoundError` when no node claims the path. A Destination redirect node comes back as `{ redirect: { path } }`, which you follow instead of rendering. See [Error handling](#fetchexperienceexperienceoptions-clientoptions-resolveoptions) in the API reference for routing `NotFoundError` to your framework's 404.
 
-To fetch one Experience by id instead (for example, to preview a draft), pass `{ spaceId, environmentId, experienceId }`. See [Destinations](#destinations) for when to use which.
+To fetch one Experience by id instead (for example, when your app already knows its id), pass `{ spaceId, environmentId, experienceId }`. See [Destinations](#destinations) for when to use which.
 
 The signature is three grouped params: what to fetch (a Destination path or an Experience id), how to fetch (auth), and how to resolve (component config plus per-render `metadata` and a `debug` switch). Each group evolves on its own, so new options and transport settings fit their respective group without reshaping the signature.
 
@@ -154,7 +154,7 @@ A Destination maps URL paths to Experiences through its nodes, so your app route
 - **Redirects.** The destination forms return `PortableRenderPlan | DestinationRedirectResult`. A redirect node resolves to `{ redirect: { path } }`; navigate there instead of rendering.
 - **Personalization.** Both destination forms accept `personalization` (a profile id plus events), the same as by-id. It switches the request from a cacheable GET to a POST.
 - **Scope.** Destination delivery is space-scoped: no `environmentId`, `locale`, `parameters`, or `extensions` on the destination forms.
-- **Preview.** Not supported on Destinations yet. `preview: true` with a destination throws `DestinationPreviewNotSupportedError` (re-exported by every adapter). Use the by-id form, with a `previewToken`, for preview and live preview.
+- **Preview Sessions.** Free fetches use ordinary Delivery. Configure session capability on a Node/Web runtime owner and render by Experience id, or use the low-level Preview Session helpers; see [Live preview](#live-preview).
 - **Static generation.** Page through `fetchDestinationSitemap` to enumerate paths, then call `fetchExperience` for each `path`. The sitemap is a free function; the Node and Web runtimes have no sitemap method.
 
 ```ts
@@ -203,6 +203,7 @@ Preview credentials on the root in a client module:
 'use client';
 
 import { createExperiences, usePreviewState } from '@contentful/experiences-react/client';
+import { createLivePreviewClient } from '@contentful/experiences-live-preview';
 
 const { ExperiencesRoot, Experience } = createExperiences({ config: browserRegistry });
 
@@ -211,30 +212,14 @@ function PreviewStatus() {
   return preview?.error ? <p>{preview.error.message}</p> : null;
 }
 
-export function ExperiencePage({
-  experienceId,
-  sessionId,
-  previewEnabled,
-}: {
-  experienceId: string;
-  sessionId?: string;
-  previewEnabled: boolean;
-}) {
-  const activeSessionId = previewEnabled ? sessionId?.trim() : undefined;
+export function ExperiencePage({ experienceId }: { experienceId: string }) {
   return (
     <ExperiencesRoot
-      key={activeSessionId || 'ordinary'}
       {...browserConfig}
-      isPreview={Boolean(activeSessionId)}
-      livePreview={
-        activeSessionId
-          ? {
-              experienceId,
-              sessionId: activeSessionId,
-              loadImplementation: () => import('@contentful/experiences-live-preview'),
-            }
-          : undefined
-      }
+      preview={{
+        accessToken: browserPreviewToken,
+        createClient: createLivePreviewClient,
+      }}
     >
       <PreviewStatus />
       <Experience experienceId={experienceId} />
@@ -243,9 +228,12 @@ export function ExperiencePage({
 }
 ```
 
-Here `browserConfig` contains explicit browser Delivery configuration and,
-when preview is enabled, browser-designated `preview` credentials. Install the
-optional `@contentful/experiences-live-preview` package for the conditional import.
+Here `browserConfig` contains explicit browser Delivery configuration and
+`browserPreviewToken` is a browser-designated Preview credential. Install the
+optional `@contentful/experiences-live-preview` package for the factory import.
+Configure capability once: a nonempty, trimmed `preview_session_id` in the URL
+activates preview. Without configuration or an ID, the owner uses ordinary Delivery.
+Omit `createClient` for snapshot-only preview.
 The SDK owns the shared connection, snapshot fetch and update resolution; the
 managed result retains the initial or last usable plan alongside errors. An
 `initialPlan` can preserve server content without a startup snapshot fetch. Next
@@ -258,11 +246,15 @@ For framework-neutral code, import `createLivePreviewClient` directly from
 `@contentful/experiences-live-preview`. Svelte retains its `useLivePreview` getter
 and Angular its `injectLivePreview` getter; see their adapter references.
 
-Both runtimes accept an explicit `isPreview` boolean. Web detects a nonempty URL
-`preview_session_id` when the option is omitted; Node integrations pass
-`isPreview: true` to `forRequest()` for preview requests.
-Recreate a managed browser owner when entering or leaving preview.
-Calls return `{ accepted: false, reason: 'preview' }`, while rendering and Session updates continue.
+Browser owners use the current URL; managed server routers use the incoming
+request URL. Bare Node integrations pass the ID through
+`forRequest({ preview: { sessionId } })`. Runtime `preview` configuration has no
+session-ID override, and there is no `isPreview` configuration flag or iframe
+detection. The read-only `isPreview` state reflects the selected session mode.
+Managed owners replace their SDK on session transitions without a consumer key
+or preview wrapper. Socket or factory failure keeps preview isolation and the
+last usable content. Event calls return `{ accepted: false, reason: 'preview' }`,
+while rendering and Session updates continue.
 See the [Web](./packages/web/README.md#session-preview) and [Node](./packages/node/README.md#session-preview) contracts.
 
 ---
@@ -303,7 +295,7 @@ consent is granted only `allowedEventTypes` are sent, and the application decide
 when to grant consent. Web's
 automatic interaction tracking sends views, hovers, and clicks through its direct
 Analytics methods (see the [Web SDK README](./packages/web/README.md#interaction-tracking));
-Session preview gates automatic and manual tracking. CPA fetching alone does not select that policy.
+Session preview gates automatic and manual tracking independently of socket status.
 
 An ordinary event call does not wait for every queued handoff. If a later call
 needs a profile produced by `identify`, `page`, or `track`, await the earlier
@@ -542,8 +534,7 @@ persistence, subscriptions, and exposure deduplication.
 
 Web automatically adopts XDA changes from ordinary by-ID and destination fetches
 through the same state-interceptor path as direct Personalization responses.
-Preview Session changes remain in the preview instance; per-call CPA preview
-fetches do not replace live visitor flags.
+Preview Session changes remain isolated in the preview instance.
 Supplied changes replace the browser snapshot: `[]` clears flags; omitted changes
 retain them unless profile identity changes. Treating XDA changes as a complete
 snapshot follows Personalization API/Optimization behavior and remains an assumption pending
@@ -661,7 +652,7 @@ Returning `undefined` means "not resolvable": the SDK retains the raw token in t
 
 When the simple path isn't enough, a few optional features cover most production needs. Per-page `metadata` flows into resolvers. `debug` mode surfaces what the SDK saw (visible missing-component boxes, verbose logs, a JSON dump panel). Async `resolveData` enriches props from external sources. Use any combination of them.
 
-A full working route is at [`examples/nextjs/app/experiences/[id]/page.tsx`](./examples/nextjs/app/experiences/[id]/page.tsx). Visit `/experiences/<id>?debug=true&locale=en-US` after running the example. (Destination routes accept `?debug=true` too; they have no `locale` or `preview`.)
+A full working route is at [`examples/nextjs/app/experiences/[id]/page.tsx`](./examples/nextjs/app/experiences/[id]/page.tsx). Visit `/experiences/<id>?debug=true&locale=en-US` after running the example. (Destination routes accept `?debug=true` too; they have no `locale` option.)
 
 ```tsx
 // app/experiences/[id]/page.tsx
@@ -678,20 +669,16 @@ export default async function ExperiencePage({
 }) {
   const { id: experienceId } = await params;
   const sp = await searchParams;
-  const previewMode = sp.preview === 'true';
   const debug = sp.debug === 'true';
   const locale = (sp.locale as string) ?? 'en-US';
 
   // Per-page metadata flows into every resolveData hook; debug is the
   //    single observability switch (logs + missing-component box + JSON dump).
-  //    Note: `debug` (render/observability) is independent of `preview`
-  //    (which token + host to fetch from).
+  //    Preview Sessions use the runtime owner described in Live preview above.
   const experience = await fetchExperience(
     { spaceId: process.env.SPACE_ID!, environmentId: 'master', experienceId, locale },
     {
       accessToken: process.env.CDA_TOKEN!,
-      previewToken: process.env.CPA_TOKEN,
-      preview: previewMode,
     },
     {
       config: experienceConfig,
@@ -740,7 +727,7 @@ Button: defineComponent<ButtonProps>({
 - **Shows the missing-component box** — `MissingComponent` renders a visible box naming the unregistered `componentId` (silent `null` when debug is off).
 - **Auto-mounts `<DebugExperience>`** above the tree — a collapsible panel dumping the resolved plan as pretty JSON, so you can see exactly what the SDK interpreted.
 
-Wire it to any signal you like — a `?debug=true` query param in development, a feature flag, `process.env.NODE_ENV !== 'production'`. It's independent of `preview` (which selects the delivery vs. preview token and host); debug is purely a render/observability concern.
+Wire it to any signal you like — a `?debug=true` query param in development, a feature flag, `process.env.NODE_ENV !== 'production'`. It is independent of Preview Session activation; debug is purely a render/observability concern.
 
 ```tsx
 const debug = sp.debug === 'true';
@@ -1016,7 +1003,7 @@ export const load = async ({ params }) => {
 <ServerExperienceRenderer experience={data.experience} config={experienceConfig} />
 ```
 
-To fetch by Experience id instead (for example, for preview), pass `{ spaceId, environmentId, experienceId }`; see [Destinations](#destinations). Everything else applies identically: advanced setup (preview, async `resolveData`), the API reference below, merge precedence, and design tokens. Substitute the Svelte spelling of each hook.
+To fetch by Experience id instead (when you already know its id), pass `{ spaceId, environmentId, experienceId }`; see [Destinations](#destinations). Everything else applies identically: advanced setup (preview, async `resolveData`), the API reference below, merge precedence, and design tokens. Substitute the Svelte spelling of each hook.
 
 ---
 
@@ -1158,7 +1145,7 @@ For any other framework (Vue, Nuxt, Solid, Lit, Qwik, ...), the [implement-frame
 
 ## Examples
 
-Runnable example apps live in [`examples/`](./examples). Clone the repo, seed the demo Experience, and run them against your own space. They are the place to start when integrating the SDK. The Next.js example's preview component imports APIs unavailable in the current React adapter. See the [Next.js package guide](./packages/adapter-nextjs/README.md) for managed App/Pages integration.
+Runnable example apps live in [`examples/`](./examples). Clone the repo, seed the demo Experience, and run them against your own space. They are the place to start when integrating the SDK. See the [Next.js package guide](./packages/adapter-nextjs/README.md) for managed App/Pages integration.
 
 | Example                                          | Stack                           | Shows                                                                                                                            |
 | ------------------------------------------------ | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
@@ -1191,7 +1178,7 @@ npm run dev
 
 Then visit `/` and `/demo/landing` (Destination paths), or `/experiences/landing` (by id). See each example's README for its file map and route-by-route walkthrough.
 
-**Tokens.** `CMA_TOKEN` is a Personal Access Token that only the bootstrap script sees. `CDA_TOKEN` is a Content Delivery API token — this is what the running app uses at runtime. `CPA_TOKEN` is a Content Preview API token, only needed if you want to exercise `?preview=true`; see each example's README for details.
+**Tokens.** `CMA_TOKEN` is a Personal Access Token that only the bootstrap script sees. `CDA_TOKEN` is a Content Delivery API token — this is what the running app uses at runtime. `CPA_TOKEN` is a Content Preview API token for optional Preview Session capability; open the by-id route with `preview_session_id` to activate it. See each example's README for details.
 
 **Examples vs. reference implementations.** The repo also has an `implementations/` directory. Those are reference implementations for SDK maintainers: standalone apps that install locally packed SDK tarballs to validate SDK behavior before release. They are not integration guides; use `examples/`. See [`CONTRIBUTING.md`](./CONTRIBUTING.md#example-apps-vs-reference-implementations) for the difference.
 
@@ -1212,12 +1199,12 @@ Three positional args map to three concerns that evolve independently:
 | Arg                 | Type                                                                                                                                                                  | Purpose                                                                                                                                                                          |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `experienceOptions` | `{ spaceId, destinationId, path \| nodeId, personalization? }` **or** `{ spaceId, environmentId, experienceId, locale?, parameters?, personalization?, extensions? }` | Which Experience to fetch: by Destination path or node id (recommended), or by Experience id. Both take first-class personalization; by-id also takes additional XDA extensions. |
-| `clientOptions`     | `{ accessToken, previewToken?, preview?, host? }` **or** `{ client }`                                                                                                 | How to fetch. Discriminated union: pass credentials inline (with optional preview toggle) or pass in your own `ContentfulViewDeliveryClient`.                                    |
+| `clientOptions`     | `{ accessToken, host? }` **or** `{ client }`                                                                                                                          | How to fetch. Discriminated union: pass Delivery credentials inline or pass in your own `ContentfulViewDeliveryClient`.                                                          |
 | `resolveOptions`    | `{ config, metadata?, debug? }`                                                                                                                                       | How to resolve. `metadata` flows into every `resolveData` hook as `ctx.experience.metadata`; `debug` turns on logging + the visible missing-component box.                       |
 
 Both `metadata` and `debug` are recorded on the returned plan, so the renderer picks them up without being passed them again.
 
-Configure both tokens up front and flip `preview: true` per call to hit the preview API. `preview: true` without `previewToken` throws an error. `host` is a full base-URL string for custom endpoints (staging, proxy, per-region); when set, it wins over the `preview`-derived default host.
+Free fetches use ordinary Delivery and accept no preview toggle or preview token. `host` remains a full base-URL string for custom endpoints (staging, proxy, per-region). Preview Sessions use runtime owners or the existing low-level session helpers; see [Live preview](#live-preview).
 
 ```ts
 // Inline credentials, client created internally
@@ -1225,8 +1212,6 @@ const plan = await fetchExperience(
   { spaceId: '...', environmentId: 'master', experienceId: slug, locale: 'en-US' },
   {
     accessToken: process.env.CDA_TOKEN!,
-    previewToken: process.env.CPA_TOKEN!,
-    preview: true, // flip per request; omit or set false for delivery
   },
   { config: experienceConfig, metadata: { slug }, debug: true }
 );
@@ -1293,12 +1278,14 @@ plan. Each fetch resolves the returned payload again, including `resolveData`.
 For example, in a client React component with `initialPlan` supplied as a prop:
 
 ```tsx
+'use client';
+
 import { useState } from 'react';
 import {
   ExperienceRenderer,
   fetchExperience,
   type PortableRenderPlan,
-} from '@contentful/experiences-react';
+} from '@contentful/experiences-react/client';
 
 function FeaturedPosts({ initialPlan }: { initialPlan: PortableRenderPlan }) {
   const [plan, setPlan] = useState(initialPlan);
@@ -1363,10 +1350,8 @@ headers. Calls omitting `parameters` retain existing behavior. Delivery failures
 retain their message and original error (including status/body) as
 `ExperienceFetchError.cause`; `NotFoundError` still passes through unchanged.
 
-Direct by-ID preview fetches accept the same option and transport encoding.
-Preview can report missing/invalid values in the hydrated response's `errors`
-instead of failing the fetch; recognized entries appear in
-[`plan.deliveryDiagnostics`](#delivery-diagnostics). Preview Sessions continue to use their existing
+Hydrated responses can report field errors in
+[`plan.deliveryDiagnostics`](#delivery-diagnostics). Preview Sessions use their existing
 **unprefixed** `context.parameters` map, such as `{ productId: 'foo123' }`;
 the Session contract determines its supported values. The Contentful editor owns
 Session context changes, and the SDK consumes the new hydrated snapshots through
@@ -1444,9 +1429,10 @@ Both are type-level only — no validation, no copying, no runtime cost. `readSo
 
 Functional constructor over `ContentfulViewDeliveryClient` for the SDK's option shape. It maps `accessToken` to `token` and `host` to `baseUrl`, and passes everything else through. Prefer this over `new ContentfulViewDeliveryClient({...})` so field names stay consistent with `fetchExperience`'s inline-credentials path.
 
-`createClient` is a **one-time setup** primitive: it builds a single client bound to a single token, space, and environment, and is best for cases where you're managing the client lifecycle yourself (custom caching, request middleware, sharing the instance across code paths). It does not participate in the per-request `preview` toggle. `spaceId`/`environmentId` are required — `@contentful/experience-delivery` binds them at client construction as of `1.0.0-dev.13`, so a client built here can only serve requests for that space/environment.
+`createClient` is a **one-time setup** primitive: it builds a single client bound to a single token, space, and environment, and is best for cases where you're managing the client lifecycle yourself (custom caching, request middleware, sharing the instance across code paths). It binds ordinary Delivery credentials and a host. `spaceId`/`environmentId` are required — `@contentful/experience-delivery` binds them at client construction as of `1.0.0-dev.13`, so a client built here can only serve requests for that space/environment.
 
-> **If you need runtime-dynamic swaps between delivery and preview use `fetchExperience`'s inline-credentials path**. Pass `{ accessToken, previewToken, preview }` directly instead of pre-building a client and passing `{ client }`. The `preview` boolean is a per-call selector; a pre-built client is bound to whichever token it was constructed with and can't swap.
+Preview Session selection belongs to the runtime owner. Custom hosts and
+caller-supplied Delivery clients remain available without selecting session policy.
 
 ```ts
 import { createClient } from '@contentful/experiences-react';

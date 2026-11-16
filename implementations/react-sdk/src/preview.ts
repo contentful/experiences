@@ -5,26 +5,14 @@ import type { PublicEnvironment } from '../public-config';
 // tree-shake the optional package’s factory.
 declare const __LIVE_PREVIEW_ENABLED__: boolean;
 
-export function getPreviewBinding(environment: PublicEnvironment, href: string) {
+export function createPreviewConfiguration(environment: PublicEnvironment) {
   const preview = environment.LIVE_PREVIEW;
   if (!preview) return undefined;
-  const url = new URL(href);
-  const sessionId = url.searchParams.get('preview_session_id')?.trim();
-  if (!sessionId) return undefined;
   return {
-    experienceId: url.searchParams.get('preview_experience_id')?.trim() || preview.experienceId,
-    sessionId,
+    accessToken: preview.accessToken,
+    host: preview.host,
     sessionHost: preview.sessionHost,
     resourceResolution: preview.resourceResolution,
-  };
-}
-
-export function createPreviewConfiguration(binding: ReturnType<typeof getPreviewBinding>) {
-  if (!binding) return undefined;
-  return {
-    sessionId: binding.sessionId,
-    sessionHost: binding.sessionHost,
-    resourceResolution: binding.resourceResolution,
     createClient: __LIVE_PREVIEW_ENABLED__ ? createLivePreviewClient : undefined,
   };
 }

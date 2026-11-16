@@ -24,6 +24,8 @@ export interface ManagedExperienceRequestContext {
 
 export interface ExperienceSourceOptions {
   readonly request: FetchExperienceOptions;
+  /** Content locale for invalidation, even when Preview transport omits inherited locale. */
+  readonly effectiveLocale?: string;
   /** Caller descriptor before inherited locale and ordinary attribution defaults. */
   readonly seedRequest?: FetchExperienceOptions;
   readonly resolve: FetchResolveOptions;
@@ -107,7 +109,10 @@ export class SourceController {
       sameValue(previous.resolve.metadata ?? {}, options.resolve.metadata ?? {}) &&
       (previous.resolve.debug ?? false) === (options.resolve.debug ?? false) &&
       // Snapshot activation and temporary preview initialization retain caller seeds.
-      (!previous.sdk || !options.sdk || previous.request.locale === options.request.locale) &&
+      (!previous.sdk ||
+        !options.sdk ||
+        (previous.effectiveLocale ?? previous.request.locale) ===
+          (options.effectiveLocale ?? options.request.locale)) &&
       (!previous.sdk || previous.requestContext?.revision === options.requestContext?.revision);
     const newSeed =
       (options.initialPlan !== undefined || options.initialError !== undefined) &&

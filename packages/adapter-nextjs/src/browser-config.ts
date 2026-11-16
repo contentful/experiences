@@ -22,7 +22,6 @@ type FlushPolicy = NonNullable<QueuePolicy['flush']>;
 export interface BrowserConfig {
   readonly delivery: BrowserDeliveryConfig;
   readonly preview?: BrowserDeliveryConfig & PreviewContext;
-  readonly isPreview?: boolean;
   readonly optimization?: Pick<
     NonNullable<Config['optimization']>,
     'personalizationBaseUrl' | 'analyticsBaseUrl' | 'personalizationEnabledFeatures'

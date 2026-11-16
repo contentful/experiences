@@ -93,7 +93,7 @@ export function useServerPreviewRefresh(refresh: () => void) {
   }, [preview?.revision, preview?.data?.sys?.id, refresh]);
 }
 
-/** Derive one session context from explicit setup or the route, before SDK activation. */
+/** Configure Preview transport; the browser URL selects the active session. */
 export function BrowserRoot({
   preview,
   sdk,
@@ -103,13 +103,7 @@ export function BrowserRoot({
   if (preview && sdk) throw new TypeError('Managed Preview requires an SDK-owned Next.js root.');
   const options = resolvePreview(preview, previewUrl ?? props.routeKey ?? '/');
   if (sdk) return <ExperiencesProvider {...props} sdk={sdk} />;
-  return (
-    <ExperiencesRoot
-      {...(props as ExperiencesRootProps)}
-      preview={options}
-      isPreview={props.isPreview === true || Boolean(options?.sessionId)}
-    />
-  );
+  return <ExperiencesRoot {...(props as ExperiencesRootProps)} preview={options} />;
 }
 
 /** Shared whole-result adoption and page builder precedence for both router families. */

@@ -54,6 +54,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   window.localStorage.clear();
   clearIdentityCookies();
+  window.history.replaceState(null, '', '/');
 });
 
 describe('Web Custom Flags', () => {
@@ -208,7 +209,8 @@ describe('Web Custom Flags', () => {
   );
 
   it('quietly suppresses automatic exposure in preview', async () => {
-    const sdk = createRuntime({ isPreview: true });
+    window.history.replaceState(null, '', '?preview_session_id=session');
+    const sdk = createRuntime({ preview: { accessToken: 'preview' } });
     sdk.getFlag('banner');
     await settle();
     expect(sdk.states.eventStream.current).toBeUndefined();
@@ -294,14 +296,9 @@ describe('Web Custom Flags', () => {
     expect(window.localStorage.getItem(key)).toBeNull();
   });
 
-  it.each([
-    ['fetchExperience', false],
-    ['fetchByDestinationNode', false],
-    ['fetchByDestinationPath', false],
-    ['fetchExperience', true],
-  ] as const)(
-    'adopts %s flag snapshots outside per-call preview (preview: %s)',
-    async (method, preview) => {
+  it.each(['fetchExperience', 'fetchByDestinationNode', 'fetchByDestinationPath'] as const)(
+    'adopts %s flag snapshots during ordinary fetching',
+    async (method) => {
       const sdk = createRuntime();
       vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
       const profile = completeProfile('visitor');
@@ -318,7 +315,6 @@ describe('Web Custom Flags', () => {
             destinationId: 'destination',
             nodeId: 'node',
             path: '/',
-            ...(preview ? { preview } : {}),
           },
           { config: { components: {} } }
         );
@@ -326,8 +322,8 @@ describe('Web Custom Flags', () => {
         personalization: { profile, changes: changes(false) },
       });
       await load();
-      expect(next.mock.calls).toEqual(preview ? [[true]] : [[true], [false]]);
-      expect(JSON.parse(window.localStorage.getItem(key)!)).toEqual(changes(preview));
+      expect(next.mock.calls).toEqual([[true], [false]]);
+      expect(JSON.parse(window.localStorage.getItem(key)!)).toEqual(changes(false));
       vi.spyOn(sdk.api.personalization, 'upsertProfile').mockResolvedValue({
         profile,
         changes: changes('XPAPI'),
@@ -342,7 +338,7 @@ describe('Web Custom Flags', () => {
         personalization: { profile, changes: [] },
       } as never);
       await load();
-      expect(sdk.getFlag('banner')).toBe(preview ? 'XPAPI' : undefined);
+      expect(sdk.getFlag('banner')).toBeUndefined();
       subscription.unsubscribe();
     }
   );
@@ -356,7 +352,20 @@ describe('Web Custom Flags', () => {
   ] as const)(
     'discards stale %s flags while retaining content (pending interception: %s)',
     async (source, interception) => {
-      const sdk = createRuntime({ isPreview: source === 'preview XDA' });
+      if (source === 'preview XDA')
+        window.history.replaceState(null, '', '?preview_session_id=session');
+      const sdk = createRuntime({
+        preview:
+          source === 'preview XDA'
+            ? {
+                accessToken: 'preview',
+                fetch: async () =>
+                  new globalThis.Response(
+                    JSON.stringify({ sys: { type: 'Experience', id: 'other' }, nodes: [] })
+                  ),
+              }
+            : undefined,
+      });
       vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
       const profile = completeProfile('visitor');
       const stale = deferred<never>();
@@ -464,7 +473,9 @@ describe('Web Custom Flags', () => {
       const profile = completeProfile('stored');
       window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile));
       window.localStorage.setItem(key, JSON.stringify(changes('stored')));
-      const sdk = createRuntime({ isPreview, defaults: { persistenceConsent: true } });
+      if (isPreview) window.history.replaceState(null, '', '?preview_session_id=session');
+      const preview = isPreview ? { accessToken: 'preview' } : undefined;
+      const sdk = createRuntime({ preview, defaults: { persistenceConsent: true } });
       vi.spyOn(sdk, 'trackFlagView').mockResolvedValue({ accepted: true });
       expect(sdk.getFlag('banner')).toBe(isPreview ? undefined : 'stored');
       expect(sdk.states.profile.current).toEqual(isPreview ? undefined : profile);
@@ -476,7 +487,7 @@ describe('Web Custom Flags', () => {
       sdk.destroy();
       window.localStorage.setItem(key, JSON.stringify(changes('stored')));
       const next = createRuntime({
-        isPreview,
+        preview,
         defaults: { persistenceConsent: false, changes: changes('configured') },
       });
       vi.spyOn(next, 'trackFlagView').mockResolvedValue({ accepted: true });

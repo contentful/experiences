@@ -279,17 +279,13 @@ export function ExperiencesProvider(props: ExperiencesProviderProps) {
 }
 
 export function ExperiencesRoot(props: ExperiencesRootProps) {
-  const sessionId = resolvePreviewSessionId(
-    props.preview?.sessionId,
-    new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search)
-  );
-  return (
-    <ActivationProvider
-      key={sessionId}
-      {...props}
-      preview={
-        props.preview && { ...props.preview, sessionId: sessionId ?? props.preview.sessionId }
-      }
-    />
-  );
+  const sessionId = props.preview
+    ? resolvePreviewSessionId(
+        new URL(
+          typeof window === 'undefined' ? (props.routeKey ?? '/') : window.location.href,
+          'https://react.invalid'
+        ).searchParams
+      )
+    : undefined;
+  return <ActivationProvider key={sessionId} {...props} />;
 }

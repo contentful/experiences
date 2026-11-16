@@ -6,7 +6,10 @@ import {
   type Config,
   type RequestContext,
 } from './contentful-experiences.js';
-import { EventProfileRequiredError } from '@contentful/experiences-runtime';
+import {
+  EventProfileRequiredError,
+  type PreviewSessionOptions,
+} from '@contentful/experiences-runtime';
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from './sdk-info.js';
 
@@ -86,12 +89,12 @@ describe('Node ContentfulExperiences', () => {
   });
 
   describe('request-owned Preview Session', () => {
-    function previewFixture() {
+    function previewFixture(configured = true) {
       const payload: ExperiencePayload = { sys: { id: 'edited', type: 'Experience' }, nodes: [] };
-      const snapshot = vi.fn(() => Promise.resolve(payload));
+      const snapshot = vi.fn((_session: PreviewSessionOptions) => Promise.resolve(payload));
       class PreviewExperiences extends ContentfulExperiences {
-        protected override fetchPreviewSessionPayload() {
-          return snapshot();
+        protected override fetchPreviewSessionPayload(session: PreviewSessionOptions) {
+          return snapshot(session);
         }
       }
       const runtime = trackRuntime(
@@ -99,7 +102,7 @@ describe('Node ContentfulExperiences', () => {
           spaceId: 'space',
           environmentId: 'environment',
           delivery: { accessToken: 'delivery-token' },
-          preview: { accessToken: 'preview-token' },
+          preview: configured ? { accessToken: 'preview-token' } : undefined,
         })
       );
       const ordinary = vi
@@ -109,20 +112,46 @@ describe('Node ContentfulExperiences', () => {
       return { runtime, payload, snapshot, ordinary, resolve };
     }
 
-    it('sets session policy immediately while credentials alone leave ordinary requests active', async () => {
-      const f = previewFixture();
-      const request = f.runtime.forRequest({ preview: { sessionId: 'session' }, consent: true });
-      expect(request.isPreview).toBe(true);
-      await expect(request.page()).resolves.toEqual({ accepted: false, reason: 'preview' });
-      expect(f.snapshot).not.toHaveBeenCalled();
-      expect(f.runtime.forRequest().isPreview).toBe(false);
-      expect(() =>
-        f.runtime.forRequest({ preview: { sessionId: 'session' }, isPreview: false })
-      ).toThrow(/isPreview: false/);
-    });
+    it.each([
+      [true, ' session ', true],
+      [true, '  ', false],
+      [true, undefined, false],
+      [false, 'session', false],
+    ])(
+      'derives request policy from configuration=%s and session=%s',
+      async (configured, sessionId, isPreview) => {
+        const f = previewFixture(configured);
+        const request = f.runtime.forRequest({
+          preview: sessionId === undefined ? undefined : { sessionId },
+          consent: true,
+          profile: { id: 'live-visitor' },
+        });
+        expect(request.profile).toEqual(isPreview ? undefined : { id: 'live-visitor' });
+        expect(request.canPersistProfile).toBe(!isPreview);
+        expect(request.isPreview).toBe(isPreview);
+        if (isPreview) {
+          await expect(request.page()).resolves.toEqual({ accepted: false, reason: 'preview' });
+        }
+        expect(f.snapshot).not.toHaveBeenCalled();
+        await request.fetchExperience({ experienceId: 'edited' }, { config: resolverConfig });
+        if (isPreview) {
+          expect(f.snapshot).toHaveBeenCalledWith({
+            sessionId: 'session',
+            sessionHost: undefined,
+            resourceResolution: undefined,
+          });
+          expect(f.ordinary).not.toHaveBeenCalled();
+        } else {
+          expect(f.snapshot).not.toHaveBeenCalled();
+          expect(f.ordinary).toHaveBeenCalledOnce();
+        }
+        expect(f.runtime.forRequest().isPreview).toBe(false);
+      }
+    );
 
     it('resolves only the edited Experience from one raw snapshot, retaining each call registry', async () => {
       const f = previewFixture();
+      f.payload.extensions = { personalization: { profile: completeProfile('preview-profile') } };
       const request = f.runtime.forRequest({
         preview: { sessionId: 'session' },
         profile: { id: 'visitor' },
@@ -132,21 +161,18 @@ describe('Node ContentfulExperiences', () => {
         { experienceId: 'edited' },
         { config: resolverConfig, metadata: { operation: true } }
       );
-      await request.fetchExperience(
-        { experienceId: 'other', preview: true },
-        { config: resolverConfig }
-      );
+      await request.fetchExperience({ experienceId: 'other' }, { config: resolverConfig });
       expect(f.resolve).toHaveBeenCalledWith(f.payload, {
         config: resolverConfig,
         metadata: { request: true, operation: true },
         debug: undefined,
       });
       expect(f.ordinary).toHaveBeenCalledWith(
-        { experienceId: 'other', preview: true, personalization: undefined, locale: undefined },
+        { experienceId: 'other', personalization: undefined, locale: undefined },
         expect.anything()
       );
       expect(f.snapshot).toHaveBeenCalledOnce();
-      expect(request.profile).toEqual({ id: 'visitor' });
+      expect(request.profile).toBeUndefined();
     });
 
     it('keeps payloads without an ID out of the requested Experience', async () => {
@@ -158,24 +184,72 @@ describe('Node ContentfulExperiences', () => {
       expect(f.ordinary).toHaveBeenCalledOnce();
     });
 
-    it('discards a snapshot that finishes after request disposal', async () => {
+    it('shares failed acquisition without Delivery fallback and retries on the next call', async () => {
       const f = previewFixture();
-      let complete!: (payload: ExperiencePayload) => void;
-      f.snapshot.mockReturnValue(
-        new Promise((resolve) => {
-          complete = resolve;
+      const failure = new Error('session unavailable');
+      let reject!: (error: Error) => void;
+      f.snapshot.mockReturnValueOnce(
+        new Promise((_resolve, fail) => {
+          reject = fail;
         })
       );
-      const request = f.runtime.forRequest({ preview: { sessionId: 'session' } });
-      const pending = request.fetchExperience(
-        { experienceId: 'edited' },
-        { config: resolverConfig }
-      );
-      request.destroy();
-      complete(f.payload);
-      await expect(pending).rejects.toThrow(/destroyed/);
-      expect(f.resolve).not.toHaveBeenCalled();
+      const request = f.runtime.forRequest({
+        preview: { sessionId: 'session' },
+        consent: true,
+        profile: { id: 'visitor' },
+      });
+      const pending = Promise.allSettled([
+        request.fetchExperience({ experienceId: 'edited' }, { config: resolverConfig }),
+        request.fetchExperience({ experienceId: 'other' }, { config: resolverConfig }),
+      ]);
+      expect(f.snapshot).toHaveBeenCalledOnce();
+      expect(f.ordinary).not.toHaveBeenCalled();
+      reject(failure);
+      expect(await pending).toEqual([
+        { status: 'rejected', reason: failure },
+        { status: 'rejected', reason: failure },
+      ]);
+      expect(f.ordinary).not.toHaveBeenCalled();
+      expect(request.isPreview).toBe(true);
+      expect(request.profile).toBeUndefined();
+      expect(request.canPersistProfile).toBe(false);
+      await expect(request.page()).resolves.toMatchObject({ accepted: false, reason: 'preview' });
+
+      await request.fetchExperience({ experienceId: 'edited' }, { config: resolverConfig });
+      await request.fetchExperience({ experienceId: 'other' }, { config: resolverConfig });
+      expect(f.snapshot).toHaveBeenCalledTimes(2);
+      expect(f.ordinary).toHaveBeenCalledOnce();
     });
+
+    it.each(['success', 'failure'] as const)(
+      'discards snapshot %s after request disposal',
+      async (outcome) => {
+        const f = previewFixture();
+        let complete!: (payload: ExperiencePayload) => void;
+        let fail!: (error: Error) => void;
+        f.snapshot.mockReturnValueOnce(
+          new Promise((resolve, reject) => {
+            complete = resolve;
+            fail = reject;
+          })
+        );
+        const request = f.runtime.forRequest({ preview: { sessionId: 'session' } });
+        const pending = request.fetchExperience(
+          { experienceId: 'edited' },
+          { config: resolverConfig }
+        );
+        request.destroy();
+        if (outcome === 'success') complete(f.payload);
+        else fail(new Error('late snapshot failure'));
+        await expect(pending).rejects.toThrow(/destroyed/);
+        await expect(
+          request.fetchExperience({ experienceId: 'edited' }, { config: resolverConfig })
+        ).rejects.toThrow(/destroyed/);
+        expect(f.snapshot).toHaveBeenCalledOnce();
+        expect(f.resolve).not.toHaveBeenCalled();
+        expect(f.ordinary).not.toHaveBeenCalled();
+      }
+    );
   });
 
   it('forwards changed parameters through request facades independently of event consent', async () => {
@@ -185,7 +259,7 @@ describe('Node ContentfulExperiences', () => {
     const parameters = { featuredPosts: { limit: 6, order: '-fields.title' } };
     await request.fetchExperience({ experienceId: 'exp', parameters }, { config: resolverConfig });
     await request.fetchExperience(
-      { experienceId: 'exp', parameters: { productId: 'other' }, preview: true },
+      { experienceId: 'exp', parameters: { productId: 'other' } },
       { config: resolverConfig }
     );
     await runtime
@@ -196,7 +270,7 @@ describe('Node ContentfulExperiences', () => {
       { productId: 'other' },
       undefined,
     ]);
-    expect(fetch.mock.calls[1]?.[0]).toMatchObject({ locale: 'de-DE', preview: true });
+    expect(fetch.mock.calls[1]?.[0]).toMatchObject({ locale: 'de-DE' });
     expect(fetch.mock.calls[2]?.[0].personalization).toBeUndefined();
   });
 

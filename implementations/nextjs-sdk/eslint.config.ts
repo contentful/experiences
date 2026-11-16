@@ -19,6 +19,7 @@ export default [
       parser: tsParser,
       globals: {
         HTMLElement: 'readonly',
+        process: 'readonly',
         window: 'readonly',
         document: 'readonly',
         fetch: 'readonly',

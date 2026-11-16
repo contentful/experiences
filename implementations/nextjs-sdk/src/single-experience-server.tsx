@@ -21,12 +21,6 @@ function configuration(): AppRouterServerConfig {
       ...(browser.web.preview ? { preview: browser.web.preview } : {}),
     },
     consent: { server: ({ cookies }: { cookies: CookieReader }) => readConsent(cookies) },
-    preview: {
-      ...nodeConfig.preview,
-      sessionHost: browser.livePreview?.sessionHost,
-      resourceResolution: browser.livePreview?.resourceResolution,
-      enabled: Boolean(browser.livePreview),
-    },
     request: {
       mode: 'hybrid',
       experience: ({ requestUrl }) =>

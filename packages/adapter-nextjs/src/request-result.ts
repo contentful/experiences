@@ -31,7 +31,7 @@ export interface RequestResult {
 }
 
 export type BoundRootProps = Omit<ExperiencesProviderProps, 'sdk'> &
-  Partial<Pick<ExperiencesRootProps, RuntimeIdentity | 'defaults' | 'locale' | 'isPreview'>> & {
+  Partial<Pick<ExperiencesRootProps, RuntimeIdentity | 'defaults' | 'locale'>> & {
     readonly sdk?: ExperiencesProviderProps['sdk'];
     readonly preview?: PreviewConfig;
   };
@@ -49,7 +49,7 @@ export type RequestExperienceProps = Omit<
 /** Plain browser configuration plus server-inherited scope/locale and one whole result. */
 export type DefaultRequestRootProps = Omit<
   BoundRequestRootProps,
-  RuntimeIdentity | 'defaults' | 'isPreview' | 'preview'
+  RuntimeIdentity | 'defaults' | 'preview'
 > &
   Pick<ExperiencesRootProps, 'spaceId' | 'environmentId' | 'locale'> & {
     readonly browser: BrowserConfig;

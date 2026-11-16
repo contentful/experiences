@@ -10,7 +10,7 @@ export default async function SingleExperience() {
   const result = serializeRequestResult(await singleAppExperiences().request.loadExperience());
   const { browser } = getServer();
   return (
-    <ClientRequestRoot {...browser.web} isPreview={false} result={result}>
+    <ClientRequestRoot {...browser.web} result={result}>
       <SingleExperiencePage>
         <ClientRequestExperience result={result} />
       </SingleExperiencePage>
