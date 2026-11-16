@@ -5,7 +5,7 @@ import {
   NotFoundError,
   fetchExperience,
   type PortableRenderPlan,
-} from '@contentful/experiences-react';
+} from '@contentful/experiences-react/client';
 
 import { env } from './lib/env';
 import { experienceConfig } from './lib/experience-config';
