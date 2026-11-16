@@ -6,7 +6,6 @@ import { headers } from 'next/headers';
 import {
   bindAppRouterServerExperiences,
   serializeRequestResult,
-  type AppRouterExperienceResult,
 } from '@contentful/experiences-nextjs/app-router/server';
 import type { BoundRequestRootProps } from '@contentful/experiences-nextjs/app-router/client';
 import {
@@ -58,13 +57,13 @@ export const loadServerPage = cache(async () => {
         headers.get('rsc') !== '1' && new URL(requestUrl).searchParams.get('userId') === 'charles'
           ? [{ type: 'identify', userId: 'charles', traits: { identified: true } }]
           : [],
-      composeRequest: async (request, primary, { requestUrl }) => {
-        comparisons = await loadComparisons(request, primary, new URL(requestUrl), !serverOnly);
+      composeRequest: async (request) => {
+        comparisons = await loadComparisons(request, experience, url, !serverOnly);
       },
     },
   });
   // The diagnostic hybrid view owns navigation in Web; this choice belongs to the host.
-  const result: AppRouterExperienceResult =
+  const result =
     incoming.get('rsc') === '1' && !serverOnly && !serverPreview(url)
       ? {
           requestId: randomUUID(),

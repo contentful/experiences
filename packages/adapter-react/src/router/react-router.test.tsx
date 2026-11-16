@@ -15,13 +15,19 @@ import {
   type ReactRouterExperiencesProviderProps,
 } from './react-router.js';
 
-const { useHref, useLocation, useMatches, construct } = vi.hoisted(() => ({
+const { useHref, useLocation, useMatches, navigate, construct } = vi.hoisted(() => ({
+  navigate: vi.fn(),
   useHref: vi.fn(),
   useLocation: vi.fn(),
   useMatches: vi.fn(),
   construct: vi.fn(),
 }));
-vi.mock('react-router-dom', () => ({ useHref, useLocation, useMatches }));
+vi.mock('react-router-dom', () => ({
+  useHref,
+  useLocation,
+  useMatches,
+  useNavigate: () => navigate,
+}));
 vi.mock('@contentful/experiences-web', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@contentful/experiences-web')>();
   return {
@@ -103,6 +109,24 @@ describe('React Router mapping', () => {
       )
     );
   }
+
+  it('replaces the route for a destination redirect without reporting resolved content', async () => {
+    source.fetchExperience.mockResolvedValue({ redirect: { path: '/target' } });
+    const onExperienceResolved = vi.fn();
+    await act(async () =>
+      view.render(
+        <ExperiencesProvider sdk={source.sdk}>
+          <Experience
+            destinationId="site"
+            path="/old"
+            onExperienceResolved={onExperienceResolved}
+          />
+        </ExperiencesProvider>
+      )
+    );
+    expect(navigate).toHaveBeenCalledWith('/target', { replace: true });
+    expect(onExperienceResolved).not.toHaveBeenCalled();
+  });
 
   it('maps location/context through the provider and fetches the same ID once per route', async () => {
     location = { ...location, search: '?tab=featured&tag=first&tag=last' };

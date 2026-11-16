@@ -13,6 +13,7 @@ import {
   type ManagedExperienceResult,
 } from './use-managed-experience.js';
 import { deferred, plan, previewState, sourceSdk } from '../test/managed-experience.js';
+import { Experience } from './experience.js';
 
 const config = { components: {} };
 let result: ManagedExperienceResult;
@@ -49,6 +50,66 @@ describe('useManagedExperience', () => {
       </RequestContext.Provider>
     </RuntimeContext.Provider>
   );
+
+  it('rejects raw selectors before a seed can bypass normalization and fetching', () => {
+    const source = sourceSdk();
+    expect(() =>
+      renderToStaticMarkup(
+        content(source, {
+          experienceId: 'home',
+          destinationId: 'site',
+          path: '/',
+          config,
+          initialPlan: plan(),
+        } as never)
+      )
+    ).toThrow(TypeError);
+    expect(() =>
+      renderToStaticMarkup(
+        <Experience
+          {...({ path: '/', config, initialPlan: plan() } as unknown as Parameters<
+            typeof Experience
+          >[0])}
+        />
+      )
+    ).toThrow(TypeError);
+    const unselected = { config, initialPlan: plan() } as unknown as Parameters<
+      typeof Experience
+    >[0];
+    expect(() => renderToStaticMarkup(<Experience {...unselected} />)).toThrow(TypeError);
+    expect(renderToStaticMarkup(<Experience config={config} experience={undefined} />)).toBe('');
+    expect(source.fetchExperience).not.toHaveBeenCalled();
+    expect(source.subscribeToPreview).not.toHaveBeenCalled();
+  });
+
+  it('reports a committed redirect once across StrictMode and callback replacement', async () => {
+    const source = sourceSdk();
+    source.fetchExperience.mockResolvedValue({ redirect: { path: '/new' } });
+    const onRedirect = vi.fn();
+    const onExperienceResolved = vi.fn();
+    const onExperienceError = vi.fn();
+    const options = {
+      destinationId: 'site',
+      path: '/old',
+      config,
+      onRedirect,
+      onExperienceResolved,
+      onExperienceError,
+    };
+    await act(async () => root.render(<StrictMode>{content(source, options)}</StrictMode>));
+    expect(result.redirect).toEqual({ path: '/new' });
+    expect(result.data).toBeUndefined();
+    expect(onRedirect).toHaveBeenCalledOnce();
+    expect(onExperienceResolved).not.toHaveBeenCalled();
+    expect(onExperienceError).not.toHaveBeenCalled();
+    const replacement = vi.fn();
+    await act(async () =>
+      root.render(
+        <StrictMode>{content(source, { ...options, onRedirect: replacement })}</StrictMode>
+      )
+    );
+    expect(replacement).not.toHaveBeenCalled();
+  });
 
   it('starts fetch only after the parent layout guard is installed, without a content-readiness gate', async () => {
     const source = sourceSdk();

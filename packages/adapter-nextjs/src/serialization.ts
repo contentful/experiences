@@ -124,6 +124,7 @@ export function serializePlan(
 ): PortableRenderPlan {
   return jsonData(
     {
+      ...(plan.experienceId === undefined ? {} : { experienceId: plan.experienceId }),
       nodes: plan.nodes,
       debug: plan.debug,
       diagnostics: [],

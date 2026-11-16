@@ -24,7 +24,8 @@ export interface RouterPageContext {
 /** Router hooks supply context; the existing owner sequence constructs and admits events. */
 export function createRouterBinding<TRouteContext extends RouterPageContext>(
   options: CreateExperiencesOptions,
-  useRouteContext: () => TRouteContext
+  useRouteContext: () => TRouteContext,
+  useRedirect?: () => NonNullable<CreateExperiencesOptions['onRedirect']>
 ) {
   const bound = createExperiences(options);
 
@@ -59,5 +60,23 @@ export function createRouterBinding<TRouteContext extends RouterPageContext>(
     return <bound.ExperiencesProvider {...props} {...inputs} />;
   }
 
-  return { ...bound, ExperiencesRoot, ExperiencesProvider };
+  function Experience(props: Parameters<typeof bound.Experience>[0]) {
+    const onRedirect = useRedirect?.();
+    return (
+      <bound.Experience
+        {...props}
+        onRedirect={props.onRedirect ?? options.onRedirect ?? onRedirect}
+      />
+    );
+  }
+
+  function useManagedExperience(managedOptions: Parameters<typeof bound.useManagedExperience>[0]) {
+    const onRedirect = useRedirect?.();
+    return bound.useManagedExperience({
+      ...managedOptions,
+      onRedirect: managedOptions.onRedirect ?? options.onRedirect ?? onRedirect,
+    });
+  }
+
+  return { ...bound, Experience, useManagedExperience, ExperiencesRoot, ExperiencesProvider };
 }

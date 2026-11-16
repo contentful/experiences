@@ -1,13 +1,17 @@
 import {
+  assertExperienceSelector,
   ContentfulViewDeliveryClient,
   createUserAgentHeaders,
-  fetchExperience,
+  fetchDestinationSitemap,
   fetchExperiencePayload,
   serializePersonalization,
   PREVIEW_HOST,
   type DestinationRedirectResult,
-  type ExperienceRequestExtensions,
-  type ExperienceParameters,
+  type DestinationSitemapResult,
+  type FetchDestinationSitemapPaginationOptions,
+  type ByIdExperienceOptions,
+  type ByDestinationNodeIdExperienceOptions,
+  type ByDestinationPathExperienceOptions,
   type PersonalizationOptions as BuiltPersonalizationOptions,
 } from '@contentful/experiences-client';
 import { resolveExperience as resolveCoreExperience } from '@contentful/experiences-sdk-core';
@@ -93,18 +97,29 @@ export type PersonalizationOptions = Omit<BuiltPersonalizationOptions, 'events'>
   events?: (FetchEventArguments | BuiltFetchEvent)[];
 };
 
-export type FetchExperienceOptions = {
-  experienceId: string;
-  locale?: string;
-  parameters?: ExperienceParameters;
+type RuntimeExperienceOptions<T> = Omit<T, 'spaceId' | 'environmentId' | 'personalization'> & {
   personalization?: PersonalizationOptions;
-  extensions?: ExperienceRequestExtensions;
 };
 
+export type FetchByIdExperienceOptions = RuntimeExperienceOptions<ByIdExperienceOptions>;
+
+export type FetchByDestinationNodeOptions =
+  RuntimeExperienceOptions<ByDestinationNodeIdExperienceOptions> & { extensions?: never };
+
+export type FetchByDestinationPathOptions =
+  RuntimeExperienceOptions<ByDestinationPathExperienceOptions> & { extensions?: never };
+
+export type FetchExperienceOptions =
+  FetchByIdExperienceOptions | FetchByDestinationNodeOptions | FetchByDestinationPathOptions;
+
+export type FetchDestinationSitemapOptions = { destinationId: string };
+
 /** @internal Leaf owners build admitted intent before interception and XDA validation. */
-export type BuiltFetchExperienceOptions = Omit<FetchExperienceOptions, 'personalization'> & {
-  personalization?: BuiltPersonalizationOptions;
-};
+export type BuiltFetchExperienceOptions = FetchExperienceOptions extends infer T
+  ? T extends FetchExperienceOptions
+    ? Omit<T, 'personalization'> & { personalization?: BuiltPersonalizationOptions }
+    : never
+  : never;
 
 /** @internal Use the owner's existing builder; retain caller-built messages unchanged. */
 export function buildFetchPersonalization(
@@ -132,17 +147,6 @@ export function buildFetchPersonalization(
   };
 }
 
-export type FetchByDestinationNodeOptions = {
-  destinationId: string;
-  nodeId: string;
-  personalization?: PersonalizationOptions;
-};
-
-export type FetchByDestinationPathOptions = {
-  destinationId: string;
-  path: string;
-  personalization?: PersonalizationOptions;
-};
 
 /** Structural contract implemented by the shared runtime. */
 export interface ExperienceRuntime {
@@ -156,9 +160,13 @@ export interface ExperienceRuntime {
     resolveOptions: ResolveOptions
   ): Promise<PortableRenderPlan>;
   fetchExperience(
-    options: FetchExperienceOptions,
+    options: FetchByIdExperienceOptions,
     resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan>;
+  fetchExperience(
+    options: FetchExperienceOptions,
+    resolveOptions: FetchResolveOptions
+  ): Promise<PortableRenderPlan | DestinationRedirectResult>;
   fetchByDestinationNode(
     options: FetchByDestinationNodeOptions,
     resolveOptions: FetchResolveOptions
@@ -167,6 +175,10 @@ export interface ExperienceRuntime {
     options: FetchByDestinationPathOptions,
     resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult>;
+  fetchDestinationSitemap(
+    options: FetchDestinationSitemapOptions,
+    pagination?: FetchDestinationSitemapPaginationOptions
+  ): Promise<DestinationSitemapResult>;
 }
 
 export type Config = {
@@ -282,13 +294,23 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
   }
 
   fetchExperience(
+    options: FetchByIdExperienceOptions,
+    resolveOptions: FetchResolveOptions
+  ): Promise<PortableRenderPlan>;
+  fetchExperience(
     options: FetchExperienceOptions,
     resolveOptions: FetchResolveOptions
-  ): Promise<PortableRenderPlan> {
+  ): Promise<PortableRenderPlan | DestinationRedirectResult>;
+  fetchExperience(
+    options: FetchExperienceOptions,
+    resolveOptions: FetchResolveOptions
+  ): Promise<PortableRenderPlan | DestinationRedirectResult> {
     const payload = this.fetchExperiencePayload(options, resolveOptions);
     const { config } = resolveOptions;
     const merged = this.#mergeFetchResolveOptions(resolveOptions);
-    return payload.then((value) => resolveCoreExperience(value, config, merged));
+    return payload.then<PortableRenderPlan | DestinationRedirectResult>((value) =>
+      'redirect' in value ? value : resolveCoreExperience(value, config, merged)
+    );
   }
 
   /** Fetch the current session payload through the runtime-owned Preview transport. */
@@ -310,20 +332,26 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
   protected fetchExperiencePayload(
     options: FetchExperienceOptions,
     resolveOptions: FetchResolveOptions
-  ): Promise<ExperiencePayload> {
+  ): Promise<ExperiencePayload | DestinationRedirectResult> {
+    try {
+      assertExperienceSelector(options);
+    } catch (error) {
+      return Promise.reject(error);
+    }
     requireResolverConfig(resolveOptions);
     const personalization = buildFetchPersonalization(options.personalization, this.eventBuilder);
+    const common = {
+      spaceId: this.spaceId,
+      locale: options.locale ?? this.locale,
+      personalization:
+        personalization === undefined ? undefined : serializePersonalization(personalization),
+    };
+    const request =
+      options.experienceId !== undefined
+        ? { ...options, ...common, environmentId: this.environmentId }
+        : { ...options, ...common };
     return fetchExperiencePayload(
-      {
-        spaceId: this.spaceId,
-        environmentId: this.environmentId,
-        experienceId: options.experienceId,
-        locale: options.locale ?? this.locale,
-        parameters: options.parameters,
-        personalization:
-          personalization === undefined ? undefined : serializePersonalization(personalization),
-        extensions: options.extensions,
-      },
+      request,
       this.#deliveryClient,
       resolveOptions.debug ?? this.#resolveDefaults.debug
     );
@@ -333,39 +361,25 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
     options: FetchByDestinationNodeOptions,
     resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
-    const resolverConfig = requireResolverConfig(resolveOptions);
-    return fetchExperience(
-      {
-        spaceId: this.spaceId,
-        destinationId: options.destinationId,
-        nodeId: options.nodeId,
-        personalization:
-          options.personalization === undefined
-            ? undefined
-            : serializePersonalization(options.personalization),
-      },
-      { client: this.#deliveryClient },
-      { config: resolverConfig, ...this.#mergeFetchResolveOptions(resolveOptions) }
-    );
+    return this.fetchExperience(options, resolveOptions);
   }
 
   fetchByDestinationPath(
     options: FetchByDestinationPathOptions,
     resolveOptions: FetchResolveOptions
   ): Promise<PortableRenderPlan | DestinationRedirectResult> {
-    const resolverConfig = requireResolverConfig(resolveOptions);
-    return fetchExperience(
-      {
-        spaceId: this.spaceId,
-        destinationId: options.destinationId,
-        path: options.path,
-        personalization:
-          options.personalization === undefined
-            ? undefined
-            : serializePersonalization(options.personalization),
-      },
+    return this.fetchExperience(options, resolveOptions);
+  }
+
+  /** Fetch one page of published Destination paths using the configured Delivery client. */
+  fetchDestinationSitemap(
+    options: FetchDestinationSitemapOptions,
+    pagination: FetchDestinationSitemapPaginationOptions = {}
+  ): Promise<DestinationSitemapResult> {
+    return fetchDestinationSitemap(
+      { spaceId: this.spaceId, destinationId: options.destinationId },
       { client: this.#deliveryClient },
-      { config: resolverConfig, ...this.#mergeFetchResolveOptions(resolveOptions) }
+      pagination
     );
   }
 

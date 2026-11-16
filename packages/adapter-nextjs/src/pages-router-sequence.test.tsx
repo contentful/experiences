@@ -17,6 +17,7 @@ import type { RequestResult } from './request-result.js';
 
 const router = vi.hoisted(() => ({
   isReady: true,
+  replace: vi.fn(),
   asPath: '/pages',
   events: { on: vi.fn(), off: vi.fn() },
 }));
@@ -92,6 +93,42 @@ describe('Pages managed request sequence', () => {
       vi.restoreAllMocks();
       vi.unstubAllGlobals();
     }
+  });
+
+  it('uses native navigation for browser-managed destination redirects', async () => {
+    const binding = bindPagesRouterExperiences({ config: { components: {} } });
+    const { sdk, fetchExperience } = sdkFixture();
+    fetchExperience.mockResolvedValueOnce({ redirect: { path: '/selected' } });
+    await act(async () =>
+      root.render(
+        <binding.ExperiencesRoot sdk={sdk}>
+          <binding.Experience destinationId="site" path="/pages" />
+        </binding.ExperiencesRoot>
+      )
+    );
+    expect(router.replace).toHaveBeenCalledExactlyOnceWith('/selected');
+    expect(fetchExperience).toHaveBeenCalledOnce();
+  });
+
+  it('navigates a terminal destination result without resolving or replaying it', async () => {
+    const binding = bindPagesRouterExperiences({ config: { components: {} } });
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    await act(async () =>
+      root.render(
+        <binding.request.Experience
+          result={{
+            requestId: 'redirect',
+            routeKey: '/pages',
+            experience: { destinationId: 'site', nodeId: 'node' },
+            redirect: { path: '/target' },
+          }}
+        />
+      )
+    );
+    expect(router.replace).toHaveBeenCalledExactlyOnceWith('/target');
+    expect(fetch).not.toHaveBeenCalled();
+    expect(container.textContent).toBe('');
   });
 
   it('retains bound consent denial when the root defaults prop is undefined', async () => {

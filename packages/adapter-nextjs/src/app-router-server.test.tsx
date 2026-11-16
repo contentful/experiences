@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ExperienceFetchError } from '@contentful/experiences-node';
+import { ExperienceFetchError, NotFoundError } from '@contentful/experiences-node';
 import { ServerExperienceRenderer } from '@contentful/experiences-react/server';
 import { NextRequest } from 'next/server.js';
 import { AppRouterRequestRoot, AppRouterRequestAnalyticsRoot } from './app-router-client.js';
 import { bindAppRouterServerExperiences } from './app-router-server.js';
 import { ServerPreviewRefresh } from './server-preview-refresh.js';
 import type { PreviewConfig } from './preview.js';
+import * as requestPolicy from './request-policy.js';
 
 const doubles = vi.hoisted(() => ({
   headers: vi.fn(),
@@ -14,6 +15,14 @@ const doubles = vi.hoisted(() => ({
   fetch: vi.fn(),
   transfer: vi.fn(),
   destroy: vi.fn(),
+}));
+vi.mock('next/navigation.js', () => ({
+  notFound: () => {
+    throw new Error('NEXT_NOT_FOUND');
+  },
+  redirect: (path: string) => {
+    throw new Error(`NEXT_REDIRECT:${path}`);
+  },
 }));
 vi.mock('next/headers.js', () => ({ headers: doubles.headers, cookies: doubles.cookies }));
 // React's server dispatcher normally supplies this render-local memoization.
@@ -39,6 +48,7 @@ vi.mock('./server-request.js', () => ({
     spaceId: 'space',
     environmentId: 'master',
     config,
+    forRequest: () => ({ fetchExperience: doubles.fetch, destroy: doubles.destroy }),
   }),
   bindExperiencesRequest: doubles.bind,
 }));
@@ -78,6 +88,98 @@ beforeEach(() => {
 });
 
 describe('App Router request family', () => {
+  it('preserves conflicting selector fields for validation by the Node boundary', async () => {
+    const binding = bindAppRouterServerExperiences(config);
+    const selector = { experienceId: 'home', destinationId: 'site', path: '/' };
+    await binding.Experience(selector as never);
+    expect(doubles.fetch.mock.calls[0]![0]).toMatchObject(selector);
+  });
+
+  it('routes an explicit missing selection to native notFound', async () => {
+    const binding = bindAppRouterServerExperiences(config);
+    doubles.fetch.mockRejectedValueOnce(new NotFoundError());
+    await expect(binding.Experience({ experienceId: 'missing' })).rejects.toThrow('NEXT_NOT_FOUND');
+    expect(doubles.destroy).toHaveBeenCalledOnce();
+  });
+
+  it('returns the raw notFound outcome and routes managed components before adoption', async () => {
+    const result = {
+      requestId: 'missing',
+      routeKey: '/',
+      experience: config.request.experience,
+      notFound: true as const,
+    };
+    const load = vi.spyOn(requestPolicy, 'loadPrimaryExperience').mockResolvedValueOnce(result);
+    try {
+      const binding = bindAppRouterServerExperiences(config);
+      expect(await binding.request.loadExperience()).toBe(result);
+      await expect(binding.request.Experience({})).rejects.toThrow('NEXT_NOT_FOUND');
+      await expect(binding.request.ExperiencesRoot({})).rejects.toThrow('NEXT_NOT_FOUND');
+      await expect(binding.request.ExperiencesAnalyticsRoot({})).rejects.toThrow('NEXT_NOT_FOUND');
+      expect(load).toHaveBeenCalledOnce();
+    } finally {
+      load.mockRestore();
+    }
+  });
+
+  it('does not turn another explicit content failure into a native 404', async () => {
+    const failure = new ExperienceFetchError('unavailable', {
+      spaceId: 'space',
+      experienceId: 'home',
+    });
+    doubles.fetch.mockRejectedValueOnce(failure);
+    await expect(
+      bindAppRouterServerExperiences(config).Experience({ experienceId: 'home' })
+    ).rejects.toBe(failure);
+    expect(doubles.destroy).toHaveBeenCalledOnce();
+  });
+
+  it('renders an explicit destination plan and follows its native redirect', async () => {
+    const binding = bindAppRouterServerExperiences(config);
+    const element = await binding.Experience({
+      destinationId: 'site',
+      path: '/lookup',
+      as: 'section',
+    });
+    expect(element.props.experience).toBe(plan);
+    expect(element.props.as).toBe('section');
+    expect(element.props).not.toHaveProperty('destinationId');
+    expect(element.props).not.toHaveProperty('path');
+    expect(doubles.fetch).toHaveBeenCalledExactlyOnceWith(
+      {
+        destinationId: 'site',
+        path: '/lookup',
+        locale: undefined,
+        personalization: undefined,
+      },
+      { config: config.config }
+    );
+    doubles.fetch.mockResolvedValueOnce({ redirect: { path: '/target' } });
+    await expect(binding.Experience({ destinationId: 'site', nodeId: 'node' })).rejects.toThrow(
+      'NEXT_REDIRECT:/target'
+    );
+    expect(doubles.destroy).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps raw destination redirects while convenience components redirect before adoption', async () => {
+    const redirect = { path: '/target' };
+    doubles.transfer.mockResolvedValueOnce({ redirect, handoff });
+    const composeRequest = vi.fn();
+    const binding = bindAppRouterServerExperiences({
+      ...config,
+      request: { experience: { destinationId: 'site', path: '/' }, composeRequest },
+    });
+    expect(await binding.request.loadExperience()).toMatchObject({ redirect, handoff });
+    await expect(binding.request.Experience({})).rejects.toThrow('NEXT_REDIRECT:/target');
+    await expect(binding.request.ExperiencesRoot({})).rejects.toThrow('NEXT_REDIRECT:/target');
+    await expect(binding.request.ExperiencesAnalyticsRoot({})).rejects.toThrow(
+      'NEXT_REDIRECT:/target'
+    );
+    expect(doubles.transfer).toHaveBeenCalledOnce();
+    expect(composeRequest).toHaveBeenCalledOnce();
+    expect(doubles.destroy).toHaveBeenCalledOnce();
+  });
+
   it('wires active managed preview from the primary and projects only browser options', async () => {
     doubles.headers.mockResolvedValue(
       new globalThis.Headers({

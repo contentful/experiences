@@ -1,6 +1,7 @@
 // Request/response adaptation follows Optimization's pages-router-server.ts at
 // f76f1ff04df1b466c98fc6ce5db6b569f9212438 (MIT). XDA owns content evaluation.
 import type { GetServerSidePropsContext } from 'next';
+import type { FetchExperienceOptions } from '@contentful/experiences-node';
 import type { RequestResult } from './request-result.js';
 import {
   createAnonymousIdSetCookieHeader,
@@ -20,6 +21,7 @@ import {
   type ServerConfig,
   type ServerRequestContext,
   type ServerRequestOverrides,
+  type SelectedExperience,
 } from './server-config.js';
 import { loadPrimaryExperience, resolveRequestPolicy } from './request-policy.js';
 
@@ -29,7 +31,9 @@ export type { CookieConfig } from './cookies.js';
 export type { ServerRequestOverrides, ServerRequestPolicy } from './server-config.js';
 export type { PreviewConfig, PreviewContext } from './server-config.js';
 
-export interface PagesRouterServerConfig extends ServerConfig {
+export interface PagesRouterServerConfig<
+  E extends FetchExperienceOptions = FetchExperienceOptions,
+> extends ServerConfig<E> {
   /** Trusted HTTP(S) origin. Required here or on every loadExperience call. */
   readonly origin?: string;
 }
@@ -95,13 +99,15 @@ function pagesRequest(context: GetServerSidePropsContext, origin?: string, route
   };
 }
 
-type PagesRequestArguments<Config> = Config extends { readonly origin: string }
-  ? [overrides?: PagesRouterRequestOptions]
-  : [overrides: PagesRouterRequestOptions & { readonly origin: string }];
+type PagesRequestArguments<O, Origin> = [Origin] extends [string]
+  ? [overrides: O & NoInfer<PagesRouterRequestOptions | undefined>]
+  : [overrides: O & NoInfer<PagesRouterRequestOptions> & { readonly origin: string }];
 
-export function bindPagesRouterServerExperiences<Config extends PagesRouterServerConfig>(
-  options: Config
-) {
+export function bindPagesRouterServerExperiences<
+  E extends FetchExperienceOptions = FetchExperienceOptions,
+  Origin extends string | undefined = string | undefined,
+>(configuration: PagesRouterServerConfig<E> & { readonly origin?: Origin }) {
+  const options = configuration as PagesRouterServerConfig;
   const {
     config: _config,
     consent,
@@ -164,9 +170,15 @@ export function bindPagesRouterServerExperiences<Config extends PagesRouterServe
     }
   }
 
-  const loadWithOrigin: (
-    context: GetServerSidePropsContext,
-    ...args: PagesRequestArguments<Config>
-  ) => Promise<RequestResult> = loadExperience;
+  const loadWithOrigin = loadExperience as {
+    (
+      context: GetServerSidePropsContext,
+      ...args: [Origin] extends [string] ? [overrides?: undefined] : [overrides: never]
+    ): Promise<RequestResult<E>>;
+    <O extends PagesRouterRequestOptions | undefined>(
+      context: GetServerSidePropsContext,
+      ...args: PagesRequestArguments<O, Origin>
+    ): Promise<RequestResult<SelectedExperience<E, O>>>;
+  };
   return { request: { loadExperience: loadWithOrigin } };
 }

@@ -10,13 +10,13 @@ Isolates `@contentful/experience-delivery` — the generated Experience Delivery
 
 ### `fetchExperience(experienceOptions, clientOptions, resolveOptions)`
 
-The primary fetch + resolve entry point. Fetches an Experience payload and resolves it into a `PortableRenderPlan` in one call. There are three ways to say which Experience:
+The primary fetch + resolve entry point. Fetches an Experience payload and resolves it into a `PortableRenderPlan` in one call. Its internal `fetchExperiencePayload` loader shares the same exclusive selector union and returns a payload or redirect before resolution, so runtime consumers do not fetch the selected Experience a second time. There are three ways to say which Experience:
 
 - **By destination path** (recommended for apps): `{ spaceId, destinationId, path }`. The URL path is the Destination path.
 - **By destination node id**: `{ spaceId, destinationId, nodeId }`.
 - **By Experience id**: `{ spaceId, environmentId, experienceId, … }`. Use it when you already hold an id.
 
-The destination forms are space-scoped (no `environmentId`, `locale`, `parameters` or `extensions`) and accept `personalization`; with it set, the request is sent as a POST instead of the cacheable GET. They return `PortableRenderPlan | DestinationRedirectResult`: a redirect node resolves to `{ redirect: { path } }`, which you follow instead of rendering.
+The destination forms are space-scoped (no `environmentId`, `parameters` or `extensions`) and accept `locale` and `personalization`; supplying personalization sends a POST instead of the cacheable GET. Locale is forwarded as a query value on GET and POST. They return `PortableRenderPlan | DestinationRedirectResult`: a redirect node resolves to `{ redirect: { path } }`, which you follow instead of rendering.
 
 ```ts
 const result = await fetchExperience(
@@ -78,11 +78,11 @@ the renderer's plan; see the [runtime parameters example](../../README.md#runtim
 
 Three positional args group by concern:
 
-| Arg                 | Type                                                                                                                                                                  | Purpose                                                                           |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `experienceOptions` | `{ spaceId, destinationId, path \| nodeId, personalization? }` **or** `{ spaceId, environmentId, experienceId, locale?, parameters?, personalization?, extensions? }` | Which Experience to fetch: by destination or by id.                               |
-| `clientOptions`     | `{ accessToken, host? }` **or** `{ client }`                                                                                                                          | How to fetch — inline Delivery credentials or a pre-made client.                  |
-| `resolveOptions`    | `{ config, metadata?, debug? }`                                                                                                                                       | How to resolve — component registry, per-render `metadata`, and a `debug` switch. |
+| Arg                 | Type                                                                                                                                                                           | Purpose                                                                           |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `experienceOptions` | `{ spaceId, destinationId, path \| nodeId, locale?, personalization? }` **or** `{ spaceId, environmentId, experienceId, locale?, parameters?, personalization?, extensions? }` | Which Experience to fetch: by destination or by id.                               |
+| `clientOptions`     | `{ accessToken, host? }` **or** `{ client }`                                                                                                                                   | How to fetch — inline Delivery credentials or a pre-made client.                  |
+| `resolveOptions`    | `{ config, metadata?, debug? }`                                                                                                                                                | How to resolve — component registry, per-render `metadata`, and a `debug` switch. |
 
 ```ts
 import { fetchExperience } from '@contentful/experiences-react'; // or experiences-svelte
@@ -113,6 +113,11 @@ const plan = await fetchExperience(
 ```
 
 Returns `PortableRenderPlan`. An empty-nodes payload (draft / unpublished / empty locale) resolves to a valid plan with `nodes: []` — it is not a 404. For the missing-experience case, catch `NotFoundError` (re-exported below).
+
+Malformed selectors reject with `TypeError` before Delivery: supply either a
+nonempty `experienceId`, or a nonempty `destinationId` with exactly one nonempty
+`path` or `nodeId`. Paths must start with `/`. Selector values are validated
+without trimming or normalization; content existence remains a Delivery concern.
 
 Successful responses can carry upstream field-resolution errors alongside useful
 content. Core projects recognized errors into optional `plan.deliveryDiagnostics`
@@ -193,20 +198,20 @@ do {
 } while (pageNext);
 ```
 
-Each item is `{ path, experienceId, type }`. Cursors (`pages.next`, `pages.prev`) are opaque; don't combine `pageNext` and `pagePrev`. A missing Destination throws `NotFoundError`. It is a free function only; the Node and Web runtimes have no sitemap method.
+Each item is `{ path, experienceId, type }`. Cursors (`pages.next`, `pages.prev`) are opaque; don't combine `pageNext` and `pagePrev`. A missing Destination throws `NotFoundError`. Node and Web instances also expose `sdk.fetchDestinationSitemap({ destinationId }, pagination)` through their configured Delivery client.
 
 ### `NotFoundError`
 
-Re-exported from `@contentful/experience-delivery` as a value + type. Thrown by the underlying delivery client on 404 responses. Route it to your framework's 404 idiom:
+Re-exported from `@contentful/experience-delivery` as a value + type. Thrown by the underlying delivery client on 404 responses. Use `isNotFoundError(error)` to recognize that class or a numeric `statusCode: 404` across package/serialization boundaries, then route it to your framework's 404 idiom. The predicate does not inspect error names, messages or nested causes:
 
 ```ts
-import { fetchExperience, NotFoundError } from '@contentful/experiences-react';
+import { fetchExperience, isNotFoundError } from '@contentful/experiences-react';
 
 try {
   const experience = await fetchExperience(/* … */);
   // …
 } catch (err) {
-  if (err instanceof NotFoundError) notFound(); // Next.js
+  if (isNotFoundError(err)) notFound(); // Next.js
   throw err;
 }
 ```

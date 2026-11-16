@@ -58,3 +58,23 @@ it('exposes the structural preview configuration through direct Web configuratio
     PreviewConfig | undefined
   >();
 });
+
+it('preserves exclusive destination selectors in bound options and supplied props', () => {
+  type Options = import('./experience/create-experiences.js').BoundManagedExperienceOptions;
+  const path: Options = { destinationId: 'site', path: '/landing', locale: 'de-DE' };
+  const node: Options = { destinationId: 'site', nodeId: 'catalog-node' };
+  const id: Options = { experienceId: 'home', parameters: { category: 'news' } };
+  // @ts-expect-error Source selectors are exclusive.
+  const mixed: Options = { experienceId: 'home', destinationId: 'site', path: '/' };
+  // @ts-expect-error Destination lookup requires path or nodeId.
+  const missing: Options = { destinationId: 'site' };
+  // @ts-expect-error Parameters belong to by-ID delivery.
+  const parameters: Options = { destinationId: 'site', path: '/', parameters: {} };
+  // @ts-expect-error Supplied content excludes destination selectors.
+  const supplied: BoundManagedExperienceProps = {
+    experience: null,
+    destinationId: 'site',
+    path: '/',
+  };
+  void [path, node, id, mixed, missing, parameters, supplied];
+});

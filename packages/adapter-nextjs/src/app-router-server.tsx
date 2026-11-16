@@ -5,11 +5,13 @@ import {
   type ServerExperienceRendererProps,
 } from '@contentful/experiences-react/server';
 import {
+  isNotFoundError,
   type ExperiencesHandoff,
   type FetchExperienceOptions,
   type FetchResolveOptions,
   type PortableRenderPlan,
 } from '@contentful/experiences-node';
+import { notFound, redirect } from 'next/navigation.js';
 import { cookies, headers } from 'next/headers.js';
 import { cache, createElement, type ComponentType } from 'react';
 import { ServerPreviewRefresh } from './server-preview-refresh.js';
@@ -35,6 +37,7 @@ import {
   type ServerRequestContext,
   type ServerRequestOverrides,
   type ServerRequestResult,
+  type SelectedExperience,
 } from './server-config.js';
 import { loadPrimaryExperience, resolveRequestPolicy } from './request-policy.js';
 import { mergePreview } from './preview.js';
@@ -46,7 +49,8 @@ export type { ServerRequestOverrides, ServerRequestPolicy } from './server-confi
 export type { PreviewConfig, PreviewContext } from './server-config.js';
 
 export type AppRouterRequestContext = ServerRequestContext;
-export type AppRouterServerConfig = ServerConfig;
+export type AppRouterServerConfig<E extends FetchExperienceOptions = FetchExperienceOptions> =
+  ServerConfig<E>;
 
 export interface AppRouterServerOptions {
   readonly request?: {
@@ -61,7 +65,8 @@ export type BoundServerRequestRootProps = Omit<
   'sdk' | 'onStatesReady' | 'beforeInitialPage' | 'buildPagePayload' | 'result'
 >;
 
-export type AppRouterExperienceResult = ServerRequestResult;
+export type AppRouterExperienceResult<E extends FetchExperienceOptions = FetchExperienceOptions> =
+  ServerRequestResult<E>;
 
 /** Server renderer callbacks stay on the server; DOM handlers belong in client components. */
 export type ServerRequestExperienceProps = Omit<
@@ -91,19 +96,23 @@ export type ServerExperienceProps = Omit<ServerExperienceRendererProps, 'experie
       })
   );
 
-export function bindAppRouterServerExperiences(
-  options: AppRouterServerConfig,
+export function bindAppRouterServerExperiences<
+  E extends FetchExperienceOptions = FetchExperienceOptions,
+>(
+  options: AppRouterServerConfig<E>,
   client?: AppRouterServerOptions & {
     readonly request?: NonNullable<AppRouterServerOptions['request']> & {
       readonly Experience?: never;
     };
   }
-): ReturnType<typeof createAppRouterServerExperiences<ServerRequestExperienceProps>>;
+): ReturnType<typeof createAppRouterServerExperiences<ServerRequestExperienceProps, E>>;
 // eslint-disable-next-line no-redeclare -- TypeScript overload, not a runtime redeclaration.
-export function bindAppRouterServerExperiences(
-  options: AppRouterServerConfig,
+export function bindAppRouterServerExperiences<
+  E extends FetchExperienceOptions = FetchExperienceOptions,
+>(
+  options: AppRouterServerConfig<E>,
   client: AppRouterServerOptions
-): ReturnType<typeof createAppRouterServerExperiences<ServerRequestClientExperienceProps>>;
+): ReturnType<typeof createAppRouterServerExperiences<ServerRequestClientExperienceProps, E>>;
 // eslint-disable-next-line no-redeclare -- TypeScript overload implementation.
 export function bindAppRouterServerExperiences(
   options: AppRouterServerConfig,
@@ -112,10 +121,10 @@ export function bindAppRouterServerExperiences(
   return createAppRouterServerExperiences(options, client);
 }
 
-function createAppRouterServerExperiences<PresentationProps extends ServerRequestExperienceProps>(
-  options: AppRouterServerConfig,
-  client?: AppRouterServerOptions
-) {
+function createAppRouterServerExperiences<
+  PresentationProps extends ServerRequestExperienceProps,
+  E extends FetchExperienceOptions = FetchExperienceOptions,
+>(options: AppRouterServerConfig, client?: AppRouterServerOptions) {
   const {
     config,
     consent,
@@ -218,7 +227,10 @@ function createAppRouterServerExperiences<PresentationProps extends ServerReques
   }
 
   async function RequestExperiencesRoot(props: BoundServerRequestRootProps) {
-    return ExperiencesRoot({ ...props, result: browserResult(await loadExperience()) });
+    const result = await loadExperience();
+    if (result.redirect) redirect(result.redirect.path);
+    if (result.notFound) notFound();
+    return ExperiencesRoot({ ...props, result: browserResult(result) });
   }
 
   function ExperiencesAnalyticsRoot(props: BoundRequestRootProps) {
@@ -234,12 +246,17 @@ function createAppRouterServerExperiences<PresentationProps extends ServerReques
   }
 
   async function RequestExperiencesAnalyticsRoot(props: BoundServerRequestRootProps) {
-    const { plan: _plan, ...result } = browserResult(await loadExperience());
+    const loaded = await loadExperience();
+    if (loaded.redirect) redirect(loaded.redirect.path);
+    if (loaded.notFound) notFound();
+    const { plan: _plan, ...result } = browserResult(loaded);
     return ExperiencesAnalyticsRoot({ ...props, result });
   }
 
   async function RequestExperience(props: PresentationProps) {
     const result = await loadExperience();
+    if (result.redirect) redirect(result.redirect.path);
+    if (result.notFound) notFound();
     if (result.plan === undefined && result.contentError === undefined) return null;
     if (client?.request?.Experience)
       return createElement(client.request.Experience, { ...props, result: browserResult(result) });
@@ -254,6 +271,9 @@ function createAppRouterServerExperiences<PresentationProps extends ServerReques
     }
     const {
       experienceId,
+      destinationId,
+      nodeId,
+      path,
       locale,
       parameters,
       personalization,
@@ -262,13 +282,28 @@ function createAppRouterServerExperiences<PresentationProps extends ServerReques
       cache: cachePolicy,
       ...presentation
     } = props;
-    const descriptor = {
-      experienceId,
-      locale,
-      parameters,
-      personalization,
-      extensions,
-    };
+    const descriptor: FetchExperienceOptions =
+      experienceId !== undefined
+        ? {
+            experienceId,
+            destinationId,
+            nodeId,
+            path,
+            locale,
+            parameters,
+            personalization,
+            extensions,
+          }
+        : nodeId !== undefined
+          ? { experienceId, destinationId: destinationId!, nodeId, path, locale, personalization }
+          : {
+              experienceId,
+              destinationId: destinationId!,
+              nodeId,
+              path: path!,
+              locale,
+              personalization,
+            };
     if (cachePolicy)
       assertPublicRequestPolicy({
         cache: cachePolicy,
@@ -276,7 +311,13 @@ function createAppRouterServerExperiences<PresentationProps extends ServerReques
       });
     const request = sdk.forRequest({ consent: false });
     try {
-      const plan = await request.fetchExperience(descriptor, { ...resolveOptions, config });
+      const plan = await request
+        .fetchExperience(descriptor, { ...resolveOptions, config })
+        .catch((error: unknown) => {
+          if (isNotFoundError(error)) notFound();
+          throw error;
+        });
+      if ('redirect' in plan) redirect(plan.redirect.path);
       return <ServerExperienceRenderer {...presentation} experience={plan} config={config} />;
     } finally {
       request.destroy();
@@ -301,7 +342,12 @@ function createAppRouterServerExperiences<PresentationProps extends ServerReques
     ExperiencesRoot,
     ExperiencesAnalyticsRoot,
     request: {
-      loadExperience,
+      loadExperience: loadExperience as {
+        (overrides?: undefined): Promise<AppRouterExperienceResult<E>>;
+        <O extends ServerRequestOverrides | undefined>(
+          overrides: O & NoInfer<ServerRequestOverrides | undefined>
+        ): Promise<AppRouterExperienceResult<SelectedExperience<E, O>>>;
+      },
       Experience: RequestExperience,
       ExperiencesRoot: RequestExperiencesRoot,
       ExperiencesAnalyticsRoot: RequestExperiencesAnalyticsRoot,

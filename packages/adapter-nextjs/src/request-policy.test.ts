@@ -1,4 +1,8 @@
-import { ExperienceFetchError, type RequestRuntime } from '@contentful/experiences-node';
+import {
+  ExperienceFetchError,
+  NotFoundError,
+  type RequestRuntime,
+} from '@contentful/experiences-node';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   resolveRequestPolicy as resolvePolicy,
@@ -35,6 +39,81 @@ const request = {
 
 describe('Next primary request policy', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it.each([
+    { mode: 'ssr' as const, experience: { experienceId: 'missing' } },
+    { mode: 'hybrid' as const, experience: { destinationId: 'site', path: '/missing' } },
+  ])(
+    'classifies primary content 404 without discarding handoff ($mode, $experience)',
+    async ({ mode, experience }) => {
+      const error = new NotFoundError();
+      const handoff = {
+        spaceId: 'space',
+        environmentId: 'master',
+        cache: { scope: 'private-request' as const },
+      };
+      if (mode === 'ssr') fetchExperience.mockRejectedValueOnce(error);
+      else fetchExperienceForHandoff.mockResolvedValueOnce({ error, handoff } as never);
+      const resolved = await resolvePolicy(config, { mode, experience }, context);
+      const result = await loadPrimary(request, resolved, context, config);
+      expect(result).toMatchObject({ notFound: true, error, handoff });
+      expect(result.plan).toBeUndefined();
+      expect(result.initialPageOwner).toBe(mode === 'ssr' ? 'server' : undefined);
+    }
+  );
+
+  it.each(['ssr', 'hybrid'] as const)(
+    'preserves a destination redirect and composes once (%s)',
+    async (mode) => {
+      const redirect = { path: '/target?from=source' };
+      const composeRequest = vi.fn();
+      const descriptor = { destinationId: 'site', path: '/page', locale: 'de-DE' };
+      const resolved = await resolvePolicy(
+        config,
+        { mode, experience: descriptor, composeRequest },
+        context
+      );
+      if (mode === 'ssr') fetchExperience.mockResolvedValueOnce({ redirect });
+      else fetchExperienceForHandoff.mockResolvedValueOnce({ redirect } as never);
+      const result = await loadPrimary(request, resolved, context, config);
+      expect(result.redirect).toEqual(redirect);
+      expect(result.plan).toBeUndefined();
+      expect(result.experience).toEqual(descriptor);
+      expect(result.experienceId).toBeUndefined();
+      expect(result.handoff).toBeUndefined();
+      expect(composeRequest).toHaveBeenCalledExactlyOnceWith(request, result, context);
+      const called = mode === 'ssr' ? fetchExperience : fetchExperienceForHandoff;
+      expect(called.mock.calls[0]?.[0]).toMatchObject({
+        destinationId: 'site',
+        path: '/page',
+        locale: 'de-DE',
+        personalization: {
+          events: [
+            {
+              type: 'page',
+              properties: expect.objectContaining({
+                path: '/page',
+                search: '?q=a+b&tag=first&tag=last',
+              }),
+            },
+          ],
+        },
+      });
+    }
+  );
+
+  it('reports the fetched Experience identity for destination content', async () => {
+    fetchExperience.mockResolvedValueOnce({ ...plan, experienceId: 'selected' });
+    const resolved = await resolvePolicy(
+      config,
+      { mode: 'ssr', experience: { destinationId: 'site', nodeId: 'node' } },
+      context
+    );
+    const result = await loadPrimary(request, resolved, context, config);
+    expect(result.experienceId).toBe('selected');
+    expect(result.experience).toEqual({ destinationId: 'site', nodeId: 'node' });
+  });
+
   it('defaults to hybrid and resolves a mode callback once with override precedence', async () => {
     expect((await resolvePolicy(config, {}, context)).mode).toBe('hybrid');
     const bound = vi.fn(() => 'hybrid' as const);
@@ -76,6 +155,7 @@ describe('Next primary request policy', () => {
     );
     expect(fetchExperienceForHandoff).not.toHaveBeenCalled();
     expect(result.initialPageOwner).toBe('server');
+    expect(result.notFound).toBeUndefined();
     expect(result.handoff).toEqual({
       spaceId: 'space',
       environmentId: 'master',
@@ -110,6 +190,7 @@ describe('Next primary request policy', () => {
       handoff: { profileId: profile.id },
     });
     expect(failed.plan).toBeUndefined();
+    expect(failed.notFound).toBeUndefined();
     expect(failed.handoff?.state).toBeUndefined();
     expect(failed.handoff?.replay).toBeUndefined();
   });

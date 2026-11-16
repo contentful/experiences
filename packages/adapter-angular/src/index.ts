@@ -168,6 +168,7 @@ export {
   DELIVERY_HOST,
   ExperienceFetchError,
   NotFoundError,
+  isNotFoundError,
   PREVIEW_HOST,
   createClient,
   fetchExperience,

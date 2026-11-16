@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { assertExperienceSelector } from '@contentful/experiences-client';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import {
   ClientExperienceRenderer,
@@ -20,12 +21,13 @@ interface ExperiencePresentationProps
   readonly children?: (result: ManagedExperienceResult) => ReactNode;
 }
 
+type KeysOfUnion<T> = T extends unknown ? keyof T : never;
+type ManagedOptionKeys = KeysOfUnion<ManagedExperienceOptions>;
+
 export type SuppliedExperienceProps = ExperiencePresentationProps & {
   readonly experience: PortableRenderPlan | null | undefined;
 } & {
-  readonly [
-    Key in keyof Omit<ManagedExperienceOptions, 'config' | keyof ExperienceNotifications>
-  ]?: never;
+  readonly [Key in Exclude<ManagedOptionKeys, 'config' | keyof ExperienceNotifications>]?: never;
 };
 
 export type ManagedExperienceProps =
@@ -34,9 +36,18 @@ export type ManagedExperienceProps =
 
 /** Managed and seeded presentation share the supplied-plan renderer and tracking surface. */
 export function Experience(props: ManagedExperienceProps): ReactNode {
+  if (
+    !('experience' in props) ||
+    props.experienceId !== undefined ||
+    props.destinationId !== undefined ||
+    props.nodeId !== undefined ||
+    props.path !== undefined
+  )
+    assertExperienceSelector(props);
   const result = useExperienceSource(props);
   const { children, loadingFallback, errorFallback } = props;
   if (children) return children(result);
+  if (result.redirect) return null;
   // Usable content survives refresh and preview errors; callbacks can present both explicitly.
   if (result.data) return <ClientExperienceRenderer {...props} experience={result.data} />;
   const fallback = result.error ? errorFallback : loadingFallback;

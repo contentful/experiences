@@ -4,14 +4,14 @@ A client-only Vite + React 19 single-page app demonstrating `@contentful/experie
 
 ## What it shows
 
-- **Client-side fetch and resolve** in [`src/ExperiencePage.tsx`](./src/ExperiencePage.tsx): the same `fetchExperience` call the Next.js example makes on the server, run in an effect. The `card` component's async `resolveData` runs in the browser too.
-- **Client rendering** with `ClientExperienceRenderer`, with explicit loading, not-found, and error states.
+- **Managed client-side fetch and resolve** in [`src/App.tsx`](./src/App.tsx): `createExperiences({ config, onRedirect })` binds the registry once, and one `ExperiencesRoot` owns the SDK used by `Experience`. Pass a complete SDK selector to `<Experience {...selector} />`; it fetches, resolves, and renders without a render callback or a separate renderer. The `card` component's async `resolveData` runs in the browser too.
+- **Client rendering** with the default managed presentation and small loading, not-found, and error fallbacks. The SDK follows redirects through the bound callback and keeps the last usable plan during refresh errors.
 - **Debug mode via `?debug=true`**: verbose SDK logging, visible `MissingComponent` boxes, and `<DebugExperience>`.
 - **Design values as props**: every component declares the design keys it consumes as named props, as in the Next.js example.
 - **CSS-in-JS**: [`src/components/Card.tsx`](./src/components/Card.tsx) is styled with styled-components. Resolved design values arrive as props and pass into the styled components as transient (`$`-prefixed) props, so they never reach the DOM. The other components use inline styles.
 - **The `useDesignValues()` escape hatch**: the card's nested `CardCta` reads the card's design off context.
 - **Design tokens**: [`src/lib/experience-config.ts`](./src/lib/experience-config.ts) wires a `resolveToken` that maps token ids to values from [`src/lib/design-tokens.ts`](./src/lib/design-tokens.ts).
-- **Destination routing**: the URL path is the Destination path, so `/` and `/demo/landing` resolve to different Experiences. A redirect node (`/welcome`) comes back as `{ redirect }` and the app follows it with `location.replace`. `/experiences/<id>` fetches one Experience by id instead.
+- **Destination routing**: the URL path is the Destination path, so `/` and `/demo/landing` resolve to different Experiences. A redirect node (`/welcome`) comes back as `{ redirect }` and the app follows it with `location.replace`. `/experiences/<id>` fetches one Experience by id instead. Both selectors forward `?locale=de-DE` as the content locale; `?debug=true` enables debug output.
 - **No router dependency**: [`src/App.tsx`](./src/App.tsx) chooses between those two from `location.pathname`. Replace it with your router; nothing SDK-related changes.
 
 ## Client-only trade-offs

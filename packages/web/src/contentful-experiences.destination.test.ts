@@ -71,9 +71,9 @@ afterEach(() => {
   clearIdentityCookies();
 });
 
-describe.each([byNode, byPath])('Web Destination fetch %s', (_label, method, fetchIt, locator) => {
+describe.each([byNode, byPath])('Web Destination fetch %s', (_label, _method, fetchIt, locator) => {
   const spyOnBase = () =>
-    vi.spyOn(RuntimeContentfulExperiences.prototype, method).mockResolvedValue({
+    vi.spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience').mockResolvedValue({
       nodes: [],
     } as never);
 
@@ -103,7 +103,7 @@ describe.each([byNode, byPath])('Web Destination fetch %s', (_label, method, fet
 
   it('stores the complete profile XDA returns', async () => {
     const runtime = createRuntime();
-    vi.spyOn(RuntimeContentfulExperiences.prototype, method).mockResolvedValue({
+    vi.spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience').mockResolvedValue({
       nodes: [],
       personalization: { profile: profileFixture('returned') },
     } as never);
@@ -115,7 +115,7 @@ describe.each([byNode, byPath])('Web Destination fetch %s', (_label, method, fet
 
   it('returns a redirect unchanged and leaves the profile alone', async () => {
     const runtime = createRuntime();
-    vi.spyOn(RuntimeContentfulExperiences.prototype, method).mockResolvedValue({
+    vi.spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience').mockResolvedValue({
       redirect: { path: '/elsewhere' },
     } as never);
 
@@ -154,7 +154,7 @@ describe.each([byNode, byPath])('Web Destination fetch %s', (_label, method, fet
     const runtime = createRuntime();
     const pending = deferred<object>();
     const fetch = vi
-      .spyOn(RuntimeContentfulExperiences.prototype, method)
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
       .mockReturnValue(pending.promise as never);
 
     const request = fetchIt(runtime);
@@ -173,5 +173,43 @@ describe.each([byNode, byPath])('Web Destination fetch %s', (_label, method, fet
 
     await expect(fetchIt(runtime)).rejects.toThrow('Experiences SDK has been destroyed');
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('unified destination source sharing', () => {
+  it('shares identical event-free selections while isolating caller results', async () => {
+    const sdk = createRuntime();
+    const pending = deferred<object>();
+    const fetch = vi
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
+      .mockReturnValue(pending.promise as never);
+    const selector = { destinationId: 'dest', path: '/page', locale: 'de-DE' };
+    const first = sdk.fetchExperience(selector, resolveOptions);
+    const second = sdk.fetchByDestinationPath(selector, resolveOptions);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    pending.resolve({ experienceId: 'selected', nodes: [] });
+    const [a, b] = await Promise.all([first, second]);
+    expect(a).toEqual(b);
+    expect(a).not.toBe(b);
+    expect(fetch.mock.calls[0]?.[0]).toMatchObject(selector);
+  });
+
+  it('never shares event-bearing destination evaluations', async () => {
+    const sdk = createRuntime({ defaults: { consent: true } });
+    const fetch = vi
+      .spyOn(RuntimeContentfulExperiences.prototype, 'fetchExperience')
+      .mockResolvedValue({ nodes: [], metadata: {}, debug: false, diagnostics: [] });
+    const selector = {
+      destinationId: 'dest',
+      nodeId: 'node',
+      personalization: { events: [{ type: 'page' as const }] },
+    };
+    await Promise.all([
+      sdk.fetchExperience(selector, resolveOptions),
+      sdk.fetchExperience(selector, resolveOptions),
+    ]);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const ids = fetch.mock.calls.map(([request]) => request.personalization?.events?.[0]);
+    expect(ids[0]).not.toEqual(ids[1]);
   });
 });

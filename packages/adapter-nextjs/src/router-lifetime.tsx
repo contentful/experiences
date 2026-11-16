@@ -72,12 +72,49 @@ export function useRequestOptions(supplied?: RequestResult) {
   const result = supplied ?? inherited?.result;
   const canAdopt = useInitialData(result?.requestId);
   const error = result?.contentError;
-  const initialError = useMemo(() => (error === undefined ? undefined : new Error(error)), [error]);
+  const notFound = result?.notFound;
+  const initialError = useMemo(
+    () =>
+      error === undefined && !notFound
+        ? undefined
+        : Object.assign(
+            new Error(error ?? 'Experience content not found.'),
+            notFound ? { statusCode: 404 } : {}
+          ),
+    [error, notFound]
+  );
   return {
     result,
+    initialRedirect: canAdopt ? result?.redirect : undefined,
     initialPlan: canAdopt ? result?.plan : undefined,
     initialError: canAdopt ? initialError : undefined,
+    resolveOptions: result?.plan && {
+      metadata: result.plan.metadata,
+      debug: result.plan.debug,
+    },
   };
+}
+
+/** One native navigation per adopted result, including StrictMode effect replay. */
+export function useRequestRedirect(
+  result: RequestResult | undefined,
+  redirect: RequestResult['redirect'],
+  isCurrent: boolean,
+  navigate: (redirect: NonNullable<RequestResult['redirect']>) => void
+) {
+  const redirectedRequest = useRef<string | undefined>(undefined);
+  const requestId = result?.requestId;
+  useEffect(() => {
+    if (
+      !isCurrent ||
+      !redirect ||
+      requestId === undefined ||
+      redirectedRequest.current === requestId
+    )
+      return;
+    redirectedRequest.current = requestId;
+    navigate(redirect);
+  }, [requestId, redirect, isCurrent, navigate]);
 }
 
 /** Server-only presentations observe valid context content without browser resolution. */
@@ -133,6 +170,7 @@ export function RequestPresentation({
     matchingResult?.initialPagePayload ?? (result ? undefined : props.initialPagePayload);
   const events = matchingResult?.experience.personalization?.events;
   const pageFree =
+    matchingResult?.redirect !== undefined ||
     matchingResult?.initialPageOwner === 'server' ||
     (events !== undefined && !events.some((event) => event.type === 'page'));
   const builder = props.buildPagePayload ?? configuredBuilder;
@@ -148,14 +186,16 @@ export function RequestPresentation({
   return (
     <Root
       {...props}
-      {...(waiting ? { beforeInitialPage: undefined } : {})}
+      {...(waiting || matchingResult?.redirect ? { beforeInitialPage: undefined } : {})}
       routeKey={routeKey}
       previewUrl={previewUrl}
       preview={preview}
       handoff={
         result
           ? ready || typeof window === 'undefined'
-            ? matchingResult?.handoff
+            ? matchingResult?.redirect
+              ? undefined
+              : matchingResult?.handoff
             : undefined
           : props.handoff
       }

@@ -12,14 +12,14 @@ type, while the Web leaf owns its observable value.
 
 The shared base and Node do not impose a singleton restriction. Multiple Node instances can coexist, and each `forRequest()` facade belongs to its creating instance. Web owns a `globalThis` lock allowing one live Experiences Web SDK per JavaScript runtime. Its `destroy()` stops browser-owned work before releasing that lock.
 
-Client remains the lower-level Delivery and free-function boundary. Runtime imports `ContentfulViewDeliveryClient`, `fetchExperience`, host constants, and XDA-derived request types from `@contentful/experiences-client`. Client has no dependency on Runtime. It supplements generated XDA validation only for
+Client remains the lower-level Delivery and free-function boundary. Runtime imports `ContentfulViewDeliveryClient`, `fetchExperiencePayload`, host constants, and XDA-derived request types from `@contentful/experiences-client`. Client has no dependency on Runtime. It supplements generated XDA validation only for
 `context.gdpr.isConsentGiven` (boolean) and optional `context.page.title` (string),
 using local primitive constraints in `zod/mini`. Existing XDA event/context
 contracts and the generated passthrough result are preserved. Core remains dependency-free.
 
 ## Shared base
 
-Construct `ContentfulExperiences` with a space, environment, Delivery configuration, and an `eventBuilder` configuration with an explicit platform `channel`. Preview and Optimization configuration are optional. The base creates and owns its Delivery, optional Preview, and Optimization clients. Fetch and resolve operations, including Node's `fetchExperienceForHandoff`, require `{ config: resolverConfig }` as a per-call resolve option, so one SDK can interpret different Experiences independently. Event-only construction requires no resolver registry. Metadata and debug defaults may still be configured on the SDK. By-ID fetches use Delivery; leaf owners use the configured Preview transport for active Preview Session snapshots. Destination operations remain delivery-only.
+Construct `ContentfulExperiences` with a space, environment, Delivery configuration, and an `eventBuilder` configuration with an explicit platform `channel`. Preview and Optimization configuration are optional. The base creates and owns its Delivery, optional Preview, and Optimization clients. Fetch and resolve operations, including Node's `fetchExperienceForHandoff`, require `{ config: resolverConfig }` as a per-call resolve option, so one SDK can interpret different Experiences independently. Event-only construction requires no resolver registry. Metadata and debug defaults may still be configured on the SDK. By-ID fetches use Delivery; leaf owners use the configured Preview transport for active Preview Session snapshots. Destination acquisition uses Delivery, then active leaf Preview Sessions may replace the selected payload only when its actual Experience ID matches and the configured environment is `master`, the Destination scope. Redirects are terminal.
 
 The readonly `api` property exposes the full Personalization and Analytics service
 clients as `api.personalization` and `api.analytics`, with their shared `api.config`;
@@ -112,6 +112,9 @@ retry after acquisition failure; Web shares only in-flight snapshot acquisition.
 Managed views retain existing usable content while pending or failed. Web subscriptions
 use the same identity check; payloads without an ID are never broadcast to arbitrary
 Experiences. Snapshot HTTP errors surface through the fetch or managed result;
+all snapshot acquisition failures, including HTTP 404, use the existing
+`PreviewSessionFetchError` wrapper with the original error as `cause`. A missing
+session is distinct from missing Delivery content for `isNotFoundError` checks.
 `states.preview` reports connection/update state and errors.
 `createPreviewClient` evaluates token suppliers and passes the session options
 to the configured factory, without requiring
@@ -265,6 +268,35 @@ supplied changes replace flag state.
 It does not commit preflight results or transfer selected-optimization state.
 No 64 KiB cap or version field applies to the aggregate or `PortableRenderPlan`;
 callers own safe serialization and response-size policy.
+
+## Destination selection
+
+Configured-space `fetchExperience` accepts exactly one selector: `{ experienceId }`,
+`{ destinationId, path }`, or `{ destinationId, nodeId }`. The by-ID overload
+returns a plan; destination and union overloads return a plan or `{ redirect: { path } }`.
+`fetchByDestinationPath` and `fetchByDestinationNode` remain convenience wrappers.
+Malformed selectors reject with `TypeError` before Preview acquisition or event
+preparation. Required selector fields must be nonempty strings; paths start with
+`/`, and selector families cannot be combined. Values are not normalized.
+All selectors accept `locale` and Runtime's builder-or-built `personalization.events`.
+Destinations are master-only and do not accept by-ID `parameters` or `extensions`.
+`plan.experienceId`, when present, comes from the acquired payload's actual `sys.id`.
+No destination lookup cache or second by-ID fetch is introduced.
+
+Node and Web instances inherit
+`sdk.fetchDestinationSitemap({ destinationId }, { limit?, pageNext?, pagePrev? })`.
+It uses the configured space and ordinary Delivery client to fetch one page of
+published paths, returning `{ items: { path, experienceId, type }[], limit, pages }`.
+Follow the opaque `pages.next` or `pages.prev` cursor in a subsequent call; do not
+combine both cursors. This optional enumeration supports static generation and
+`sitemap.xml`; it does not fetch Experience content or supply analytics attribution.
+
+Destination service parity is incomplete: live verification found that destination
+`preflight: false` did not finalize fresh event-bearing profiles, while the same
+by-ID request did. Destination source-map requests also returned no source map or
+node IDs while the by-ID control returned both. The SDK forwards the existing
+personalization contract without emulating commitment; destination attribution
+enrichment is unavailable. These upstream gaps block release of complete parity.
 
 ## XDA preflight and profile finalization
 

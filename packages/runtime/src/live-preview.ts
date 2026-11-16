@@ -84,7 +84,6 @@ export async function fetchPreviewSessionPayload(
     }
     return payload;
   } catch (error) {
-    if (error instanceof NotFoundError) throw error;
     const reason = error instanceof Error ? error.message : String(error);
     const failure = new Error(
       `Failed to fetch Preview Session "${sessionId}" (space "${spaceId}", environment "${environmentId}"): ${reason}`,

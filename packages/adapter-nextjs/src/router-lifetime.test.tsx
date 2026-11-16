@@ -31,6 +31,25 @@ const result: RequestResult = {
 };
 
 describe('Next request presentation inputs', () => {
+  it.each([true, undefined] as const)(
+    'preserves seeded error classification (notFound=%s)',
+    (notFound) => {
+      const seeded = { ...result, contentError: 'Experience content unavailable.', notFound };
+      function Probe() {
+        const { initialError } = useRequestOptions();
+        expect(initialError?.message).toBe(seeded.contentError);
+        if (notFound) expect(initialError).toHaveProperty('statusCode', 404);
+        else expect(initialError).not.toHaveProperty('statusCode');
+        return null;
+      }
+      renderToStaticMarkup(
+        <RequestResultBoundary result={seeded}>
+          <Probe />
+        </RequestResultBoundary>
+      );
+    }
+  );
+
   it('inherits the whole result, gives explicit results precedence and requires a root otherwise', () => {
     const explicit = { ...result, requestId: 'explicit' };
     const observed: (RequestResult | undefined)[] = [];
@@ -131,6 +150,29 @@ describe('Next request presentation inputs', () => {
     expect(override).toHaveBeenCalledTimes(source === 'override' ? 1 : 0);
     expect(buildRoutePayload).toHaveBeenCalledTimes(!waiting && expected === 'route' ? 1 : 0);
   });
+  it('makes redirect results terminal without replay or page fallback', () => {
+    const Root = vi.fn((_props: BoundRootProps) => <></>);
+    const builder = vi.fn();
+    renderToStaticMarkup(
+      <RequestPresentation
+        Root={Root}
+        result={{ ...result, redirect: { path: '/target' } }}
+        routeKey="/page"
+        pageMode="analytics"
+        beforeInitialPage={{ run: vi.fn() }}
+        buildPagePayload={builder}
+        buildRoutePayload={builder}
+      />
+    );
+    expect(Root.mock.calls[0]![0]).toMatchObject({
+      handoff: undefined,
+      buildPagePayload: undefined,
+      pageMode: undefined,
+      beforeInitialPage: undefined,
+    });
+    expect(builder).not.toHaveBeenCalled();
+  });
+
   it('suppresses browser initial page work for a matching server-owned result', () => {
     const Root = vi.fn((_props: BoundRootProps) => <></>);
     const buildPagePayload = vi.fn();

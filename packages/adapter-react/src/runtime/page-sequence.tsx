@@ -6,6 +6,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, type PropsWithChildren } from 'react';
 import type {
   ContentfulExperiences,
+  DestinationRedirectResult,
   CurrentPageOptions,
   ExperiencesHandoff,
   WebExperiencesRuntime,
@@ -67,15 +68,22 @@ export function PageSequence({
   const requestContext = useMemo(() => {
     let initialStarted = false;
     let pageIntent = false;
+    let abandoned = false;
     let pending:
       | {
           request: FetchExperienceOptions;
           resolve: FetchResolveOptions;
-          promise: Promise<PortableRenderPlan>;
+          promise: Promise<PortableRenderPlan | DestinationRedirectResult>;
         }
       | undefined;
     return {
       revision: {},
+      abandonPresentation() {
+        abandoned = true;
+      },
+      get abandoned() {
+        return abandoned;
+      },
       get pageIntent() {
         return pageIntent;
       },
@@ -85,7 +93,7 @@ export function PageSequence({
         request: FetchExperienceOptions,
         resolve: FetchResolveOptions,
         isRefresh: boolean
-      ): Promise<PortableRenderPlan> {
+      ): Promise<PortableRenderPlan | DestinationRedirectResult> {
         // One supported Experience per page. Only its pending initial intent joins;
         // Retry and application comparison requests have no cross-fetch contract.
         if (
@@ -215,11 +223,11 @@ export function PageSequence({
     const emitPage = () => {
       void owner.callback
         .then(() => {
-          if (!isCurrent()) return;
+          if (!isCurrent() || requestContext.abandoned) return;
           return sdk.trackCurrentPage({
             routeKey,
             buildPayload: latest.current.buildPagePayload ?? (() => ({})),
-            isCurrent,
+            isCurrent: () => isCurrent() && !requestContext.abandoned,
           });
         })
         .catch(() => undefined);

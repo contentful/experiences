@@ -3,16 +3,18 @@ import type {
   FetchExperienceOptions,
 } from '@contentful/experiences-node';
 
-export interface CacheKeyInput {
+type CacheSelector<T extends FetchExperienceOptions = FetchExperienceOptions> = T extends unknown
+  ? Readonly<Pick<T, 'experienceId' | 'destinationId' | 'path' | 'nodeId' | 'parameters'>>
+  : never;
+
+export type CacheKeyInput = {
   readonly spaceId: string;
   readonly environmentId: string;
-  readonly experienceId: string;
   readonly contentRevision: string | number;
   readonly locale: string;
-  readonly parameters?: FetchExperienceOptions['parameters'];
   /** Application-approved public dimensions; no raw identity or replay. */
   readonly selectionDimensions: Readonly<Record<string, string | number | boolean>>;
-}
+} & CacheSelector;
 
 const scalar = (value: unknown, path: string, allowBoolean = false): unknown => {
   if (
@@ -54,7 +56,10 @@ export function createCacheKey(input: CacheKeyInput): string {
     JSON.stringify([
       input.spaceId,
       input.environmentId,
-      input.experienceId,
+      input.experienceId ?? [
+        input.destinationId,
+        input.nodeId === undefined ? ['path', input.path] : ['node', input.nodeId],
+      ],
       scalar(input.contentRevision, 'contentRevision'),
       input.locale,
       parameters,

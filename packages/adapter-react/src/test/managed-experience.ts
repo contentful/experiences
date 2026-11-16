@@ -3,6 +3,7 @@ import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import {
   createWebSnapshotRuntime,
   type ContentfulExperiences,
+  type DestinationRedirectResult,
   type States,
   type Observable,
   type PreviewState,
@@ -82,7 +83,10 @@ export function sourceSdk() {
   }[] = [];
   const fetchExperience = vi
     .fn<
-      (request: FetchExperienceOptions, resolve: FetchResolveOptions) => Promise<PortableRenderPlan>
+      (
+        request: FetchExperienceOptions,
+        resolve: FetchResolveOptions
+      ) => Promise<PortableRenderPlan | DestinationRedirectResult>
     >()
     .mockResolvedValue(plan());
   const subscribeToPreview = vi.fn<ContentfulExperiences['subscribeToPreview']>(
