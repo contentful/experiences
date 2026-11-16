@@ -9,7 +9,7 @@ import {
   type EventProfile,
 } from '@contentful/experiences-runtime';
 import { staticObservable } from '../signals/Observable.js';
-import type { States } from '../states.js';
+import type { States } from '../state/states.js';
 import type { ExperiencesRuntime } from '../runtime.js';
 
 /**
@@ -53,6 +53,7 @@ class SnapshotRuntime implements ExperiencesRuntime {
 
     this.states = {
       flag: (name) => staticObservable(this.getFlag(name)),
+      preview: staticObservable(undefined),
       blockedEventStream: staticObservable(undefined),
       consent: staticObservable(snapshot.consent),
       persistenceConsent: staticObservable(snapshot.persistenceConsent ?? snapshot.consent),

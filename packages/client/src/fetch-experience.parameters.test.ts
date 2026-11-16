@@ -70,7 +70,7 @@ function request(fetch: ReturnType<typeof transport>, index = 0) {
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe('runtime parameter transport (real generated Delivery client)', () => {
+describe('fetchExperience transport (real generated Delivery client)', () => {
   it('encodes scalar and Record leaves on GET, keeping system locale separate', async () => {
     const fetch = transport();
     await fetchExperience(
@@ -98,6 +98,7 @@ describe('runtime parameter transport (real generated Delivery client)', () => {
       const values = reason === 'empty record' ? { featuredPosts: {} } : parameters;
       const extensions = reason === 'extensions' ? { sourceMap: {} } : undefined;
       const personalization = reason === 'personalization' ? { profileId: 'profile' } : undefined;
+      const original = globalThis.structuredClone(personalization);
       await fetchExperience(
         { ...identity, locale: 'en-US', parameters: values, extensions, personalization },
         { accessToken: 'delivery-token' },
@@ -108,30 +109,35 @@ describe('runtime parameter transport (real generated Delivery client)', () => {
       expect(Object.fromEntries(sent.url.searchParams)).toEqual({ locale: 'en-US' });
       expect(sent.body).toEqual({
         parameters: values,
-        extensions: { ...extensions, ...(personalization ? { personalization } : {}) },
+        extensions: {
+          ...extensions,
+          ...(personalization ? { personalization: { ...personalization, preflight: false } } : {}),
+        },
       });
+      expect(personalization).toEqual(original);
     }
   );
 
-  it.each([parameters, { featuredPosts: {} }])(
-    'sends parameters on preview with the preview token and host: %j',
-    async (values) => {
+  it.each([
+    { preflight: undefined, expected: false },
+    { preflight: true, expected: true },
+    { preflight: false, expected: false },
+  ])(
+    'sends profile-only preflight $preflight as $expected without mutating input',
+    async ({ preflight, expected }) => {
       const fetch = transport();
+      const personalization = { profileId: 'profile', preflight };
+      const original = { ...personalization };
       await fetchExperience(
-        { ...identity, parameters: values },
-        { accessToken: 'delivery-token', previewToken: 'preview-token', preview: true },
+        { ...identity, personalization },
+        { accessToken: 'delivery-token' },
         resolveOptions
       );
-      expect(request(fetch).url.origin).toBe('https://preview.xdn.contentful.com');
-      if ('productId' in values) {
-        expect(request(fetch).method).toBe('GET');
-        expect(request(fetch).url.searchParams.get('parameter.featuredPosts.order')).toBe(
-          '-fields.title'
-        );
-      } else {
-        expect(request(fetch).method).toBe('POST');
-        expect(request(fetch).body.parameters).toEqual(values);
-      }
+      expect(request(fetch).method).toBe('POST');
+      expect(request(fetch).body).toEqual({
+        extensions: { personalization: { profileId: 'profile', preflight: expected } },
+      });
+      expect(personalization).toEqual(original);
     }
   );
 

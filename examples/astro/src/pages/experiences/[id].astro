@@ -4,10 +4,8 @@ import { fetchExperience, NotFoundError } from '@contentful/experiences-react';
 import ExperienceNodes from '../../exo/ExperienceNodes.astro';
 import { experienceConfig } from '../../lib/experience-config';
 
-// By Experience id. Destinations do not support preview, so this is the route for it.
+// Fetch one published Experience by id.
 const experienceId = Astro.params.id!;
-// ?preview=true fetches draft content from the Content Preview API (needs CPA_TOKEN).
-const preview = Astro.url.searchParams.get('preview') === 'true';
 
 let plan;
 try {
@@ -17,7 +15,7 @@ try {
       environmentId: import.meta.env.ENVIRONMENT_ID ?? 'master',
       experienceId,
     },
-    { accessToken: import.meta.env.CDA_TOKEN, previewToken: import.meta.env.CPA_TOKEN, preview },
+    { accessToken: import.meta.env.CDA_TOKEN },
     { config: experienceConfig, metadata: { slug: experienceId } }
   );
 } catch (error) {
@@ -27,7 +25,6 @@ try {
   throw error;
 }
 
-if (preview) Astro.response.headers.set('cache-control', 'no-store');
 ---
 
 <!doctype html>

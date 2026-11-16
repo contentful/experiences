@@ -1,9 +1,17 @@
-import { defineConfig } from 'vitest/config';
+import { defineProject } from 'vitest/config';
 
-export default defineConfig({
+export default defineProject({
   test: {
+    name: 'node',
     globals: true,
     environment: 'node',
-    include: ['src/**/*.ssr.test.ts'],
+    provide: { webTestEnvironment: 'node' },
+    include: [
+      'src/runtime/snapshot-runtime.test.ts',
+      'src/preview/preview-session.test.ts',
+      'src/sdk/contentful-experiences.test.ts',
+      'src/browser/event-context.test.ts',
+      'src/preview/preview-session-binding.test.ts',
+    ],
   },
 });

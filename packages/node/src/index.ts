@@ -1,4 +1,3 @@
-export { createRequestHandoffFromData } from './handoff.js';
 export { ContentfulExperiences } from './contentful-experiences.js';
 export type {
   Config,
@@ -7,33 +6,40 @@ export type {
   PersonalizationRequestOptions,
   AnalyticsRequestOptions,
   RequestContext,
-  PrepareRequestHandoffOptions,
-  PrepareRequestHandoffResult,
 } from './contentful-experiences.js';
 export { EXPERIENCES_NODE_SDK_NAME, EXPERIENCES_NODE_SDK_VERSION } from './sdk-info.js';
+/** @internal */
+export { assertExperienceSelector } from '@contentful/experiences-client';
 
 export {
   ContentfulViewDelivery,
   DELIVERY_HOST,
-  DestinationPreviewNotSupportedError,
   ExperienceFetchError,
   NotFoundError,
+  isNotFoundError,
+  isPreviewSessionFetchError,
   PREVIEW_HOST,
 } from '@contentful/experiences-client';
 export type {
   DestinationRedirectResult,
+  DestinationSitemapResult,
+  FetchDestinationSitemapPaginationOptions,
+  SitemapPathItem,
   ExperienceRequestExtensions,
   ExperienceParameters,
   ExperienceParameterValue,
   ExperienceParameterRecord,
   ExperienceParameterOrder,
-  PersonalizationOptions,
 } from '@contentful/experiences-client';
 export {
   ANONYMOUS_ID_COOKIE,
+  assertExperiencesCacheSafety,
+  assertExperiencesHandoffScope,
   EventProfileRequiredError,
+  getPreviewSessionBinding,
   InterceptorManager,
   resolveFlagChange,
+  parseExperiencesHandoffEnvelope,
 } from '@contentful/experiences-runtime';
 export type {
   ChangeArray,
@@ -52,22 +58,35 @@ export type {
   EventOptimizationData,
   EventEmissionResult,
   EventProfile,
+  ExperiencesCacheMetadata,
   ExperiencesHandoff,
+  FetchExperienceForHandoffResult,
   ClickBuilderArgs,
   FlagViewBuilderArgs,
   HoverBuilderArgs,
   IdentifyBuilderArgs,
   PageViewBuilderArgs,
-  InitialPersonalizationEvent,
   OptimizationConfig,
   DeliveryClientOptions,
   FetchByDestinationNodeOptions,
   FetchByDestinationPathOptions,
+  FetchDestinationSitemapOptions,
   FetchExperienceOptions,
   FetchPersonalizationOptions,
+  FetchByIdExperienceOptions,
+  PersonalizationOptions,
   FetchResolveOptions,
   ResolveDefaults,
   ResolveOptions,
+  PreviewSessionBinding,
+  LivePreviewOwnerConfig,
+  PreviewConfig,
+  PreviewSessionOptions,
+  PreviewClient,
+  PreviewClientOptions,
+  PreviewClientFactory,
+  PreviewSessionIdentity,
+  PreviewStatus,
   TrackBuilderArgs,
   UniversalEventBuilderArgs,
   ViewBuilderArgs,

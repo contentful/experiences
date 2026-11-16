@@ -150,16 +150,44 @@ export interface ExperienceSourceMap {
   nodes: Record<string, unknown>;
 }
 
-/**
- * XDA response extensions consumed by the SDK. Kept as a structural subset of
- * `HydratedExperienceViewExtensions` so Core remains dependency-free.
- */
+/** Mirrors `HydratedExperienceView.Extensions.Personalization.Profile` from Delivery. */
+export interface ExperienceProfile {
+  id: string;
+  stableId: string;
+  random: number;
+  audiences: string[];
+  traits: Record<string, unknown>;
+  location: {
+    coordinates?: { latitude: number; longitude: number };
+    city?: string;
+    postalCode?: string;
+    region?: string;
+    regionCode?: string;
+    country?: string;
+    countryCode?: string;
+    continent?: string;
+    timezone?: string;
+  };
+  session: {
+    id?: string;
+    isReturningVisitor: boolean;
+    landingPage: {
+      path: string;
+      query: Record<string, string | string[]>;
+      referrer: string;
+      search: string;
+      url: string;
+    };
+    count: number;
+    activeSessionLength: number;
+    averageSessionLength: number;
+  };
+}
+
+/** XDA response extensions consumed by the dependency-free Core package. */
 export interface ExperienceExtensions {
   personalization?: {
-    /** Optional here so hand-authored and partial payloads remain accepted. */
-    profile?: {
-      id?: string;
-    };
+    profile?: ExperienceProfile;
     experiences?: unknown[];
     changes?: unknown[];
   };
@@ -309,6 +337,8 @@ export interface ExperienceDeliveryDiagnostic {
  * is no plan-level template concept — see `PortableRegistration`.
  */
 export interface PortableRenderPlan {
+  /** Actual Experience ID reported by the payload; absent when no nonempty ID was returned. */
+  experienceId?: string;
   nodes: PortableRenderNode[];
   /**
    * The `metadata` the resolve step ran with, so the renderer does not need it
@@ -324,8 +354,8 @@ export interface PortableRenderPlan {
   attribution?: PlanAttribution;
   /** Present only when XDA returned a nonempty profile id for this Experience. */
   personalization?: {
-    /** Profile id to use for subsequent personalized requests. */
-    profileId: string;
+    /** Full XDA evaluation snapshot; its identity may remain provisional until replay commits. */
+    profile: ExperienceProfile;
     /** XDA changes preserved as returned, including custom flags and their metadata. */
     changes?: unknown[];
   };

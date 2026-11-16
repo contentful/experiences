@@ -4,18 +4,127 @@ Use Optimization's corresponding reference implementation as the example. Keep
 SDK operations in the public runtime and justify every departure from that example.
 
 Standalone apps: [Node](./node-sdk/README.md), [Web](./web-sdk/README.md), and
-[Node + Web](./node-sdk+web-sdk/README.md). Root `npm run implementation:install`
-prepares all three through their existing Nx setup targets; stop running apps with
+[Node + Web](./node-sdk+web-sdk/README.md), plus the
+[React reference](./react-sdk/README.md) and
+[Next.js App/Pages reference](./nextjs-sdk/README.md). Root `npm run implementation:install`
+prepares all registered implementations through their existing Nx setup targets; stop running apps with
 their scoped lifecycle targets before refreshing dependencies.
 
-For server-side personalization, send the page event directly to establish the
-SDK-owned visitor profile. Build the identify event with the SDK event builder
-and include it in `request.fetchExperience()` personalization options so XDA can
-select content for the identified visitor. Fetch each Experience once per app
-request; do not send identify independently or add an initialization content fetch.
-These choices compensate for current XDA behavior. Follow the Node reference's
-[workaround removal criteria](./node-sdk/README.md#current-xda-limitations-and-workaround-removal)
-when XDA/client support changes instead of treating the flow as a permanent API requirement.
+References supply literal page/optional URL identify arguments in ordinary Node/Web
+`personalization.events`; the SDK builds admitted arguments once and also accepts
+raw built events. SSR uses ordinary Node fetch; CSR and browser-local navigation/
+actions use ordinary Web fetch. Only the actual hybrid server response uses Node
+`fetchExperienceForHandoff` with third argument `{ routeKey }`, returning a full
+handoff plus optional plan/error for optional explicit browser consumption.
+Normal fetch requires no handoff; no Web producer or Node aggregate commit remains.
+Usable server replay survives content failure and browser admission is independent
+of SSR display. Direct event APIs are callable, not prerequisites or compensation.
+
+XDA defaults to noncommitting `preflight: true`; ordinary SDK fetches explicitly
+default supplied personalization to `preflight: false`, committing admitted intent.
+An explicit per-call value wins over Node `forRequest({ preflight })`. Actual hybrid
+server transfers pin preflight to true, then the browser commits admitted replay.
+Hybrid server facades also set `preflight: true` for later ordinary XDA reads.
+Profile-only lookup of a provisional ID can still return upstream GET 404; add no
+synthetic events or workaround. Content Retry uses ordinary fetch of the same ID without events,
+builders, event hooks or replay; accepted incoming replay delivery retry is queue-owned.
+Reference-only later IDs use ordinary event-free fetch. See the
+[canonical Runtime contract](../packages/runtime/README.md#xda-preflight-and-profile-finalization).
+
+Browser handoff operations preserve live-profile/provider/handoff identity capture
+before hydration and ordinary provider-first policy under Optimization PR #549 at
+`f76f1ff04df1b466c98fc6ce5db6b569f9212438`. Browser continuity may supersede
+the XDA ID; exact replay does not guarantee the same target, response or selection.
+
+Web retains accepted replay identity across newer initialization within the owner
+lifetime. After A is admitted and B becomes current, a serialized A is refused for
+both page and nonpage batches, without reapplying state, republishing events,
+recommitting or starting page fallback. Calls joining current A share its owned work.
+New visitor/action intent must carry fresh message IDs. Reset/destroy clear owner
+admission history; event-consent withdrawal purges permitted queued work without
+forgetting accepted replay identity or restoring accepted/blocked intent on grant.
+This admission guard provides no durable or exactly-once transport guarantee.
+
+Automatic fetching, resolution and management of one primary Experience is the
+normal React/Next workflow. The Next reference demonstrates it at
+`/single-experience` and `/pages/single-experience`, alongside diagnostic routes.
+App/Pages server families expose `request.loadExperience`. Both client bindings
+expose ordinary Web components and a separate `request` family for full server
+results. App server `request.Experience` uses `ServerExperienceRenderer`; Pages
+uses native GSSP and client request presentation. Bind `config` and resolve options
+once, with flat browser options, `consent.clientDefaults` and `cookie` in a client
+module. Follow the [canonical setup](../packages/adapter-nextjs/README.md#automatic-single-experience-setup)
+and [request contract](../packages/adapter-nextjs/README.md#router-bindings).
+Browser roots inherit scope/locale, not private credentials; supply
+explicit browser Delivery credentials or a trusted proxy, even for analytics-only
+use under the existing Runtime requirement. Advanced preview/callback setup belongs
+in client modules. Next bindings accept deployment-gated `preview: { createClient, ...transport }`
+and own session inference, replacement and mode changes; do not add consumer
+preview-only wrappers/hooks/keys. Request results carry client-free preview configuration; roots derive sessions
+from existing route/descriptor data. Request history survives owned SDK replacement.
+The server and browser use matching deployment policy and separate credentials.
+Next request bindings select `request.mode: 'ssr'` for committed server-only work
+and `'hybrid'` (the default) for actual browser transfers. SSR results mark
+`initialPageOwner: 'server'` and carry private state hydration without replay;
+matching browser adoption does not compensate with a second initial page, including
+server consent drops or ambiguous errors. Ownership does not prove commitment. `request.pagePayload` becomes `result.initialPagePayload`; pass
+the complete result without overlays and retain the `requestId` history guard.
+`composeRequest` permits application-owned diagnostic composition on the same
+facade after every actual server primary fetch, including RSC and Pages data, before cleanup.
+Do not add multi-prefetch/result lists, identity reconciliation or new
+controllers/cache/barriers.
+
+Official support is one Experience fetch per page. The SDK does not enforce this
+limit in code. Reference implementations fetch multiple IDs only to compare
+rendering scenarios; their ordering, identity and result handling are application-owned
+diagnostic behavior, not a supported product pattern, and provide no multi-Experience
+or cross-fetch guarantee. Reuse plans
+for repeated presentations. Retry/refresh creates or submits no new visitor events
+and does not rerun event hooks. Standalone Identify and custom track are fresh
+nonpage inputs to ordinary fetch. Initial URL intent pairs identify with the initial
+page; navigation builds page intent without repeating initial identify. Page Two's
+CUSTOM TRACK action is nonpage, while navigation to Page Two still builds a page.
+
+Follow the [Runtime aggregate contract](../packages/runtime/README.md#shared-handoff-primitives).
+Do not add standalone Personalization API preparation, separate supplied-data producers or public
+state-only hydration. Hydration/storage/admission do not prove commit; preserve
+Personalization API retry ambiguity and existing browser transport limits.
+See [XDA preflight and profile finalization](../packages/runtime/README.md#xda-preflight-and-profile-finalization)
+and the [Node personalization contract](../packages/node/README.md#personalization).
+
+Managed React roots/loaders/page bindings adapt Optimization source/presentation
+ports to XDA-built events without requiring
+`beforeInitialPage` direct emission. Preserve Optimization's page consent-retry
+exception in that managed flow.
+Add focused maintained no-network unit/contract tests for optional-page replay,
+consent/preview/schema, content failure, Retry retention, full aggregate ownership
+and stale/reset/destroy guards, without MSW, E2E or server simulations.
+Throwaway verification code must not change
+reference use cases or create maintained consumers/apps.
+
+## Optional Preview Sessions
+
+Use deployment-gated Node/Web `preview` capability configuration. Node snapshots use the
+configured Preview transport; Web supplies the optional package’s `createLivePreviewClient` factory. Branch on `isPreview` before visitor work; destroy Node request facades
+in `finally`. Web uses `fetchExperience()` then `subscribeToPreview()` for updates
+and `states.preview` for status; hybrid retains SSR plans/DOM without a startup
+refetch or profile handoff. Release subscriptions on route
+replacement/final exit, retaining them for BFCache. Preview content must not write
+identity cookies. Keep `.env` intact and browser config explicitly allowlisted.
+Build and host both read app-local `LIVE_PREVIEW_ENABLED` from `.env`; preserve
+tarball setup and pack the existing optional preview artifact without rebuilding it.
+Every app retains `LIVE_PREVIEW_ENABLED` and `LIVE_PREVIEW_SESSION_ID` in local
+`.env`; leave both fields blank in `.env.example`. The session ID is an unread
+convenience value for copying into the URL, never a default or browser projection.
+Activate preview only when the flag is exactly `true` and the URL contains a
+nonempty trimmed `preview_session_id`. Missing/empty URL session or a falsy flag
+keeps ordinary event handling, even with a nonempty session parameter. Omit `preview`
+configuration entirely for disabled deployments. Web and Next infer
+the URL session; bare Node supplies it in request-local `preview`. SDK-owned
+`isPreview` derives from configured capability and a nonempty session, with no
+application mode override. Sidebar attempts remain subject to normal consent and
+identity requirements; they must not be suppressed by an inactive preview URL.
+See each app README and [Runtime limits](../packages/runtime/README.md#shared-limitations).
 
 All reference implementations use the same hard-coded default Experience IDs:
 
@@ -26,7 +135,8 @@ All reference implementations use the same hard-coded default Experience IDs:
 An implementation-local override is optional; configuring IDs must not be required
 to use the reference data. Keep implementations standalone rather than adding a
 shared runtime configuration dependency. Profile IDs are distinct: they must come
-from Experience API/XDA responses and remain SDK-managed, with no manual entry.
+from Personalization API/XDA responses and remain SDK-managed, with no manual entry.
+An XDA-returned ID alone does not establish a committed profile.
 
 ## Content typing
 

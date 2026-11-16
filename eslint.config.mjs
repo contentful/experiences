@@ -6,7 +6,7 @@ import prettierConfig from 'eslint-config-prettier';
 export default [
   js.configs.recommended,
   {
-    files: ['**/*.ts', '**/*.tsx'],
+    files: ['**/*.ts', '**/*.tsx', 'scripts/*.mts'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
@@ -52,6 +52,7 @@ export default [
         PointerEvent: 'readonly',
         MouseEvent: 'readonly',
         URL: 'readonly',
+        URLSearchParams: 'readonly',
         crypto: 'readonly',
         globalThis: 'readonly',
         setTimeout: 'readonly',

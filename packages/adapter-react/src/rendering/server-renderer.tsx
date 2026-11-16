@@ -1,0 +1,120 @@
+/*
+ * Server-safe Experience renderer. It renders the resolved plan directly.
+ */
+
+import type { ReactNode } from 'react';
+
+import type { ExperienceContext, PortableRenderPlan } from '@contentful/experiences-sdk-core';
+
+import { ExperienceBoundary, type ExperienceBoundaryOptions } from './experience-boundary.js';
+import type { ExperienceRootProps } from '../tracking/root-binding-types.js';
+
+import { ComponentError } from '../diagnostics/component-error.js';
+import { DebugExperience } from '../diagnostics/debug-experience.js';
+import { ExperienceProvider } from './context.js';
+import { MissingComponent } from '../diagnostics/missing-component.js';
+import { NodesRenderer, type RenderError, type RenderUnknown } from './nodes-renderer.js';
+import type { Config, RenderContext } from '../registry/types.js';
+
+const DEFAULT_CONTEXT: ExperienceContext = {
+  debug: false,
+  metadata: {},
+};
+
+export interface ServerExperienceRendererProps extends Omit<
+  ExperienceBoundaryOptions,
+  'rootProps'
+> {
+  /** DOM refs belong to the client rendering path. */
+  rootProps?: Omit<ExperienceRootProps, 'ref'>;
+  experience: PortableRenderPlan | null | undefined;
+  config: Config;
+  /** Shallow-merges over the plan's `metadata`. Only needed to override it. */
+  metadata?: Record<string, unknown>;
+  /**
+   * Observability switch. When on: renders the visible missing-component box,
+   * turns the default `renderUnknown` fallback into the debug component, and
+   * auto-mounts `<DebugExperience>` (the resolved-plan JSON panel) after the
+   * tree. Defaults to the plan's `debug`.
+   */
+  debug?: boolean;
+  /** Override the fallback rendered for unregistered component types. */
+  renderUnknown?: RenderUnknown;
+  /** Override the fallback rendered when a registered component throws. */
+  renderError?: RenderError;
+}
+
+export function ServerExperienceRenderer({
+  experience,
+  config,
+  metadata,
+  debug,
+  as,
+  rootProps,
+  clickable,
+  trackClicks,
+  trackHovers,
+  trackViews,
+  renderUnknown = MissingComponent,
+  renderError = ComponentError,
+}: ServerExperienceRendererProps): ReactNode {
+  if (!experience) return null;
+
+  // `??`, not `||`, so an explicit `debug={false}` overrides a debug-on plan.
+  const resolvedDebug = debug ?? experience.debug;
+  const renderContext: RenderContext = {
+    ...DEFAULT_CONTEXT,
+    debug: resolvedDebug,
+    metadata: { ...DEFAULT_CONTEXT.metadata, ...experience.metadata, ...(metadata ?? {}) },
+  };
+
+  // Render-time diagnostics (unregistered id, a component that threw),
+  // collected into a plain array rather than React state: SSR is synchronous
+  // top-down, so by the time `<DebugExperience>` renders — after the tree,
+  // see the element-order note below — this array is already fully populated.
+  // Seeded with the resolve-time diagnostics up front rather than spreading
+  // them in later: `<DebugExperience>` below reads this array by reference
+  // (`errors={renderDiagnostics}`), not a spread copy — a copy would be built
+  // right here, before React ever renders `tree` and gets a chance to push
+  // into it.
+  const renderDiagnostics: Error[] = [...(experience.diagnostics ?? [])];
+  // Dedup by message, the guard `NodeRenderer` used to hold in a `useRef`. It
+  // lives here so that module stays hook-free and therefore server-renderable.
+  // One pass on the server, so this mostly guards a node that reports the same
+  // message from several slots.
+  const seenDiagnostics = new Set(renderDiagnostics.map((error) => error.message));
+  const onDiagnostic = (error: Error): void => {
+    if (seenDiagnostics.has(error.message)) return;
+    seenDiagnostics.add(error.message);
+    renderDiagnostics.push(error);
+  };
+
+  const tree = (
+    <NodesRenderer
+      nodes={experience.nodes}
+      config={config}
+      renderUnknown={renderUnknown}
+      renderError={renderError}
+      onDiagnostic={onDiagnostic}
+      clickable={clickable}
+      trackClicks={trackClicks}
+      trackHovers={trackHovers}
+      trackViews={trackViews}
+    />
+  );
+
+  // The node tree renders BEFORE `<DebugExperience>` — required, not
+  // stylistic. React's render is synchronous top-down; if DebugExperience
+  // rendered first (as it used to), it would read `renderDiagnostics` before
+  // any descendant had a chance to push into it, and always see it empty.
+  return (
+    <ExperienceProvider value={renderContext}>
+      <ExperienceBoundary experience={experience} as={as} rootProps={rootProps}>
+        {tree}
+        {resolvedDebug ? (
+          <DebugExperience experience={experience} errors={renderDiagnostics} />
+        ) : null}
+      </ExperienceBoundary>
+    </ExperienceProvider>
+  );
+}

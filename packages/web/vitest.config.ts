@@ -1,16 +1,30 @@
 import { defineConfig } from 'vitest/config';
+import nodeProject from './vitest.ssr.config.js';
 
 export default defineConfig({
   test: {
-    globals: true,
-    environment: 'jsdom',
-    include: ['src/**/*.{test,spec}.ts'],
-    exclude: ['src/**/*.ssr.test.ts'],
+    projects: [
+      {
+        test: {
+          name: 'browser',
+          globals: true,
+          environment: 'jsdom',
+          provide: { webTestEnvironment: 'browser' },
+          include: ['src/**/*.{test,spec}.ts'],
+          exclude: [
+            'src/**/*.ssr.test.ts',
+            'src/runtime/snapshot-runtime.test.ts',
+            'src/preview/preview-session.test.ts',
+          ],
+        },
+      },
+      nodeProject,
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
       include: ['src/**/*.ts'],
-      exclude: ['**/*.test.ts', '**/*.spec.ts', '**/*.d.ts', 'src/test-fixtures/**'],
+      exclude: ['**/*.test.ts', '**/*.spec.ts', '**/*.d.ts', 'src/test/**', 'src/test-fixtures/**'],
     },
   },
 });

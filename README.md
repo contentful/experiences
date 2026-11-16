@@ -7,19 +7,21 @@ A renderer SDK for Contentful's **Experience Orchestration (ExO)**. You bring a 
 Install the adapter for your framework:
 
 ```sh
-npm install @contentful/experiences-react     # React / Next.js
+npm install @contentful/experiences-react     # React
+npm install @contentful/experiences-nextjs    # Next.js 15.5 / React 19
 npm install @contentful/experiences-svelte    # Svelte / SvelteKit
 npm install @contentful/experiences-angular   # Angular
 ```
 
-That's the only adapter package you install for rendering. The adapter re-exports everything you need: resolver, types, renderer, design utilities, the Runtime-owned `EventBuilder`, and the experience delivery client. For server-side fetch, resolve, and event work without a renderer, install `@contentful/experiences-node`; its constructor takes runtime delivery configuration and owns the Delivery, optional Preview, and Optimization clients, while `forRequest()` binds request-local locale, resolve options, and volatile event profile/context. For browser fetch, resolve, and event work without a renderer, install `@contentful/experiences-web`; its constructor follows the same runtime-owned client model and it owns browser locale/context state plus a profile persisted in LocalStorage. Direct browser tokens are credentials, but are intentionally browser-visible when appropriately scoped and CORS-controlled; otherwise use an explicit trusted proxy host. The `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, `@contentful/experiences-client`, and `@contentful/experiences-runtime` packages are workspace-internal implementation details. Apps that do not use a framework adapter can use `@contentful/experiences-live-preview` directly.
+That's the only adapter package you install for rendering. Adapters expose the resolver, types, renderer, design utilities, the Runtime-owned `EventBuilder`, and the experience delivery client. Next.js uses explicit subpaths such as `/server`, `/app-router/server`, `/app-router/client` and `/pages-router`; its root entry has no runtime exports. React hooks and client renderers come from `@contentful/experiences-react/client`, while the React root and `/server` provide server rendering and pure utilities. For server-side fetch, resolve, and event work without a renderer, install `@contentful/experiences-node`; its constructor takes runtime delivery configuration and owns the Delivery, optional Preview, and Optimization clients, while `forRequest()` binds request-local locale, resolve options, and volatile event profile/context. For browser fetch, resolve, and event work without a renderer, install `@contentful/experiences-web`; its constructor follows the same runtime-owned client model and it owns browser locale/context state plus a profile persisted in LocalStorage. Direct browser tokens are credentials, but are intentionally browser-visible when appropriately scoped and CORS-controlled; otherwise use an explicit trusted proxy host. The `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, `@contentful/experiences-client`, and `@contentful/experiences-runtime` packages are workspace-internal implementation details. Apps that do not use a framework adapter can use `@contentful/experiences-live-preview` directly.
 
-All three adapters share the same public-API shape: the same `Config`, the same `fetchExperience`, and the same styling model — design values are resolved on the server and auto-filled onto your components as ordinary props, which is the one recommended way to style them. The `useDesignValues`/`getDesignValues`/`injectDesignValues` accessor is an escape hatch for the cases props can't reach. The walkthrough below uses React. The [Svelte / SvelteKit](#svelte--sveltekit) and [Angular](#angular) sections show the same three steps in each, with the differences called out inline, and runnable example apps live in [`examples/`](#examples).
+The React, Svelte and Angular rendering adapters share the same public-API shape: the same `Config`, the same `fetchExperience`, and the same styling model — design values are resolved on the server and auto-filled onto your components as ordinary props, which is the one recommended way to style them. The `useDesignValues`/`getDesignValues`/`injectDesignValues` accessor is an escape hatch for the cases props can't reach. The walkthrough below uses React. The [Svelte / SvelteKit](#svelte--sveltekit) and [Angular](#angular) sections show the same three steps in each, with the differences called out inline, and runnable example apps live in [`examples/`](#examples).
 
 ## Contents
 
-- [Getting started](#getting-started-the-simple-path)
+- [Getting started](#getting-started)
 - [Destinations](#destinations)
+- [Next.js managed integration](#nextjs-managed-integration)
 - [Live preview](#live-preview)
 - [Event tracking](#event-tracking)
 - [Custom flags](#custom-flags)
@@ -126,7 +128,7 @@ One `fetchExperience` call fetches the payload from the Destinations Delivery AP
 
 It throws `NotFoundError` when no node claims the path. A Destination redirect node comes back as `{ redirect: { path } }`, which you follow instead of rendering. See [Error handling](#fetchexperienceexperienceoptions-clientoptions-resolveoptions) in the API reference for routing `NotFoundError` to your framework's 404.
 
-To fetch one Experience by id instead (for example, to preview a draft), pass `{ spaceId, environmentId, experienceId }`. See [Destinations](#destinations) for when to use which.
+To fetch one Experience by id instead (for example, when your app already knows its id), pass `{ spaceId, environmentId, experienceId }`. See [Destinations](#destinations) for when to use which.
 
 The signature is three grouped params: what to fetch (a Destination path or an Experience id), how to fetch (auth), and how to resolve (component config plus per-render `metadata` and a `debug` switch). Each group evolves on its own, so new options and transport settings fit their respective group without reshaping the signature.
 
@@ -134,7 +136,7 @@ The signature is three grouped params: what to fetch (a Destination path or an E
 
 `config` is the one thing both calls need. It holds your component references, and those cannot travel on the plan: the plan is plain serializable data so it can cross a server/client boundary (React Server Components, SvelteKit's `data`, Angular's `TransferState`), and functions do not survive that trip. So `config` stays a prop, deliberately.
 
-A working version is at [`examples/nextjs/lib/destination-page.tsx`](./examples/nextjs/lib/destination-page.tsx), used by the hub at [`app/page.tsx`](./examples/nextjs/app/page.tsx) and the [`app/[...path]/page.tsx`](./examples/nextjs/app/[...path]/page.tsx) catch-all, with the by-id route at [`examples/nextjs/app/experiences/[id]/page.tsx`](./examples/nextjs/app/experiences/[id]/page.tsx).
+For a complete managed Next.js application, start with [`examples/nextjs`](./examples/nextjs). Its App Router bindings own request fetching, rendering, browser state, and Preview Sessions for Destination and by-id selectors. The [Vite React example](./examples/vite-react/src/App.tsx) uses one `ExperiencesRoot` and the default managed `Experience` for both selectors. See the [Next adapter guide](./packages/adapter-nextjs/README.md) for the managed request composition.
 
 ## Destinations
 
@@ -149,9 +151,9 @@ A Destination maps URL paths to Experiences through its nodes, so your app route
 
 - **Redirects.** The destination forms return `PortableRenderPlan | DestinationRedirectResult`. A redirect node resolves to `{ redirect: { path } }`; navigate there instead of rendering.
 - **Personalization.** Both destination forms accept `personalization` (a profile id plus events), the same as by-id. It switches the request from a cacheable GET to a POST.
-- **Scope.** Destination delivery is space-scoped: no `environmentId`, `locale`, `parameters`, or `extensions` on the destination forms.
-- **Preview.** Not supported on Destinations yet. `preview: true` with a destination throws `DestinationPreviewNotSupportedError` (re-exported by every adapter). Use the by-id form, with a `previewToken`, for preview and live preview.
-- **Static generation.** Page through `fetchDestinationSitemap` to enumerate paths, then call `fetchExperience` for each `path`. The sitemap is a free function; the Node and Web runtimes have no sitemap method.
+- **Scope.** Destination delivery is space-scoped: master-only delivery, with no `environmentId`, `parameters`, or `extensions` on the destination forms. Both forms accept `locale` for content resolution.
+- **Preview Sessions.** Free fetches use ordinary Delivery. A Node/Web runtime with configured session capability first acquires the Destination payload through Delivery, then uses session content only when its actual Experience ID matches and the configured environment is `master`. Redirects remain terminal. See [Live preview](#live-preview) and [Runtime destination limits](./packages/runtime/README.md#destination-selection).
+- **Static generation.** Page through `fetchDestinationSitemap` to enumerate paths, then call `fetchExperience` for each `path`. Node and Web instances also expose `sdk.fetchDestinationSitemap({ destinationId }, pagination)`, using their configured space and Delivery client.
 
 ```ts
 const paths: string[] = [];
@@ -169,40 +171,127 @@ do {
 
 `DESTINATION_ID` is generated by Contentful when the Destination is created. The examples read it from the environment.
 
+Node request facades and Web instances accept the same three selectors through
+`fetchExperience`; their configured space supplies `spaceId`. Existing
+`fetchByDestinationPath` and `fetchByDestinationNode` helpers remain available.
+Runtime calls accept builder arguments or built events in `personalization`,
+with the same consent and lifecycle handling as by-ID fetches:
+
+```ts
+const result = await request.fetchExperience(
+  { destinationId, path: '/demo/landing', locale: 'de-DE' },
+  { config: experienceConfig }
+);
+if ('redirect' in result) redirect(result.redirect.path);
+// Otherwise result is the resolved PortableRenderPlan.
+```
+
+Managed React accepts either `destinationId` with `path`, `destinationId` with
+`nodeId`, or `experienceId`. Pass the path without a query string; use the root's
+`routeKey` for browser route identity. Configure `onRedirect` on `createExperiences`
+or the managed component to navigate when `result.redirect` is present. See the
+[managed Vite example](./examples/vite-react/src/App.tsx).
+
 ---
+
+## Next.js managed integration
+
+For a normal Next.js page, bind one primary Experience and let the Next adapter
+fetch, resolve and manage its presentation. App Router and Pages Router server
+families provide `request.loadExperience`. Both client bindings expose ordinary
+Web components and a separate `request` family for complete server results.
+App server `request.Experience` renders on Node; Pages uses native GSSP and client
+request presentation. Client-bound components can adopt results or own Web loading.
+
+The primary request selector can use a Destination path or node instead of an
+Experience id. In the existing server binding configuration:
+
+```ts
+request: {
+  experience: ({ requestUrl }) => ({
+    destinationId: process.env.DESTINATION_ID!,
+    path: new URL(requestUrl).pathname,
+  }),
+},
+```
+
+App Router's request convenience components follow destination redirects through
+Next's native `redirect()`. Raw `request.loadExperience()` callers inspect the
+complete result's `redirect` before rendering or adopting it. In Pages Router,
+map it to `{ redirect: { destination: result.redirect.path, permanent: false } }`
+in `getServerSideProps`. Redirects contain no plan to render.
+
+Start with the [one-Experience App/Pages setup](./packages/adapter-nextjs/README.md#automatic-single-experience-setup).
+Server configuration owns private credentials and resolution. Built-in browser
+roots inherit scope and locale; configure browser Delivery explicitly using a
+browser-designated credential or a trusted authenticated proxy. Delivery
+configuration remains required by the existing Runtime even for analytics-only
+browser use. Advanced callbacks and preview configuration stays in a client module.
+Diagnostic multiple-fetch ordering, identity and result handling are application-owned;
+the SDK provides no multi-Experience orchestration or reconciliation.
 
 ## Live preview
 
-The adapters can subscribe to a Contentful Preview Session and keep the rendered plan in sync with edits. Pass the Preview Session options, initial data, and resolver config to the combined hook:
+React managed content uses the same `Experience` component for ordinary and
+Preview Session content. Configure Web's optional preview configuration and browser-safe
+Preview credentials on the root in a client module:
 
 ```tsx
-import { useLivePreview } from '@contentful/experiences-react';
+'use client';
 
-const livePreview = useLivePreview({
-  previewSessionOptions: {
-    spaceId,
-    environmentId,
-    previewToken,
-    sessionId,
-  },
-  initialPayload,
-  initialPlan,
-  resolveOptions: { config: experienceConfig },
-});
+import { createExperiences, usePreviewState } from '@contentful/experiences-react/client';
+import { createLivePreviewClient } from '@contentful/experiences-live-preview';
 
-<ClientExperienceRenderer experience={livePreview.data} config={experienceConfig} />;
+const { ExperiencesRoot, Experience } = createExperiences({ config: browserRegistry });
+
+function PreviewStatus() {
+  const preview = usePreviewState();
+  return preview?.error ? <p>{preview.error.message}</p> : null;
+}
+
+export function ExperiencePage({ experienceId }: { experienceId: string }) {
+  return (
+    <ExperiencesRoot
+      {...browserConfig}
+      preview={{
+        accessToken: browserPreviewToken,
+        createClient: createLivePreviewClient,
+      }}
+    >
+      <PreviewStatus />
+      <Experience experienceId={experienceId} />
+    </ExperiencesRoot>
+  );
+}
 ```
 
-`livePreview.data` is the current `PortableRenderPlan`. The hook keeps the initial or last valid plan while a Preview Session update is received and resolved. `livePreview.error` contains an error when the live-preview connection fails, while the last valid data remains available. Svelte exposes the same `useLivePreview` API through a getter. Angular exposes `injectLivePreview`, also through a getter.
+Here `browserConfig` contains explicit browser Delivery configuration and
+`browserPreviewToken` is a browser-designated Preview credential. Install the
+optional `@contentful/experiences-live-preview` package for the factory import.
+Configure capability once: a nonempty, trimmed `preview_session_id` in the URL
+activates preview. Without configuration or an ID, the owner uses ordinary Delivery.
+Omit `createClient` for snapshot-only preview.
+The SDK owns the shared connection, snapshot fetch and update resolution; the
+managed result retains the initial or last usable plan alongside errors. An
+`initialPlan` can preserve server content without a startup snapshot fetch. Next
+uses the same owners through its [router bindings](./packages/adapter-nextjs/README.md#router-bindings);
+server-only preview updates render through a server round-trip.
 
-Use `useLivePreviewExperience` and `useExperiencePlan` separately when the app needs the raw Experience payload. For framework-neutral code, use `createLivePreviewClient` from `@contentful/experiences-live-preview`.
+For application-supplied payloads use `useExperiencePlan` from
+`@contentful/experiences-react/client`; it resolves data but owns no connection.
+For framework-neutral code, import `createLivePreviewClient` directly from
+`@contentful/experiences-live-preview`. Svelte retains its `useLivePreview` getter
+and Angular its `injectLivePreview` getter; see their adapter references.
 
-A connection starts only when both `previewToken` and `sessionId` are available.
-
-Both runtimes accept an explicit `isPreview` boolean. Web detects a nonempty URL
-`preview_session_id` when the option is omitted; Node integrations pass
-`isPreview: true` to `forRequest()` for preview requests.
-Calls return `{ accepted: false, reason: 'preview' }`, while rendering and Session updates continue.
+Browser owners use the current URL; managed server routers use the incoming
+request URL. Bare Node integrations pass the ID through
+`forRequest({ preview: { sessionId } })`. Runtime `preview` configuration has no
+session-ID override, and there is no `isPreview` configuration flag or iframe
+detection. The read-only `isPreview` state reflects the selected session mode.
+Managed owners replace their SDK on session transitions without a consumer key
+or preview wrapper. Socket or factory failure keeps preview isolation and the
+last usable content. Event calls return `{ accepted: false, reason: 'preview' }`,
+while rendering and Session updates continue.
 See the [Web](./packages/web/README.md#session-preview) and [Node](./packages/node/README.md#session-preview) contracts.
 
 ---
@@ -234,7 +323,8 @@ snapshot, event publication, and lifecycle semantics. Node's profile remains req
 
 Ordinary online Personalization calls send directly. Web accepts ordinary
 offline calls into an in-memory queue; a new offline call is refused when the
-queue is full rather than evicting accepted work. Analytics remains direct.
+queue is full before event publication, without evicting accepted work. Analytics
+uses its separate in-memory queue.
 `destroy()` makes one best-effort attempt to drain queued batches in order, but
 queued work is not durable and does not provide exactly-once delivery. Event and persistence consent are
 gated by the SDK: `consent()` on Web and `consent` per request on Node. Until event
@@ -242,7 +332,7 @@ consent is granted only `allowedEventTypes` are sent, and the application decide
 when to grant consent. Web's
 automatic interaction tracking sends views, hovers, and clicks through its direct
 Analytics methods (see the [Web SDK README](./packages/web/README.md#interaction-tracking));
-Session preview gates automatic and manual tracking. CPA fetching alone does not select that policy.
+Session preview gates automatic and manual tracking independently of socket status.
 
 An ordinary event call does not wait for every queued handoff. If a later call
 needs a profile produced by `identify`, `page`, or `track`, await the earlier
@@ -261,150 +351,113 @@ prepared events run sequentially. Retries and browser prepared replay reuse the
 evaluated events without rerunning hooks. See the [Node interceptor reference](./packages/node/README.md#event-interceptors)
 and [Web interceptor reference](./packages/web/README.md#interceptors).
 
-### Committed server rendering and state-only hydration
+### XDA rendering and browser submission
 
-For server-rendered personalized content, use the supported committed-server
-sequence below. It is separate from Personalization preparation/replay and does
-not provide noncommitting XDA content selection.
+Ordinary SSR uses Node `request.fetchExperience`; CSR and browser-local
+navigation/actions use Web `fetchExperience`. Both accept existing type-tagged
+builder arguments or raw built XDA events, and the SDK builds admitted arguments
+once. Normal fetch requires no handoff or direct identify/page prerequisite.
 
-1. Bind a Node request to explicit consent, permitted identity, locale, and event
-   context. Await one direct `request.page()` and require both its accepted result
-   and an API-issued `request.profile` before identity-dependent content fetching.
-2. If identification is requested, build one identify event for the cycle and
-   include it in each distinct sequential XDA fetch. Do not also send it directly
-   or attach the already-sent page to those fetches. Fetch each distinct Experience
-   once and reuse its plan for repeated presentations. Profile-only XDA selection
-   currently does not reliably apply audience membership.
-3. After the final fetch, produce a state-only handoff from the final
-   `request.profile`, render the plans with attribution, and safely serialize the
-   minimal public configuration and handoff into a private, no-store response.
-4. Construct Web with profile/consent defaults omitted. Automatic tracking starts
-   on the existing attributed HTML; register manual elements immediately.
-   Subscribe and adopt the final server profile through state-only hydration
-   independently. Initial activation sends no page and refetches no content.
+Ordinary SDK and free fetches default supplied `personalization.preflight` to
+`false`, requesting commitment of events and profile changes through XDA.
+An explicit `true` requests evaluation without commitment; XDA itself defaults an
+omitted value to `true`. This applies to by-ID and both destination fetch forms.
+Node's `forRequest({ preflight })` sets an XDA-only request default, overridden by
+the per-call boolean. Direct event APIs remain unchanged. Do not infer commitment
+from a selected plan or returned profile ID; live-service verification remains
+required before release.
+
+Next's server binding selects `request.mode: 'ssr'` for server-owned commitment
+or `'hybrid'` (default) for server preflight and browser replay. SSR results
+preserve private state hydration and suppress duplicate browser initial pages;
+see the [Next request policy](./packages/adapter-nextjs/README.md#router-bindings).
+
+Only an actual server-to-browser transfer uses the Node producer:
 
 ```ts
-import { createRequestHandoffFromData } from '@contentful/experiences-node';
-
-// Inside a request handler; experiences is the process-long Node SDK.
 const request = experiences.forRequest({
   profile: permittedProfile,
   consent: visitorConsent,
   locale: requestLocale,
   eventContext: { page: pageProperties, userAgent },
 });
-const pageResult = await request.page({ properties: pageProperties });
-if (!pageResult.accepted || !request.profile) {
-  throw new Error('Page initialization did not establish a profile');
-}
-const identify = userId
-  ? request.eventBuilder.buildIdentify({
-      userId,
-      traits: { identified: true },
-    })
-  : undefined;
-const plans = [];
-for (const experienceId of distinctExperienceIds) {
-  plans.push(
-    await request.fetchExperience(
-      { experienceId, personalization: { events: identify ? [identify] : [] } },
-      { config: experienceConfig }
-    )
-  );
-}
-const handoff = createRequestHandoffFromData({
-  spaceId,
-  environmentId,
-  data: { profile: request.profile },
-});
+const events = [
+  ...(userId ? [{ type: 'identify' as const, userId }] : []),
+  { type: 'page' as const, properties: pageProperties },
+];
+const { handoff, plan, error } = await request.fetchExperienceForHandoff(
+  { experienceId, personalization: { events } },
+  { config: experienceConfig },
+  { routeKey }
+);
+// Render available plan; safely serialize full handoff in private/no-store HTML.
+// Browser optionally consumes the explicitly supplied handoff independently of display.
 ```
+
+The producer fixes `personalization.preflight: true` and rejects an explicit
+`false`; browser replay fixes `preflight: false`. The third argument is
+`{ readonly routeKey: string }` only. Content failure
+retains usable finalized replay. Hybrid browser replay commits the server-supplied
+batch; Web/React consumption is optional and mode agnostic. Browser-local
+navigation uses ordinary Web fetch absent a new server handoff.
+
+Content Retry refetches the same Experience ID using ordinary fetch without
+events, builders, event hooks, publication, admission or replay. Incoming accepted
+replay delivery retry belongs to the existing queue.
+
+Official support is one Experience per page, unenforced in code. Reference multi-ID
+loops compare rendering scenarios only; later IDs use ordinary event-free fetch,
+with no SDK multi-Experience or cross-fetch guarantee. Reuse plans for repeated
+presentations. Page Two's CUSTOM TRACK action supplies nonpage intent; navigation
+to Page Two still supplies page intent.
+
+See [Runtime's canonical XDA contract](./packages/runtime/README.md#xda-preflight-and-profile-finalization)
+for ownership, consent, queue/lifetime and replay limits.
+
+Built XDA events retain consent context. Web's default browser page provider
+includes `title`, `hash`, `width` and `height`; custom providers/arguments, raw
+caller-built XDA events and Node/Client metadata remain caller-owned. See [Node handoff](./packages/node/README.md#actual-server-to-browser-transfer)
+and [Web content evaluation](./packages/web/README.md#ordinary-content-evaluation-and-optional-incoming-handoff).
+React controllers/root use this XDA flow, preserving
+Optimization's page consent-retry exception without mandatory direct
+`beforeInitialPage` emission. Current supplied-plan rendering remains supported.
 
 Node's `request.eventBuilder` applies request page URL/path/query/referrer, user
-agent, and locale before building Personalization events. Explicit event inputs
-override request context. The shared `experiences.eventBuilder` remains unbound;
-fetching does not merge request context into already-built `personalization.events`.
-Use the request builder rather than shared interceptor closures for visitor data.
-Building sends nothing and invokes no hooks. Each identify-bearing fetch is a
-separate event submission; this flow adds no duplicate-delivery guarantee.
-
-The public Node producer accepts optional profile/changes data and optional
-`cache: { scope: 'private-request' }` (the default). It validates the explicit
-space/environment scope and profile, accepts an ID-only profile, and packages no
-replay or top-level continuation ID. Missing both fields omits `state`; an absent
-profile preserves the browser profile on hydration. Changes use API `ChangeArray` validation. It performs no events or network work.
-The internal Runtime helper of the same name takes `{ handoff, data? }` and
-retains its separate replay-preserving behavior.
-
-```ts
-// In client-side lifecycle code, after safely reading the serialized handoff:
-const web = new WebContentfulExperiences({
-  spaceId,
-  environmentId,
-  delivery: publicDelivery,
-});
-// Defaults enable automatic views, hovers, and clicks on the existing HTML.
-// Register manual elements now, using actual plan attribution in options.data.
-const subscription = web.states.profile.subscribe(renderProfile);
-await web.hydrateHandoffState(handoff, {
-  routeKey: window.location.pathname + window.location.search,
-});
-// During application cleanup: subscription.unsubscribe(); web.destroy();
-```
-
-Here `WebContentfulExperiences` is the `ContentfulExperiences` export from
-`@contentful/experiences-web`. Discovery starts at construction and observes
-existing HTML and later DOM changes without a hydration prerequisite. Automatic
-tracking, attribute opt-ins, and manual registration remain subject to consent.
-Analytics needs a current profile identity when emitting an event; the constructor
-can adopt persisted profile or cookie identity, and the server handoff is another
-source. State-only hydration does not mark the route tracked; ordinary `page()`
-remains direct.
-Use the same direct page/profile step on later navigation or reset before fetching
-content. An identify action joins pending initialization and explicitly refetches
-without an unrelated page; a separate custom action uses `track()`.
+agent, and locale and stamps request-local event-consent metadata on built
+Personalization events. Explicit event inputs override request context. The shared
+`experiences.eventBuilder` remains unbound;
+fetching preserves page/user-agent/locale values in already-built
+`personalization.events`, while stamping the receiving owner's event consent.
+Fetch accepts existing type-tagged builder arguments or raw built XDA events.
+The owner builds only admitted arguments once; direct builder use remains advanced.
+Keep visitor context on the request facade rather than shared interceptor closures.
+In this recipe, visitor-event transport failure leaves content loading available
+with the current profile; the host can report that event outcome independently.
+Building sends nothing and invokes no hooks. Low-level `personalization.events`
+remains supported for actual event-bearing XDA calls and prepared composition.
+Client preserves the supported event shape, including `context.gdpr` and
+`context.page.title`, without stripping raw caller-built events. Node/Web copy owner consent into admitted inputs'
+`context.gdpr.isConsentGiven`, overwriting any caller-supplied flag, before running
+interceptors. Hooks may explicitly transform valid metadata; final validation and current-consent
+admission still apply, with caller input unchanged. Reusing an event in another
+ordinary fetch requests another commit unless `preflight: true` is explicit;
+use fresh event IDs for fresh intent. See
+[XDA preflight and profile finalization](./packages/runtime/README.md#xda-preflight-and-profile-finalization).
+Actual Personalization API commits and retries retain their delivery ambiguity.
 
 On reset, invalidate stale application render work and remove or replace old
 attributed content synchronously in the same transition, before awaiting the new
-page/fetch cycle. SDK reset clears measurements and manual overrides, then resumes
-eligible discovery immediately. Register replacement manual elements after
+visitor or content work. SDK reset clears measurements and manual overrides, then
+resumes eligible discovery immediately. Register replacement manual elements after
 insertion; during ordinary navigation, let removed occurrences finalize before
 clearing their manual registrations. Dispose subscriptions in application cleanup.
 Safe serialization and preflight limitations are described below.
 
 ### Paired server-to-browser replay
 
-A Node request facade can prepare one ordered `identify`/`track` prefix plus a
-final `page` with `prepareRequestHandoff()`. It builds the events once and sends
-one Personalization API request with `preflight: true`, which evaluates the
-batch without committing it on Node. The result contains the exact evaluated replay and,
-on success, preview data. Hook/schema failures or an invalid/blocked final page
-produce an event-free handoff; blocked optional prefix events are omitted.
-A preview transport failure retains the evaluated replay so the
-application can choose a fallback. Ordinary Node event methods remain direct
-and are not staged into this batch.
-
-```ts
-import { ContentfulExperiences as NodeContentfulExperiences } from '@contentful/experiences-node';
-
-// Construct once for this server runtime; supply the token for your environment.
-const experiences = new NodeContentfulExperiences({
-  spaceId: 'your-space-id',
-  environmentId: 'master',
-  delivery: { accessToken: process.env.CONTENTFUL_DELIVERY_TOKEN! },
-});
-
-// In a request handler, bind request-local state and prepare one route:
-const request = experiences.forRequest({
-  locale: 'en-US',
-});
-const routeKey = '/products?category=chairs';
-const { handoff, data } = await request.prepareRequestHandoff({
-  routeKey,
-  initialEvents: [{ type: 'track', event: 'experience_rendered' }],
-  page: { properties: { title: 'Chairs' } },
-});
-// Serialize the handoff into this visitor's private, no-store response.
-```
+For an actual hybrid transfer, evaluate events through the Node XDA producer
+shown above. Optionally consume the returned full aggregate through the browser owner.
+XDA supplies the content evaluation, while Personalization API commits the finalized events.
 
 The application supplies a route key made from the visible pathname and search
 string. It must begin with `/`. A handoff with profile, changes, continuation identity,
@@ -415,16 +468,19 @@ rendered Experience. The handoff parser checks these metadata rules but does
 not set HTTP cache headers or certify the rest of a response.
 
 On the browser, call `hydrateAndTrackCurrentPage()` on an existing Web instance.
-Construction does not replay events. A matching replay is validated and
-admitted as one batch; the promise settles on **admission**, before HTTP
-completes. Repeated calls for the current handoff and route join that work.
-A different handoff or a later visit can track again. A route mismatch skips
-its evaluated state and replay, then follows ordinary current-page tracking.
-A rejected prepared batch (including invalid events or insufficient capacity)
-quietly falls back to one ordinary `trackCurrentPage()` attempt using the supplied
-`buildPayload`, or the default page payload. The operation returns that attempt's
-result and respects route deduplication, capacity, and lifecycle guards. An
-accepted replay never falls back because of a later HTTP failure.
+See the [Runtime aggregate contract](./packages/runtime/README.md#shared-handoff-primitives) for optional-page replay and complete-operation rules.
+Web retains accepted replay identity across newer initialization within the owner
+lifetime. After A is admitted and B becomes current, a serialized A is refused for
+both page and nonpage batches, without reapplying state, republishing events,
+recommitting or starting page fallback. Calls joining current A share its owned work.
+New visitor/action intent must carry fresh message IDs. Reset/destroy clear owner
+admission history; event-consent withdrawal purges permitted queued work without
+forgetting accepted replay identity or restoring accepted/blocked intent on grant.
+This admission guard provides no durable or exactly-once transport guarantee.
+Later page-bearing intent with fresh message IDs uses the existing accepted-route
+tracker. A route mismatch skips evaluated
+state and replay. It must not invent page intent; only an explicitly supplied
+`buildPayload` permits ordinary current-page tracking in that case.
 
 ```ts
 // Browser runtime, after reading the handoff from that response:
@@ -446,27 +502,33 @@ async function applyHandoff(handoff: ExperiencesHandoff) {
 }
 ```
 
-Event-only handoff preparation and hydration need no component registry. When
+Internal aggregate state application and replay need no component registry. When
 the same SDK fetches or resolves an Experience plan, pass that Experience's
 registration config in the call's resolve options, for example
 `web.fetchExperience({ experienceId }, { config: experienceConfig })`. Separate
 calls may use different configs on the same SDK instance.
 
-`hydrateHandoffState(handoff, { routeKey })` can seed state before tracking and
-joins a later paired call for the same current initialization.
+Necessary state application stays internal to `hydrateAndTrackCurrentPage`; it
+shares the same complete aggregate operation and owner.
 `trackCurrentPage({ routeKey, buildPayload })` handles ordinary navigation;
 its callback receives `isInitialEmission`. Manual `page()` remains direct and
-is not deduplicated. At the beginning of a still-current initialization, the
-active browser profile or an already adopted continuation takes precedence over
-the incoming handoff ID. Selection and publication happen atomically. An
-initialization superseded before it begins adopts nothing; once published, its
-continuation is retained across navigation. Supersession still cancels pending
-hydration/replay and does not withdraw accepted queued work. Reset/destroy and
-legitimate profile updates retain their existing behavior. Before the
-Personalization response finishes, the adopted ID can attribute events without
-being stored as a synthetic profile. Concurrent `fetchExperience()` calls join
-identity initialization without waiting for replay HTTP; evaluated profile-state
-hydration remains distinct from the captured replay target.
+is not deduplicated. At the beginning of a still-current initialization, identity
+selection and publication happen atomically. Capture the handoff operation's
+target before hydration: current live profile, then configured anonymous provider,
+then `handoff.profileId`, following the active Optimization baseline. Ordinary
+requests retain provider-first policy. The returned XDA ID is continuation fallback;
+browser continuity can supersede it. Exact replay preserves finalized event bodies
+except current consent restamping, without guaranteeing the same commit profile,
+response or selection under a different live identity. An initialization
+superseded before it begins adopts nothing; navigation does not roll back published continuation.
+Supersession cancels pending hydration/replay without withdrawing accepted queue
+work. Reset/destroy and legitimate profile updates retain their normal behavior.
+Concurrent content fetching joins identity initialization without waiting for replay
+HTTP. Local adoption does not finalize a provisional ID; profile-only lookups can
+still fail before commit. Admission,
+`identityReady`, hydration, `flush()` resolution and SDK success do not prove commit.
+Evaluated state hydration remains separate from the captured replay target. See
+[XDA preflight and profile finalization](./packages/runtime/README.md#xda-preflight-and-profile-finalization).
 
 Handoffs containing event bodies are browser-visible private data. Escape JSON
 for the HTML context used by your framework, send it only in a private,
@@ -483,15 +545,17 @@ with their original event IDs, target identity, and locale. A request may have
 committed before a failure becomes visible, so retries do not guarantee
 exactly-once delivery. Web queues Analytics calls separately in memory; there is no mixed
 Personalization/Analytics replay journal or global ordinary-event barrier.
-No adapter or example currently wires this flow, and Live Preview remains
-independent.
-
-The generated dev.13 XDA client accepts `personalization.preflight`, which Client
-validates and forwards. Generated request support alone does not establish backend
-commit behavior. A separate Personalization preflight does **not** make an XDA
-fetch render content with those uncommitted mutations. Independently using both
-operations for the same events can duplicate them. This SDK adds no interim
-suppression or combined XDA content-and-handoff operation.
+The hybrid reference packages its built events through the Node data producer and
+consumes replay through this browser API. Live Preview remains independent;
+new XDA IDs remain provisional until backend finalization is verified.
+Ordinary supplied personalization defaults to `preflight: false`; hybrid server
+preparation uses `true` and browser replay uses `false`. A preview-generated ID
+can be reused by a Personalization API POST carrying events through XDA or a
+direct call; profile-only XDA uses Personalization API GET and can fail before
+commitment. Deployed behavior still requires verification. Independent profile-only
+reads with an already-concrete profile remain viable. Neither handoff recipe promises exactly-once delivery for
+actual Personalization API commits. See
+[XDA preflight and profile finalization](./packages/runtime/README.md#xda-preflight-and-profile-finalization).
 
 ---
 
@@ -500,13 +564,19 @@ suppression or combined XDA content-and-handoff operation.
 Read Personalization custom flags in the browser with `sdk.getFlag(name)` or
 observe `sdk.states.flag(name)`. Reads return JSON values, including `false`, `0`,
 `''`, and `null`; a missing flag returns `undefined`. Browser reads automatically
-attempt a flag-view event when consent permits it, preview is off, and a profile
-is available; otherwise they quietly return the value. See the [Web flag reference](./packages/web/README.md#custom-flags)
-for state, persistence, subscriptions, and exposure deduplication.
+attempt a flag-view event when preview is off and a profile is available.
+Consent refusals report blocked events; preview suppresses exposure quietly.
+See the [Web flag reference](./packages/web/README.md#custom-flags) for state,
+persistence, subscriptions, and exposure deduplication.
 
-XDA changes remain scoped to the fetched plan; fetching does not adopt them into browser
-flag state because their completeness has not been verified. Read
-them explicitly, or use the pure helper re-exported by every framework adapter:
+Web automatically adopts XDA changes from ordinary by-ID and destination fetches
+through the same state-interceptor path as direct Personalization responses.
+Preview Session changes remain isolated in the preview instance.
+Supplied changes replace the browser snapshot: `[]` clears flags; omitted changes
+retain them unless profile identity changes. Treating XDA changes as a complete
+snapshot follows Personalization API/Optimization behavior and remains an assumption pending
+live-backend verification. To read a particular plan explicitly, use the pure
+helper re-exported by every framework adapter:
 
 ```ts
 import { resolveFlagChange } from '@contentful/experiences-react';
@@ -572,7 +642,7 @@ Prefer props everywhere else. A registered component styling itself through the 
 
 ```tsx
 'use client';
-import { toCss, useDesignValues } from '@contentful/experiences-react';
+import { toCss, useDesignValues } from '@contentful/experiences-react/client';
 
 // Not registered with the SDK, so it gets no auto-filled props of its own.
 function Badge({ label }: { label: string }) {
@@ -619,7 +689,7 @@ Returning `undefined` means "not resolvable": the SDK retains the raw token in t
 
 When the simple path isn't enough, a few optional features cover most production needs. Per-page `metadata` flows into resolvers. `debug` mode surfaces what the SDK saw (visible missing-component boxes, verbose logs, a JSON dump panel). Async `resolveData` enriches props from external sources. Use any combination of them.
 
-A full working route is at [`examples/nextjs/app/experiences/[id]/page.tsx`](./examples/nextjs/app/experiences/[id]/page.tsx). Visit `/experiences/<id>?debug=true&locale=en-US` after running the example. (Destination routes accept `?debug=true` too; they have no `locale` or `preview`.)
+A managed route with these options is at [`examples/nextjs/app/experiences/[id]/page.tsx`](./examples/nextjs/app/experiences/[id]/page.tsx). Visit `/experiences/<id>?debug=true&locale=en-US` after running the example. (Destination routes accept `?debug=true` and `?locale=en-US` too.)
 
 ```tsx
 // app/experiences/[id]/page.tsx
@@ -636,20 +706,16 @@ export default async function ExperiencePage({
 }) {
   const { id: experienceId } = await params;
   const sp = await searchParams;
-  const previewMode = sp.preview === 'true';
   const debug = sp.debug === 'true';
   const locale = (sp.locale as string) ?? 'en-US';
 
   // Per-page metadata flows into every resolveData hook; debug is the
   //    single observability switch (logs + missing-component box + JSON dump).
-  //    Note: `debug` (render/observability) is independent of `preview`
-  //    (which token + host to fetch from).
+  //    Preview Sessions use the runtime owner described in Live preview above.
   const experience = await fetchExperience(
     { spaceId: process.env.SPACE_ID!, environmentId: 'master', experienceId, locale },
     {
       accessToken: process.env.CDA_TOKEN!,
-      previewToken: process.env.CPA_TOKEN,
-      preview: previewMode,
     },
     {
       config: experienceConfig,
@@ -698,7 +764,7 @@ Button: defineComponent<ButtonProps>({
 - **Shows the missing-component box** — `MissingComponent` renders a visible box naming the unregistered `componentId` (silent `null` when debug is off).
 - **Auto-mounts `<DebugExperience>`** above the tree — a collapsible panel dumping the resolved plan as pretty JSON, so you can see exactly what the SDK interpreted.
 
-Wire it to any signal you like — a `?debug=true` query param in development, a feature flag, `process.env.NODE_ENV !== 'production'`. It's independent of `preview` (which selects the delivery vs. preview token and host); debug is purely a render/observability concern.
+Wire it to any signal you like — a `?debug=true` query param in development, a feature flag, `process.env.NODE_ENV !== 'production'`. It is independent of Preview Session activation; debug is purely a render/observability concern.
 
 ```tsx
 const debug = sp.debug === 'true';
@@ -974,7 +1040,7 @@ export const load = async ({ params }) => {
 <ServerExperienceRenderer experience={data.experience} config={experienceConfig} />
 ```
 
-To fetch by Experience id instead (for example, for preview), pass `{ spaceId, environmentId, experienceId }`; see [Destinations](#destinations). Everything else applies identically: advanced setup (preview, async `resolveData`), the API reference below, merge precedence, and design tokens. Substitute the Svelte spelling of each hook.
+To fetch by Experience id instead (when you already know its id), pass `{ spaceId, environmentId, experienceId }`; see [Destinations](#destinations). Everything else applies identically: advanced setup (preview, async `resolveData`), the API reference below, merge precedence, and design tokens. Substitute the Svelte spelling of each hook.
 
 ---
 
@@ -1116,20 +1182,20 @@ For any other framework (Vue, Nuxt, Solid, Lit, Qwik, ...), the [implement-frame
 
 ## Examples
 
-Runnable example apps live in [`examples/`](./examples). Clone the repo, seed the demo Experience, and run them against your own space. They are the place to start when integrating the SDK.
+Runnable example apps live in [`examples/`](./examples). Clone the repo, seed the demo Experience, and run them against your own space. They are the place to start when integrating the SDK. See the [Next.js package guide](./packages/adapter-nextjs/README.md) for managed App/Pages integration.
 
-| Example                                          | Stack                           | Shows                                                                                                                            |
-| ------------------------------------------------ | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| [`examples/nextjs`](./examples/nextjs)           | Next.js 15 (App Router)         | Destination routing with sitemap SSG and redirects; by-id route for preview; async `resolveData`, design tokens                  |
-| [`examples/sveltekit`](./examples/sveltekit)     | SvelteKit 2 + Svelte 5          | 1:1 parity with the Next.js app                                                                                                  |
-| [`examples/angular`](./examples/angular)         | Angular 22 + `@angular/ssr`     | Same, on zoneless Angular; fetch in Express (keeps tokens server-side) + `TransferState` relay                                   |
-| [`examples/astro`](./examples/astro)             | Astro 7 + `@astrojs/react`      | Destination routing with a custom renderer from `@contentful/experiences-react/custom-renderer`: native islands, server-rendered |
-| [`examples/vite-react`](./examples/vite-react)   | Vite 6 + React 19 (client-only) | Destination routing, fetched, resolved, and rendered entirely in the browser; styled-components for CSS-in-JS                    |
-| [`examples/vite-svelte`](./examples/vite-svelte) | Vite 6 + Svelte 5 (client-only) | Same as `vite-react`, mirroring the SvelteKit app                                                                                |
-| [`examples/node`](./examples/node)               | Node `node:http`                | Carrying visitor identity between the Web SDK and the Node SDK with a cookie; no renderer                                        |
-| [`examples/scripts`](./examples/scripts)         | Node + tsx                      | One-time bootstrap that seeds the demo Experience the other examples render                                                      |
+| Example                                          | Stack                           | Shows                                                                                                                               |
+| ------------------------------------------------ | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| [`examples/nextjs`](./examples/nextjs)           | Next.js 15.5 (App Router)       | Managed dynamic Destination and by-id requests, redirects, Preview Sessions, consent and events; async `resolveData`, design tokens |
+| [`examples/sveltekit`](./examples/sveltekit)     | SvelteKit 2 + Svelte 5          | Destination routing, by-id preview, async `resolveData`, and design tokens                                                          |
+| [`examples/angular`](./examples/angular)         | Angular 22 + `@angular/ssr`     | Same, on zoneless Angular; fetch in Express (keeps tokens server-side) + `TransferState` relay                                      |
+| [`examples/astro`](./examples/astro)             | Astro 7 + `@astrojs/react`      | Destination routing with a custom renderer from `@contentful/experiences-react/custom-renderer`: native islands, server-rendered    |
+| [`examples/vite-react`](./examples/vite-react)   | Vite 6 + React 19 (client-only) | One managed root and `Experience` for Destination and by-id loading in the browser; styled-components for CSS-in-JS                 |
+| [`examples/vite-svelte`](./examples/vite-svelte) | Vite 6 + Svelte 5 (client-only) | Browser fetch, resolve, and render for Destination and by-id selectors, mirroring the SvelteKit app                                 |
+| [`examples/node`](./examples/node)               | Node `node:http`                | Carrying visitor identity between the Web SDK and the Node SDK with a cookie; no renderer                                           |
+| [`examples/scripts`](./examples/scripts)         | Node + tsx                      | One-time bootstrap that seeds the demo Experience the other examples render                                                         |
 
-The Next.js, SvelteKit, Angular, Astro, and Vite examples serve pages from a Destination: the URL path is the Destination path, and `/experiences/<id>` fetches one Experience by id (the route for preview). They register the same components against the same Experiences, so they render identically; only the framework-specific setup differs. To run one, first seed the demo content into your Contentful space with the bootstrap script. It uses the experiences management API to provision the ContentType, entries, assets, design tokens, Components, Experience Template, DataAssemblies, the `home` and `landing` Experiences, and a Channel, Destination, and Destination Nodes.
+The Next.js, SvelteKit, Angular, Astro, and Vite examples serve pages from a Destination: the URL path is the Destination path, and `/experiences/<id>` fetches one Experience by id. The Next.js example supports Preview Sessions through both selectors; the other server-rendered examples use the by-id route for preview. The client-only Vite examples have no Preview Session setup. They register the same components against the same Experiences, so they render identically; only the framework-specific setup differs. To run one, first seed the demo content into your Contentful space with the bootstrap script. It uses the experiences management API to provision the ContentType, entries, assets, design tokens, Components, Experience Template, DataAssemblies, the `home` and `landing` Experiences, and a Channel, Destination, and Destination Nodes.
 
 ```sh
 npm install --ignore-scripts
@@ -1149,7 +1215,7 @@ npm run dev
 
 Then visit `/` and `/demo/landing` (Destination paths), or `/experiences/landing` (by id). See each example's README for its file map and route-by-route walkthrough.
 
-**Tokens.** `CMA_TOKEN` is a Personal Access Token that only the bootstrap script sees. `CDA_TOKEN` is a Content Delivery API token — this is what the running app uses at runtime. `CPA_TOKEN` is a Content Preview API token, only needed if you want to exercise `?preview=true`; see each example's README for details.
+**Tokens.** `CMA_TOKEN` is a Personal Access Token that only the bootstrap script sees. `CDA_TOKEN` is a Content Delivery API token — this is what the running app uses at runtime. `CPA_TOKEN` is a Content Preview API token for optional Preview Session capability; open a supported preview route with `preview_session_id` to activate it (Destination or by-id in Next.js; by-id in the other server-rendered examples). Next.js also requires explicit `NEXT_PUBLIC_*` scope and browser-designated credentials for its managed browser owner; private server credentials are configured separately. See each example's README for details.
 
 **Examples vs. reference implementations.** The repo also has an `implementations/` directory. Those are reference implementations for SDK maintainers: standalone apps that install locally packed SDK tarballs to validate SDK behavior before release. They are not integration guides; use `examples/`. See [`CONTRIBUTING.md`](./CONTRIBUTING.md#example-apps-vs-reference-implementations) for the difference.
 
@@ -1167,15 +1233,15 @@ and direct `ContentfulViewDeliveryClient` use remain supported.
 
 Three positional args map to three concerns that evolve independently:
 
-| Arg                 | Type                                                                                                                                                                  | Purpose                                                                                                                                                                          |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `experienceOptions` | `{ spaceId, destinationId, path \| nodeId, personalization? }` **or** `{ spaceId, environmentId, experienceId, locale?, parameters?, personalization?, extensions? }` | Which Experience to fetch: by Destination path or node id (recommended), or by Experience id. Both take first-class personalization; by-id also takes additional XDA extensions. |
-| `clientOptions`     | `{ accessToken, previewToken?, preview?, host? }` **or** `{ client }`                                                                                                 | How to fetch. Discriminated union: pass credentials inline (with optional preview toggle) or pass in your own `ContentfulViewDeliveryClient`.                                    |
-| `resolveOptions`    | `{ config, metadata?, debug? }`                                                                                                                                       | How to resolve. `metadata` flows into every `resolveData` hook as `ctx.experience.metadata`; `debug` turns on logging + the visible missing-component box.                       |
+| Arg                 | Type                                                                                                                                                                           | Purpose                                                                                                                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `experienceOptions` | `{ spaceId, destinationId, path \| nodeId, locale?, personalization? }` **or** `{ spaceId, environmentId, experienceId, locale?, parameters?, personalization?, extensions? }` | Which Experience to fetch: by Destination path or node id (recommended), or by Experience id. Both take first-class personalization; by-id also takes additional XDA extensions. |
+| `clientOptions`     | `{ accessToken, host? }` **or** `{ client }`                                                                                                                                   | How to fetch. Discriminated union: pass Delivery credentials inline or pass in your own `ContentfulViewDeliveryClient`.                                                          |
+| `resolveOptions`    | `{ config, metadata?, debug? }`                                                                                                                                                | How to resolve. `metadata` flows into every `resolveData` hook as `ctx.experience.metadata`; `debug` turns on logging + the visible missing-component box.                       |
 
 Both `metadata` and `debug` are recorded on the returned plan, so the renderer picks them up without being passed them again.
 
-Configure both tokens up front and flip `preview: true` per call to hit the preview API. `preview: true` without `previewToken` throws an error. `host` is a full base-URL string for custom endpoints (staging, proxy, per-region); when set, it wins over the `preview`-derived default host.
+Free fetches use ordinary Delivery and accept no preview toggle or preview token. `host` remains a full base-URL string for custom endpoints (staging, proxy, per-region). Preview Sessions use runtime owners or the existing low-level session helpers; see [Live preview](#live-preview).
 
 ```ts
 // Inline credentials, client created internally
@@ -1183,8 +1249,6 @@ const plan = await fetchExperience(
   { spaceId: '...', environmentId: 'master', experienceId: slug, locale: 'en-US' },
   {
     accessToken: process.env.CDA_TOKEN!,
-    previewToken: process.env.CPA_TOKEN!,
-    preview: true, // flip per request; omit or set false for delivery
   },
   { config: experienceConfig, metadata: { slug }, debug: true }
 );
@@ -1251,12 +1315,14 @@ plan. Each fetch resolves the returned payload again, including `resolveData`.
 For example, in a client React component with `initialPlan` supplied as a prop:
 
 ```tsx
+'use client';
+
 import { useState } from 'react';
 import {
   ExperienceRenderer,
   fetchExperience,
   type PortableRenderPlan,
-} from '@contentful/experiences-react';
+} from '@contentful/experiences-react/client';
 
 function FeaturedPosts({ initialPlan }: { initialPlan: PortableRenderPlan }) {
   const [plan, setPlan] = useState(initialPlan);
@@ -1321,10 +1387,8 @@ headers. Calls omitting `parameters` retain existing behavior. Delivery failures
 retain their message and original error (including status/body) as
 `ExperienceFetchError.cause`; `NotFoundError` still passes through unchanged.
 
-Direct by-ID preview fetches accept the same option and transport encoding.
-Preview can report missing/invalid values in the hydrated response's `errors`
-instead of failing the fetch; recognized entries appear in
-[`plan.deliveryDiagnostics`](#delivery-diagnostics). Preview Sessions continue to use their existing
+Hydrated responses can report field errors in
+[`plan.deliveryDiagnostics`](#delivery-diagnostics). Preview Sessions use their existing
 **unprefixed** `context.parameters` map, such as `{ productId: 'foo123' }`;
 the Session contract determines its supported values. The Contentful editor owns
 Session context changes, and the SDK consumes the new hydrated snapshots through
@@ -1402,9 +1466,10 @@ Both are type-level only — no validation, no copying, no runtime cost. `readSo
 
 Functional constructor over `ContentfulViewDeliveryClient` for the SDK's option shape. It maps `accessToken` to `token` and `host` to `baseUrl`, and passes everything else through. Prefer this over `new ContentfulViewDeliveryClient({...})` so field names stay consistent with `fetchExperience`'s inline-credentials path.
 
-`createClient` is a **one-time setup** primitive: it builds a single client bound to a single token, space, and environment, and is best for cases where you're managing the client lifecycle yourself (custom caching, request middleware, sharing the instance across code paths). It does not participate in the per-request `preview` toggle. `spaceId`/`environmentId` are required — `@contentful/experience-delivery` binds them at client construction as of `1.0.0-dev.13`, so a client built here can only serve requests for that space/environment.
+`createClient` is a **one-time setup** primitive: it builds a single client bound to a single token, space, and environment, and is best for cases where you're managing the client lifecycle yourself (custom caching, request middleware, sharing the instance across code paths). It binds ordinary Delivery credentials and a host. `spaceId`/`environmentId` are required — `@contentful/experience-delivery` binds them at client construction as of `1.0.0-dev.13`, so a client built here can only serve requests for that space/environment.
 
-> **If you need runtime-dynamic swaps between delivery and preview use `fetchExperience`'s inline-credentials path**. Pass `{ accessToken, previewToken, preview }` directly instead of pre-building a client and passing `{ client }`. The `preview` boolean is a per-call selector; a pre-built client is bound to whichever token it was constructed with and can't swap.
+Preview Session selection belongs to the runtime owner. Custom hosts and
+caller-supplied Delivery clients remain available without selecting session policy.
 
 ```ts
 import { createClient } from '@contentful/experiences-react';
@@ -1484,7 +1549,7 @@ Only `experience` and `config` are needed. The other three are **overrides** —
 
 **Why `config` is still a prop.** The plan is plain serializable data by design — that is what lets it cross the RSC boundary, SvelteKit's `data`, and Angular's `TransferState`. `config` holds component references and an optional `resolveToken` function, neither of which survives serialization. So it is passed to both calls on purpose, and it is the only thing that is.
 
-### `<ClientExperienceRenderer />` (alias: `<ExperienceRenderer />`)
+### `<ClientExperienceRenderer />` (alias: `<ExperienceRenderer />`, React `/client`)
 
 Client-side renderer. Same prop shape as `ServerExperienceRenderer`, including the plan-carried defaults.
 
@@ -1530,10 +1595,10 @@ First-party debug panel. Renders the resolved `PortableRenderPlan` as pretty, ci
 
 Every component (via `useExperience()`) and `resolveData` hook (via `ctx.experience`) sees an experience context. The shape:
 
-| Field      | Type                      | Available in        | Description                                                                                                                                                                                                                             |
-| ---------- | ------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `debug`    | `boolean`                 | render, resolveData | The single observability switch (replaces the old `isPreview`). Drives verbose logging, the visible missing-component box, and the auto-mounted `<DebugExperience>` panel. Components can branch on it for their own debug affordances. |
-| `metadata` | `Record<string, unknown>` | render, resolveData | Whatever the page passed in via `resolveExperience` / `fetchExperience` opts, carried on the plan. The renderer's `metadata` prop shallow-merges over it. Free-form and untyped on purpose — see below.                                 |
+| Field      | Type                      | Available in        | Description                                                                                                                                                                                              |
+| ---------- | ------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `debug`    | `boolean`                 | render, resolveData | The single observability switch. Drives verbose logging, the visible missing-component box, and the auto-mounted `<DebugExperience>` panel. Components can branch on it for their own debug affordances. |
+| `metadata` | `Record<string, unknown>` | render, resolveData | Whatever the page passed in via `resolveExperience` / `fetchExperience` opts, carried on the plan. The renderer's `metadata` prop shallow-merges over it. Free-form and untyped on purpose — see below.  |
 
 `RenderContext` is declared once in the SDK core and re-exported by every adapter, so all three expose exactly the same shape — `useExperience()` in React, `getExperience()` in Svelte, `injectExperience()` in Angular.
 
@@ -1630,7 +1695,8 @@ This is an Nx monorepo. Install the framework adapter for rendering. `@contentfu
 | [`packages/node`](./packages/node)                       | `@contentful/experiences-node`         | **Public.** Node SDK with request-scoped fetch, resolve, and event operations.                                         |
 | [`packages/web`](./packages/web)                         | `@contentful/experiences-web`          | **Public.** Web SDK with browser-owned locale/context, persisted profile, direct events, and prepared-batch admission. |
 | [`packages/live-preview`](./packages/live-preview)       | `@contentful/experiences-live-preview` | **Public.** Framework-neutral Preview Session client.                                                                  |
-| [`packages/adapter-react`](./packages/adapter-react)     | `@contentful/experiences-react`        | **Public.** React renderer + re-exports of everything else.                                                            |
+| [`packages/adapter-react`](./packages/adapter-react)     | `@contentful/experiences-react`        | **Public.** React rendering and managed browser integration.                                                           |
+| [`packages/adapter-nextjs`](./packages/adapter-nextjs)   | `@contentful/experiences-nextjs`       | **Public.** App/Pages request loading, built-in roots and React rendering via explicit subpaths.                       |
 | [`packages/adapter-svelte`](./packages/adapter-svelte)   | `@contentful/experiences-svelte`       | **Public.** Svelte 5 renderer with the same public API shape.                                                          |
 | [`packages/adapter-angular`](./packages/adapter-angular) | `@contentful/experiences-angular`      | **Public.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) with the same public API shape.                                 |
 

@@ -14,7 +14,7 @@
     "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "eslint scripts/*.ts"
+        "command": "eslint scripts/*.ts scripts/*.mts"
       }
     },
     "typecheck": {
@@ -22,6 +22,15 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "tsc --noEmit -p scripts/tsconfig.json"
+      }
+    },
+    "pack-preview": {
+      "cache": false,
+      "dependsOn": [],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/live-preview",
+        "command": "tsx ../../scripts/pack-package.ts"
       }
     }
   }

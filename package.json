@@ -25,8 +25,8 @@
     "test": "nx run-many -t test --exclude=tag:scope:implementation",
     "lint": "nx run-many -t lint --exclude=tag:scope:implementation",
     "typecheck": "nx run-many -t typecheck --exclude=tag:scope:implementation",
-    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,md}\"",
+    "format": "prettier --write \"**/*.{ts,tsx,mts,js,mjs,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,mts,js,mjs,json,md}\"",
     "graph": "nx graph",
     "release": "nx release",
     "release:dry": "nx release --dry-run",
@@ -81,7 +81,7 @@
     "vitest": "^3.2.7"
   },
   "lint-staged": {
-    "*.{ts,tsx}": [
+    "*.{ts,tsx,mts}": [
       "prettier --write",
       "eslint --fix"
     ]

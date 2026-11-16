@@ -14,7 +14,7 @@ export function createControlPanel(sdk, { onIdentify, onReset }) {
     find('identified-status').textContent = identifyRequested ? 'Yes' : 'No';
     find('consent-button').disabled = events === true && persistence === true;
     find('unconsent-button').disabled = events === false && persistence === false;
-    find('identify-button').disabled = identifyRequested;
+    find('identify-button').disabled = sdk.isPreview || identifyRequested;
     find('reset-button').disabled = false;
   }
 

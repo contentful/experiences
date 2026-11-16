@@ -1,4 +1,5 @@
-import { createRoutes, pageContext } from '/dist/shared.js';
+import { getPreviewSessionBinding, loadPreviewImplementation } from '/dist/preview.js';
+import { createRoutes } from '/dist/shared.js';
 import { createControlPanel } from './control-panel.js';
 import { renderExperience } from './experiences.js';
 import { cloneTemplate } from './templates.js';
@@ -11,21 +12,20 @@ let controls;
 let trackingLog;
 let disposed = false;
 let manualElements = [];
+let previewSubscriptions = [];
 let routes;
 let environment;
+let previewBinding;
+const resolveOptions = { config: { components: {}, experienceTemplates: {} } };
 let generation = 0;
-let pageGeneration = 0;
-let pagePending = false;
-let pageFailed = false;
-// Node owns startup's committed page. This promise is deliberately already settled.
-let pendingPage = Promise.resolve();
 let disposeRouteAction = () => {};
+let handoffSubscription;
 
 window.addEventListener('pagehide', (event) => {
   if (event.persisted) return;
   disposed = true;
-  generation += 1;
-  pageGeneration += 1;
+  handoffSubscription?.unsubscribe();
+  releasePreviewSubscriptions();
   document.removeEventListener('click', onDocumentClick);
   window.removeEventListener('popstate', onPopState);
   disposeRouteAction();
@@ -40,8 +40,13 @@ async function activate() {
   try {
     const bootstrap = JSON.parse(document.getElementById('experience-bootstrap').textContent);
     environment = bootstrap.environment;
-    const { handoff } = bootstrap;
+    const { handoff, preview } = bootstrap;
+    previewBinding = preview?.binding;
     routes = createRoutes(environment.EXPERIENCE_IDS);
+    const previewImplementation = environment.LIVE_PREVIEW
+      ? await loadPreviewImplementation()
+      : undefined;
+    if (disposed) return;
     // Consumer integration: one Web runtime discovers existing SSR attribution
     // and later DOM changes. Tracking uses SDK consent and current identity.
     sdk = new window.ContentfulExperiences({
@@ -49,10 +54,19 @@ async function activate() {
       environmentId: environment.ENVIRONMENT_ID,
       locale: environment.LOCALE,
       delivery: { accessToken: environment.CDA_TOKEN },
+      preview: environment.LIVE_PREVIEW
+        ? {
+            accessToken: environment.LIVE_PREVIEW.accessToken,
+            host: environment.LIVE_PREVIEW.host,
+            sessionHost: environment.LIVE_PREVIEW.sessionHost,
+            resourceResolution: environment.LIVE_PREVIEW.resourceResolution,
+            createClient: previewImplementation.createLivePreviewClient,
+          }
+        : undefined,
       cookie: { path: '/', sameSite: 'lax', secure: location.protocol === 'https:', expires: 365 },
     });
-    // Maintainer: optional browser-attempt diagnostics; never synthesize Node's
-    // already-committed events. Observing does not gate SDK tracking.
+    // Maintainer: optional browser-attempt diagnostics, subscribed before replay.
+    // Observing does not gate SDK tracking.
     trackingLog = createTrackingLog(sdk);
     controls = createControlPanel(sdk, {
       onIdentify,
@@ -66,10 +80,25 @@ async function activate() {
       sdk.tracking.enableElement('views', element, { data });
       manualElements.push(element);
     }
-    status.textContent = 'Adopting server profile…';
-    // The server already committed its page and selected content. State-only
-    // hydration neither gates tracking nor replaces HTML and sends no browser page.
-    await sdk.hydrateHandoffState(handoff, { routeKey: location.pathname + location.search });
+    status.textContent = sdk.isPreview
+      ? 'Connecting preview; server content retained…'
+      : 'Browser active. Server-rendered content retained.';
+    // Preview retains SSR presentations and binds updates without a startup fetch.
+    if (sdk.isPreview) {
+      // Retain the server presentations; attach only for new preview plans.
+      // Serialized plans establish content/error state without a startup fetch.
+      const destinations = new Map();
+      for (const section of ['auto', 'manual']) {
+        for (const target of appMain.querySelectorAll(
+          `[data-experiences="${section}"] [data-experience-presentation]`
+        )) {
+          const experienceId = target.dataset.experiencePresentation;
+          if (!destinations.has(experienceId)) destinations.set(experienceId, []);
+          destinations.get(experienceId).push({ section, target });
+        }
+      }
+      await loadExperiences(destinations, () => !disposed, preview.initialPlans);
+    }
     if (disposed) return;
 
     controls.activate();
@@ -77,8 +106,34 @@ async function activate() {
     wireRouteAction();
     document.addEventListener('click', onDocumentClick);
     window.addEventListener('popstate', onPopState);
-    status.textContent = 'Browser active. Server-rendered content retained.';
+    if (!sdk.isPreview && handoff !== undefined) {
+      const owner = generation;
+      const isCurrent = () => !disposed && generation === owner;
+      // Start one bootstrap replay independently of activation/rendering. Later
+      // navigation never waits for admission or replay delivery; SSR stays visible.
+      handoffSubscription = sdk.states.consent.subscribe(() => {
+        if (!isCurrent()) return;
+        void sdk
+          .hydrateAndTrackCurrentPage(handoff, {
+            routeKey: location.pathname + location.search,
+            isCurrent,
+          })
+          .then((result) => {
+            if (!disposed && generation === owner)
+              status.textContent = result.accepted
+                ? 'Server content retained. Replay admitted; delivery unconfirmed.'
+                : 'Server content retained. Replay not admitted.';
+          })
+          .catch(() => {
+            if (!disposed && generation === owner)
+              status.textContent =
+                'Server content retained. Replay admission failed; delivery unconfirmed.';
+          });
+      });
+    }
   } catch {
+    handoffSubscription?.unsubscribe();
+    releasePreviewSubscriptions();
     controls?.dispose();
     trackingLog?.dispose();
     if (disposed) return;
@@ -95,6 +150,11 @@ void activate();
 
 function routeUrl(path) {
   const url = new URL(path, location.origin);
+  const current = new URL(location.href);
+  for (const key of ['preview_session_id', 'preview_experience_id']) {
+    if (!url.searchParams.has(key) && current.searchParams.has(key))
+      url.searchParams.set(key, current.searchParams.get(key));
+  }
   if (new URL(location.href).searchParams.get('userId') === 'charles') {
     url.searchParams.set('userId', 'charles');
   } else url.searchParams.delete('userId');
@@ -104,7 +164,8 @@ function routeUrl(path) {
 function updateNavigation() {
   for (const link of document.querySelectorAll('#app-nav a')) {
     const path = new URL(link.href).pathname;
-    link.href = routeUrl(path);
+    link.dataset.routeHref ??= link.getAttribute('href');
+    link.href = routeUrl(link.dataset.routeHref);
     const active = path === location.pathname;
     link.classList.toggle('active', active);
     if (active) link.setAttribute('aria-current', 'page');
@@ -114,12 +175,23 @@ function updateNavigation() {
   controls.refresh();
 }
 
-function onIdentify() {
+async function onIdentify() {
+  if (disposed || sdk.isPreview) return;
   // Reference app: URL identity is intent, not an API profile or authentication.
   const url = new URL(location.href);
   url.searchParams.set('userId', 'charles');
   history.replaceState(null, '', url.pathname + url.search);
-  void renderRoute();
+  controls.refresh();
+  await renderRoute({
+    events: [
+      {
+        type: 'identify',
+        userId: 'charles',
+        traits: { identified: true },
+        locale: sdk.states.locale.current,
+      },
+    ],
+  });
 }
 
 function onReset() {
@@ -202,26 +274,35 @@ function createDestinations(route) {
   return destinations;
 }
 
-// Reference app: content actions invalidate renders independently of page ownership.
-// Identify/Retry join a pending navigation page; they do not add another page.
-async function renderRoute({ sendPage = false, reset = false, focus = false } = {}) {
+// Reference app: fetch route content; generation guards stale work.
+async function renderRoute({ sendPage = false, events, reset = false, focus = false } = {}) {
+  if (disposed) return;
+  const nextBinding = environment.LIVE_PREVIEW
+    ? getPreviewSessionBinding(environment.LIVE_PREVIEW)
+    : undefined;
+  const nextIsPreview = Boolean(nextBinding);
+  if (nextIsPreview !== sdk.isPreview || nextBinding?.sessionId !== previewBinding?.sessionId) {
+    location.reload();
+    return;
+  }
   const current = ++generation;
+  releasePreviewSubscriptions();
   const isCurrent = () => !disposed && generation === current;
   const route = routes[location.pathname];
-  const page = pageContext(new URL(location.href), document.referrer);
-  const identifyRequested = new URL(location.href).searchParams.get('userId') === 'charles';
   const previousManual = manualElements;
   manualElements = [];
   renderRouteShell(route, focus);
   if (reset) {
     // SDK reset resumes discovery immediately and invalidates its old responses.
-    // Detach from obsolete page work so a previous visitor cannot delay this one.
-    pageGeneration += 1;
-    pendingPage = Promise.resolve();
-    pagePending = false;
-    pageFailed = false;
     sdk.reset();
   }
+  const locale = sdk.states.locale.current;
+  if (!sdk.isPreview && route && sendPage) {
+    events = [{ type: 'page', locale }];
+  }
+  const requestOptions = sdk.isPreview
+    ? undefined
+    : { locale, ...(events ? { personalization: { events } } : {}) };
   await Promise.resolve();
   // Let ordinary DOM removal finalize SDK measurements before clearing overrides.
   // Reset already discarded the old measurements and manual overrides.
@@ -233,12 +314,11 @@ async function renderRoute({ sendPage = false, reset = false, focus = false } = 
   appMain.setAttribute('aria-busy', 'true');
   status.textContent = 'Updating content…';
   try {
-    await initializeVisitor(sendPage, page);
+    if (sdk.isPreview) previewBinding = nextBinding;
+
+    const failed = await loadExperiences(destinations, isCurrent, undefined, requestOptions);
     if (!isCurrent()) return;
-    if (!sdk.states.profile.current?.id) throw new Error('Visitor profile is not available.');
-    const failed = await loadExperiences(destinations, identifyRequested, page, isCurrent);
-    if (!isCurrent()) return;
-    if (failed) {
+    if (failed && !sdk.isPreview) {
       errorPanel.hidden = false;
       showStatus(errorPanel, 'Some Experience content is unavailable.', {
         error: true,
@@ -246,101 +326,84 @@ async function renderRoute({ sendPage = false, reset = false, focus = false } = 
       });
     }
     appMain.removeAttribute('aria-busy');
-    status.textContent = failed
-      ? 'Some content could not be loaded.'
-      : 'Browser active. Content updated.';
   } catch {
     if (!isCurrent()) return;
     appMain.removeAttribute('aria-busy');
     errorPanel.hidden = false;
     showStatus(
       errorPanel,
-      'A visitor profile could not be established. Check your connection and retry.',
+      sdk.isPreview
+        ? 'Preview content could not be loaded. Check the session and retry.'
+        : 'Experience content could not be loaded. Check your connection and retry.',
       { error: true, retry: true }
     );
     for (const targets of destinations.values())
       targets.forEach(({ target }) =>
-        showStatus(target, 'Content is unavailable until visitor initialization succeeds.')
+        showStatus(
+          target,
+          sdk.isPreview
+            ? 'Preview content is unavailable. Retry content to try again.'
+            : 'Experience content is unavailable. Retry content to try again.'
+        )
       );
-    status.textContent = 'Visitor initialization failed. Retry content to try again.';
+    status.textContent = sdk.isPreview
+      ? 'Preview initialization failed. Retry content to try again.'
+      : 'Content update failed. Retry content to try again.';
   }
 }
 
-function initializeVisitor(sendPage, page) {
-  if (sendPage || (!pagePending && (pageFailed || !sdk.states.profile.current?.id))) {
-    const request = ++pageGeneration;
-    const properties = { url: page.url, title: document.title };
-    pagePending = true;
-    pageFailed = false;
-    pendingPage = pendingPage
-      .catch(() => {})
-      .then(async () => {
-        if (disposed || request !== pageGeneration) return;
-        try {
-          // XDA workaround: page first establishes SDK-owned identity. Never attach
-          // this committed page to XDA or infer success from queued admission alone.
-          const result = await sdk.page({ page, properties });
-          if (disposed || request !== pageGeneration) return;
-          if (!result.accepted || !sdk.states.profile.current?.id)
-            throw new Error('Page did not establish a profile.');
-        } catch (error) {
-          if (!disposed && request === pageGeneration) pageFailed = true;
-          throw error;
-        } finally {
-          if (request === pageGeneration) pagePending = false;
-        }
-      });
-  }
-  return pendingPage;
-}
-
-async function loadExperiences(destinations, identifyRequested, page, isCurrent) {
-  const identify = identifyRequested
-    ? sdk.eventBuilder.buildIdentify({
-        userId: 'charles',
-        traits: { identified: true },
-        page,
-        locale: environment.LOCALE,
-        userAgent: window.navigator.userAgent,
-      })
-    : undefined;
-  let failed = false;
+async function loadExperiences(destinations, isCurrent, initialPlans, requestOptions) {
+  const failures = new Set();
+  const rendered = new Set();
+  let profileId = sdk.states.profile.current?.id;
+  let personalization = requestOptions?.personalization;
   for (const [experienceId, targets] of destinations) {
-    if (!isCurrent()) return;
+    if (!isCurrent()) return failures.size > 0;
     try {
-      const plan = await sdk.fetchExperience(
-        {
+      let plan;
+      if (initialPlans !== undefined) {
+        plan = initialPlans[experienceId];
+      } else {
+        const options = {
           experienceId,
-          extensions: { sourceMap: {} },
-          // XDA workaround: profile-only requests can select baseline. Reuse one
-          // identify for the cycle, but never independently submit it or the page.
-          ...(identify ? { personalization: { events: [identify] } } : {}),
-        },
-        { config: { components: {}, experienceTemplates: {} } }
-      );
-      if (!isCurrent()) return;
-      const manualRoots = [];
-      const rendered = targets.map(({ section }) =>
-        renderExperience(plan, experienceId, section, {
-          onManualRoot: (element, data) => manualRoots.push({ element, data }),
-        })
-      );
-      targets.forEach(({ target }, index) => target.replaceChildren(rendered[index]));
-      for (const { element, data } of manualRoots) {
-        sdk.tracking.enableElement('views', element, { data });
-        manualElements.push(element);
+          ...requestOptions,
+          personalization: sdk.isPreview
+            ? undefined
+            : {
+                ...personalization,
+                profileId,
+              },
+        };
+        // Evaluate intent once; comparison IDs and Retry fetch without new events.
+        personalization = undefined;
+        plan = await sdk.fetchExperience(options, resolveOptions);
       }
+      if (plan) profileId = plan.personalization?.profile.id ?? profileId;
+      if (!isCurrent()) return failures.size > 0;
+      if (!plan) throw new Error('Initial preview content is unavailable.');
+      if (initialPlans === undefined) renderPresentations(plan, experienceId, targets);
+      rendered.add(experienceId);
+      if (sdk.isPreview && (plan.diagnostics?.length || plan.deliveryDiagnostics?.length))
+        failures.add(experienceId);
     } catch (error) {
-      if (!isCurrent()) return;
-      failed = true;
+      if (!isCurrent()) return failures.size > 0;
+      failures.add(experienceId);
       const message =
         error?.statusCode === 404
           ? 'This Experience was not found.'
           : 'This Experience could not be loaded or rendered.';
-      targets.forEach(({ target }) => showStatus(target, message, { error: true }));
+      if (initialPlans === undefined)
+        targets.forEach(({ target }) => showStatus(target, message, { error: true }));
     }
   }
-  return failed;
+  if (sdk.isPreview && isCurrent()) bindPreview(destinations, isCurrent, failures, rendered);
+  if (!sdk.isPreview) {
+    if (isCurrent())
+      status.textContent = failures.size
+        ? 'Some content could not be loaded.'
+        : 'Browser active. Content updated.';
+  }
+  return failures.size > 0;
 }
 
 function wireRouteAction() {
@@ -355,24 +418,97 @@ function wireRouteAction() {
   feedback.textContent = '';
   const current = generation;
   const isCurrent = () => !disposed && current === generation;
-  button.disabled = false;
-  const onClick = async () => {
-    button.disabled = true;
-    feedback.textContent = 'Submitting custom action…';
-    try {
-      await pendingPage;
-      if (!isCurrent()) return;
-      const result = await sdk.track({ event: 'reference_custom_action' });
-      if (!isCurrent()) return;
-      feedback.textContent = result.accepted
-        ? 'Custom event admitted; delivery unconfirmed.'
-        : 'Custom event not admitted.';
-    } catch {
-      if (isCurrent()) feedback.textContent = 'Unable to record the custom action.';
-    } finally {
-      if (isCurrent()) button.disabled = false;
-    }
+  button.disabled = sdk.isPreview;
+  const onClick = () => {
+    if (!isCurrent() || sdk.isPreview) return;
+    void renderRoute({
+      events: [
+        {
+          type: 'track',
+          event: 'reference_custom_action',
+          locale: sdk.states.locale.current,
+        },
+      ],
+    });
   };
   button.addEventListener('click', onClick);
   disposeRouteAction = () => button.removeEventListener('click', onClick);
+}
+
+function renderPresentations(plan, experienceId, targets) {
+  const manualRoots = [];
+  const rendered = targets.map(({ section }) =>
+    renderExperience(plan, experienceId, section, {
+      onManualRoot: (element, data) => manualRoots.push({ element, data }),
+    })
+  );
+  const removed = manualElements.filter((element) =>
+    targets.some(({ target }) => target.contains(element))
+  );
+  manualElements = manualElements.filter((element) => !removed.includes(element));
+  targets.forEach(({ target }, index) => target.replaceChildren(rendered[index]));
+  void Promise.resolve().then(() =>
+    removed.forEach((element) => sdk.tracking.clearElement('views', element))
+  );
+  for (const { element, data } of manualRoots) {
+    sdk.tracking.enableElement('views', element, { data });
+    manualElements.push(element);
+  }
+}
+
+function releasePreviewSubscriptions() {
+  previewSubscriptions.forEach((subscription) => subscription.unsubscribe());
+  previewSubscriptions = [];
+}
+
+function bindPreview(destinations, isCurrent, failures, rendered) {
+  // Fetch/render first, then subscribe to the selected Preview Session.
+  // The SDK resolves updates and guards stale work; the app owns presentations/errors.
+  for (const [experienceId, targets] of destinations) {
+    const subscription = sdk.subscribeToPreview(experienceId, resolveOptions, ({ data, error }) => {
+      if (!isCurrent()) return;
+      try {
+        if (data) {
+          renderPresentations(data, experienceId, targets);
+          rendered.add(experienceId);
+          if (data.diagnostics?.length || data.deliveryDiagnostics?.length)
+            failures.add(experienceId);
+          else failures.delete(experienceId);
+        }
+        if (error) failures.add(experienceId);
+      } catch {
+        failures.add(experienceId);
+      }
+      if (failures.has(experienceId) && !rendered.has(experienceId))
+        targets.forEach(({ target }) =>
+          showStatus(target, 'Preview content is unavailable.', { error: true })
+        );
+      updatePreviewFeedback(failures);
+    });
+    if (!isCurrent()) {
+      subscription.unsubscribe();
+      return;
+    }
+    previewSubscriptions.push(subscription);
+  }
+  const subscription = sdk.states.preview.subscribe(() => {
+    if (isCurrent()) updatePreviewFeedback(failures);
+  });
+  if (!isCurrent()) subscription.unsubscribe();
+  else previewSubscriptions.push(subscription);
+}
+
+function updatePreviewFeedback(failures) {
+  const panel = document.getElementById('content-error');
+  panel.hidden = failures.size === 0;
+  if (failures.size)
+    showStatus(panel, 'Preview content could not be updated. Retry content to try again.', {
+      error: true,
+      retry: true,
+    });
+  status.textContent = failures.size
+    ? 'Preview content update failed. Usable content retained.'
+    : sdk.states.preview.current?.status === 'live'
+      ? 'Preview connected. Content available.'
+      : 'Preview mode active. Content available.';
 }

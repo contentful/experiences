@@ -1,10 +1,8 @@
-import { Suspense, type ReactNode } from 'react';
-
-import { ConsentPanel } from '@/components/ConsentPanel';
+import type { ReactNode } from 'react';
 
 export const metadata = {
   title: 'Contentful Experiences — Next.js example',
-  description: 'Demonstrates @contentful/experiences-react with the Next.js App Router.',
+  description: 'Demonstrates @contentful/experiences-nextjs with the Next.js App Router.',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -20,13 +18,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         }}
       >
         {children}
-        <Suspense fallback={null}>
-          <ConsentPanel
-            spaceId={process.env.SPACE_ID ?? ''}
-            environmentId={process.env.ENVIRONMENT_ID ?? 'master'}
-            accessToken={process.env.CDA_TOKEN ?? ''}
-          />
-        </Suspense>
       </body>
     </html>
   );

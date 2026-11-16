@@ -1,0 +1,19 @@
+import { singleAppExperiences } from '../../../single-experience-server';
+import { SingleExperiencePage } from '../../../components/SingleExperiencePage';
+import { ClientRequestRoot, ClientRequestExperience } from '../../../components/SingleExperience';
+import { serializeRequestResult } from '@contentful/experiences-nextjs/app-router/server';
+import { getServer } from '../../../config';
+
+export const dynamic = 'force-dynamic';
+
+export default async function SingleExperience() {
+  const result = serializeRequestResult(await singleAppExperiences().request.loadExperience());
+  const { browser } = getServer();
+  return (
+    <ClientRequestRoot {...browser.web} result={result}>
+      <SingleExperiencePage>
+        <ClientRequestExperience result={result} />
+      </SingleExperiencePage>
+    </ClientRequestRoot>
+  );
+}

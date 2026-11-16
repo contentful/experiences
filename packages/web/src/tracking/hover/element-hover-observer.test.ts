@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { advance, deferred, makeElement, setDocumentVisibility } from '../../test-fixtures/dom.js';
+import { advance, deferred, makeElement, setDocumentVisibility } from '../../test/dom.js';
 
 import { type ElementHoverCallbackInfo, ElementHoverObserver } from './element-hover-observer.js';
 

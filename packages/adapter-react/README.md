@@ -8,9 +8,284 @@ The React adapter for the Contentful Experiences SDK. You bring your own React c
 npm install @contentful/experiences-react
 ```
 
-This is the only rendering SDK package you install. It re-exports everything you need from `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client`. The optional `@contentful/experiences-live-preview` package is also customer-facing and provides the framework-neutral live-preview client.
+For React, this is the rendering adapter you install. Next.js applications should
+use [`@contentful/experiences-nextjs`](../adapter-nextjs/README.md) for the common
+automatic one-Experience App/Pages setup, with request loading and built-in roots.
+The Next adapter uses these React rendering and runtime owners.
+
+This package re-exports everything you need from `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client`. The optional `@contentful/experiences-live-preview` package is also customer-facing and provides the framework-neutral live-preview client.
+
+## Import entries
+
+| Import                                                 | Available APIs                                                                                                                                                                          |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@contentful/experiences-react` or `/server`           | `ServerExperienceRenderer`, registry/type helpers, free fetching/resolution, design and attribution utilities, `EventBuilder`                                                           |
+| `@contentful/experiences-react/client`                 | Bound factory, managed root, injected provider, managed `Experience`/request hook, runtime/state/action hooks, supplied-plan renderer, render-context/design hooks and shared utilities |
+| `@contentful/experiences-react/host`                   | Explicit shared SDK binding creation/disposal for application-owned lifetime and independent roots                                                                                      |
+| `@contentful/experiences-react/custom-renderer`        | Existing node rendering and prop-resolution building blocks                                                                                                                             |
+| `@contentful/experiences-react/web-sdk`                | Public Web SDK constructor, state, events, tracking and runtime preview types                                                                                                           |
+| `@contentful/experiences-react/router/react-router`    | `bindReactRouterExperiences` and router page-payload/props types                                                                                                                        |
+| `@contentful/experiences-react/router/tanstack-router` | `bindTanStackRouterExperiences` and router page-payload/props types                                                                                                                     |
+
+Import client APIs from `/client`. The root and `/server` do not load the live
+Web SDK. The unbundled ESM build preserves each
+module's client directive. Next.js is not a React dependency or peer.
+
+Import standalone Preview Session functions, errors, client/session types and
+`PREVIEW_WEBSOCKET_HOST` directly from `@contentful/experiences-live-preview`.
+Install that optional package only when using it; ordinary adapter imports and
+declarations do not require it. General supplied-plan rendering and
+`useExperiencePlan` remain available on `/client`.
+
+Managed runtime ownership, state/action hooks, `Experience` and
+`useManagedExperience` are available on `/client`. Managed loading and supplied
+plans share the standard renderer. Application-owned fetching and supplied-plan
+rendering remain supported.
+
+Managed CSR loading uses ordinary Web fetch with existing type-tagged arguments or
+raw built events, built once by the SDK. Optional `handoff?: ExperiencesHandoff`
+is mode agnostic and explicitly supplied by the consumer, only when an actual
+server transfer provides one. Do not generate local CSR/navigation handoffs or
+require one for normal fetch. Incoming browser replay remains independent of
+display. Content Retry is ordinary event-free fetch of the same ID; replay
+delivery retry remains queue-owned. Preserve pinned ownership, consent, lifetime
+and page consent-retry mechanics without a direct initial emission prerequisite.
+See [Runtime's XDA contract](../runtime/README.md#xda-preflight-and-profile-finalization).
 
 ---
+
+## Managed content
+
+Bind the browser registry once. The root constructs Web after commit; each managed
+view fetches and binds preview updates after commit too.
+
+```tsx
+import { createExperiences, type PortableRenderPlan } from '@contentful/experiences-react/client';
+
+const { ExperiencesRoot, Experience, useManagedExperience } = createExperiences({
+  config: browserRegistry,
+});
+
+function App({
+  experienceId,
+  routeKey,
+  initialPlan,
+}: {
+  experienceId: string;
+  routeKey: string;
+  initialPlan?: PortableRenderPlan;
+}) {
+  return (
+    <ExperiencesRoot {...browserConfig} routeKey={routeKey} initialPagePayload={{}}>
+      <Experience
+        experienceId={experienceId}
+        initialPlan={initialPlan}
+        loadingFallback={<p>Loading…</p>}
+        errorFallback={({ error, retry }) => (
+          <p>
+            {error?.message} <button onClick={() => void retry()}>Retry</button>
+          </p>
+        )}
+      />
+    </ExperiencesRoot>
+  );
+}
+```
+
+The managed component and hook accept exactly one selector: `{ experienceId }`,
+`{ destinationId, path }`, or `{ destinationId, nodeId }`. Every selector accepts
+`locale` and builder-or-built `personalization.events`. Destination selectors
+resolve in master. Defined by-ID `parameters` or `extensions`, including empty
+objects, are invalid on destination selectors; `undefined` is treated as absent.
+For example:
+
+```tsx
+<Experience destinationId={destinationId} path={pathname} locale="en-US" />
+```
+
+Invalid managed selectors throw `TypeError` during render, before prop selection
+or seeded presentation can hide the invalid input. Supplied-plan and idle
+presentations retain their existing behavior. Fetch APIs reject invalid selectors
+before Delivery, Preview acquisition, or event preparation.
+
+`useManagedExperience({ destinationId, path: pathname, ...requestOptions })` and the
+other selector forms return `{ status, data, error, redirect, refresh, retry }`;
+status is `idle`, `loading`, `success`, `error` or `redirect`. `data` always remains
+a render plan; `redirect`, when present, is `{ path: string }`. Use the hook or the
+component's `children(result)` callback for custom presentation, including a usable plan alongside an error or refresh indicator.
+The unbound component/hook accepts `config`; the factory supplies it once.
+`loadingFallback` and `errorFallback` each accept a `ReactNode` or a function
+receiving the full `ManagedExperienceResult`; `children(result)` receives that
+same result and takes precedence over default rendering. Without custom children,
+usable `data` takes precedence over either fallback, including when an error
+coexists with content.
+
+Use the exported `isNotFoundError(error)` in `errorFallback` to distinguish a
+missing Experience, Destination, path or node from other fetch failures. It
+recognizes Delivery's `NotFoundError` and numeric `statusCode: 404`, including
+errors seeded from a Next server result. Preview Session failures remain distinct.
+Use `isPreviewSessionFetchError(error)` for direct acquisition errors; Next server
+results instead carry a safe message. See the [Preview error contract](../runtime/README.md#optional-runtime-live-preview).
+
+Both the hook and `Experience` accept committed presentation notifications,
+exported together as the `ExperienceNotifications` type from `/client`:
+
+```ts
+import type {
+  ManagedExperienceResult,
+  PortableRenderPlan,
+} from '@contentful/experiences-react/client';
+
+interface PresentationNotifications {
+  onExperienceResolved?: (
+    result: ManagedExperienceResult & { readonly data: PortableRenderPlan }
+  ) => void;
+  onExperienceError?: (error: Error, result: ManagedExperienceResult) => void;
+  onRedirect?: (redirect: { path: string }, result: ManagedExperienceResult) => void;
+}
+```
+
+Notifications run after React commits the current presentation, rather than during
+render or transport completion. A new usable plan triggers `onExperienceResolved`;
+a new error triggers `onExperienceError`, including errors alongside retained
+usable data. Initial and supplied plans can trigger resolution notifications too.
+Unchanged presentations, callback replacement and Strict Mode effect replay do not
+repeat a notification. Superseded or unmounted work does not notify.
+
+A redirect clears the previous plan and error, detaches its preview subscription,
+and triggers `onRedirect` without resolution/error notifications. It is terminal
+for that presentation: default rendering shows no loading/error fallback, and
+`refresh()`/`retry()` are inert. Custom `children(result)` still receives the redirect
+result. Pending page fallback and later consent retry for the abandoned presentation
+stop; events already submitted remain submitted.
+
+If `onRedirect` throws, the presentation instead reports the failure through
+`error`, `onExperienceError` and `errorFallback`. It does not repeat navigation
+automatically; an explicit `retry()` can fetch the content again without events.
+
+Generic React leaves navigation to the application. Set a shared callback through
+`createExperiences({ config, onRedirect: ({ path }) => navigate(path) })`, or pass
+`onRedirect` to an individual `Experience` or `useManagedExperience` call. An explicit
+component/hook callback overrides the factory default.
+
+`Experience` has two mutually exclusive input modes. `<Experience experience={plan} />`
+accepts `PortableRenderPlan | null | undefined` and renders supplied content
+without fetching, resolving, binding preview updates or joining managed page
+sequencing. Its `refresh()` and `retry()` are inert. A nullish
+supplied plan has `idle` status and uses the loading fallback. For SDK-owned loading,
+use `<Experience experienceId={id} initialPlan={plan} />`; `initialPlan` is an optional
+seed for that managed descriptor. Do not combine `experience` with `experienceId`,
+`destinationId`, `path`, `nodeId`, `initialPlan`, `initialError` or fetch/resolve
+options. Both modes retain the renderer's tracking props, fallbacks, custom children and notifications.
+
+Reuse an already-owned plan through the supplied mode, without another managed
+request or preview subscription:
+
+```tsx
+<Experience experience={plan} loadingFallback={<p>Waiting for content…</p>} />
+```
+
+The consumer owns the registry, route key, visitor intent and presentation. Keep
+one primary managed result as the content owner; pass its `data` to supplied
+presentations instead of copying that plan into application state or starting
+another managed loader for each repeated view. Use `children(result)` to render
+usable content and errors together, and use committed notifications for effects
+that depend on the presented result. The SDK owns request lifetimes, preview
+updates, consent, interaction measurement and event delivery.
+
+An `initialPlan` seeds the first server/browser presentation without a startup
+fetch. The hook and component accept managed `initialError?: Error`, which seeds
+an already-settled failed snapshot with `status: 'error'`, optionally alongside
+usable `initialPlan` data. It retains that failure without a duplicate
+startup fetch while keeping the existing preview binding active, so session updates
+or explicit `refresh()`/`retry()` can recover. Both seeds belong to the initial
+managed descriptor; they do not turn it into an authoritative supplied source.
+`initialError` is presentation state and is excluded from SDK fetch arguments.
+
+```tsx
+<Experience experienceId={experienceId} initialPlan={snapshot.data} initialError={snapshot.error}>
+  {({ data, error, retry }) => (
+    <>
+      {error && (
+        <p>
+          {error.message} <button onClick={() => void retry()}>Retry</button>
+        </p>
+      )}
+      {data ? <Experience experience={data} /> : !error && <p>Waiting for content…</p>}
+    </>
+  )}
+</Experience>
+```
+
+Explicit `refresh()` and `retry()` invalidate older work and refetch the
+current descriptor without personalization events, builders, event hooks or
+replay, retaining the last usable plan while pending or failed. Equivalent
+request/resolve options do not refetch after success or error. Replace these
+inputs when changing them, as with ordinary immutable React props. Changed descriptors,
+runtime replacement, navigation and reset invalidate obsolete presentation work.
+SDK queues retain ownership of already-admitted replay delivery retry.
+
+Ordinary by-ID requests obtain attribution even when automatic tracking is disabled.
+Destination commitment and attribution enrichment have verified upstream gaps;
+see [Runtime destination service limits](../runtime/README.md#destination-selection).
+`trackViews`, `trackHovers`, `trackClicks` and `onNodeRoot` work on the same managed
+surface as on `ExperienceRenderer`. Supplied plans retain their existing attribution.
+Official support is one Experience fetch per page; repeated views may reuse its
+plan. The reference's later-ID comparisons are event-free caller glue: ordering,
+identity and result handling remain application-owned diagnostic behavior, without
+a multi-Experience or cross-fetch guarantee. Next's automatic request convenience
+manages one primary Experience and consumes its complete result; it adds no
+multiple-fetch controller, result list or identity reconciliation.
+
+Configure browser-safe Preview credentials and the optional package’s `createLivePreviewClient` factory once on the root.
+Preview activates only when this configuration is present and the current URL
+contains a trimmed, nonempty `preview_session_id` query parameter. The managed Experience JSX stays unchanged:
+
+```tsx
+import { createLivePreviewClient } from '@contentful/experiences-live-preview';
+
+const { ExperiencesRoot, Experience } = createExperiences({ config });
+
+<ExperiencesRoot
+  {...browserConfig}
+  preview={{
+    accessToken: browserPreviewToken,
+    createClient: createLivePreviewClient,
+  }}
+>
+  <Experience experienceId={experienceId} />
+</ExperiencesRoot>;
+```
+
+The session selects one current Experience. Its raw payload's `sys.id` is the
+authority: matching views receive resolved updates through `subscribeToPreview`,
+while other IDs retain their ordinary source after a successful snapshot lookup.
+A destination acquires its payload first, then binds updates only to its actual
+`plan.experienceId`, derived from that payload's `sys.id`, when the SDK environment
+is `master`. It never guesses an ID or performs a second by-ID fetch. A seeded
+destination plan without `experienceId` remains usable without a startup fetch
+or a preview subscription; nonmaster SDK environments do not substitute their
+session content into master-only destination results.
+Snapshot acquisition failure remains a fetch/managed error before identity is known.
+Missing payload identity is never broadcast or inferred from child order. Repeated views of the current ID
+keep independent resolution options and presentation state.
+
+`usePreviewState()` observes the context's raw status, payload, revision and error;
+view resolution/fetch errors remain in each managed result. Session locale and
+parameters remain server-owned; unsupported explicit overrides reject. Initial
+plans and usable content survive Preview failures. Changing the selected session
+replaces the owned SDK context when the root renders again; child props and renderer APIs do not
+select sessions. The readonly `sdk.isPreview` reports the derived mode.
+See [Runtime preview limits](../runtime/README.md#optional-runtime-live-preview) for
+supported options and transport limits.
+
+Optional `beforeInitialPage` retains a standalone callback path and never gates
+managed content. Matching incoming replay supersedes a pending callback, and its
+stale continuation cannot submit another page. Reset or owner replacement guards
+callback clients and pending content; remove old attributed content before resetting
+when the host starts a fresh visitor presentation. An accepted eligible page fallback
+completes initialization; capacity refusal is retry-eligible while the complete
+operation remains unaccepted, without resubmitting a batch after successful fallback.
 
 ## Public API
 
@@ -26,22 +301,21 @@ defineExperienceTemplate<Props>(config); // Same shape, for coded Experience Tem
 ```ts
 fetchExperience(experienceOptions, clientOptions, resolveOptions)  // Async; fetches by Destination path/node id or Experience id and resolves in one call
 fetchDestinationSitemap(destinationOptions, clientOptions, paginationOptions?) // Async; lists every routable path in a Destination
-fetchPreviewSession(previewSessionOptions, clientOptions, resolveOptions) // Async; fetches and resolves a Preview Session Experience
 createClient(options)                       // Functional constructor matching the SDK's option shape
 ContentfulViewDeliveryClient                // Re-exported delivery client for advanced use cases
 NotFoundError                               // Thrown when the Experience ID or Destination path doesn't exist
-DestinationPreviewNotSupportedError         // Thrown when preview is requested for a Destination fetch
-PreviewSessionFetchError                   // Thrown when fetching a Preview Session fails
-LivePreviewConnectionError                 // Reported when the live-preview connection fails
+isNotFoundError(error)                       // Recognizes Delivery 404s and browser-seeded not-found errors
 ContentfulViewDelivery                      // Full error namespace from the delivery client
 type ExperienceOptions, ByIdExperienceOptions, ByDestinationPathExperienceOptions,
   ByDestinationNodeIdExperienceOptions, DestinationRedirectResult, DestinationSitemapResult,
   FetchDestinationSitemapOptions, FetchDestinationSitemapPaginationOptions, SitemapPathItem,
-  PreviewSessionExperienceOptions, PreviewSessionClientOptions,
-  PreviewSessionResolveOptions, ClientOptions, ResolveOptions, CreateClientOptions
+  ClientOptions, ResolveOptions, CreateClientOptions
 ```
 
-Serve pages from a Destination: the URL path is the Destination path. A redirect node comes back as a value, not an error. Preview is not supported on Destinations (it throws `DestinationPreviewNotSupportedError`); use the by-id form for preview.
+Serve pages from a Destination: the URL path is the Destination path. A redirect
+node comes back as a value, not an error. Free fetch functions use ordinary Delivery.
+Managed runtime owners support destination Preview Sessions through actual-ID
+matching in master; see [Live preview](#live-preview).
 
 ```ts
 const result = await fetchExperience(
@@ -59,12 +333,13 @@ const sitemap = await fetchDestinationSitemap({ spaceId, destinationId }, { acce
 const paths = sitemap.items.map((item) => item.path); // follow sitemap.pages.next for more
 ```
 
-Use `fetchPreviewSession` for the initial render when the Contentful app
-provides a `preview_session_id`. It fetches the current Preview Session
-snapshot and resolves it into a `PortableRenderPlan`. Use `useLivePreview` to
-receive subsequent WebSocket updates:
+For direct standalone snapshot loading, import `fetchPreviewSession` from the
+optional package. It fetches the current Preview Session snapshot and resolves
+it into a `PortableRenderPlan`:
 
 ```tsx
+import { fetchPreviewSession } from '@contentful/experiences-live-preview';
+
 const plan = await fetchPreviewSession(
   { spaceId, environmentId, sessionId },
   { previewToken },
@@ -73,8 +348,9 @@ const plan = await fetchPreviewSession(
 ```
 
 If the Preview Session references resources from other spaces, pass the same
-encoded `resourceResolution` value in the `previewSessionOptions` passed to
-`fetchPreviewSession` and `useLivePreview`.
+encoded `resourceResolution` value in the options passed to standalone snapshot
+and subscription APIs. Runtime preview applies the supported configuration mapping
+described in the [Runtime limits](../runtime/README.md#optional-runtime-live-preview).
 
 ### Resolver
 
@@ -82,38 +358,316 @@ encoded `resourceResolution` value in the `previewSessionOptions` passed to
 resolveExperience(payload, config, opts?)   // Async; walks payload, runs resolveData, returns a PortableRenderPlan
 ```
 
-### Live preview
+### Runtime ownership, state and actions
 
-Use `useLivePreview` when the app should subscribe to Preview Session updates,
-resolve each payload, and render the resulting plan from `data`:
+Bind the registry once, then mount a managed root around supplied-plan rendering:
 
 ```tsx
-const livePreview = useLivePreview({
-  previewSessionOptions,
-  initialPayload,
-  initialPlan,
-  resolveOptions: { config: experienceConfig },
+import {
+  createExperiences,
+  useConsentState,
+  useExperiencesActions,
+  type PortableRenderPlan,
+} from '@contentful/experiences-react/client';
+
+const { ExperiencesRoot, ExperiencesProvider, ExperienceRenderer } = createExperiences({
+  config: experienceConfig,
 });
 
-<ClientExperienceRenderer experience={livePreview.data} config={experienceConfig} />;
+function ConsentControls() {
+  const consent = useConsentState();
+  const { setConsent } = useExperiencesActions();
+  return (
+    <button onClick={() => setConsent(true)} disabled={consent === true}>
+      Grant consent
+    </button>
+  );
+}
+
+function App({ plan }: { plan: PortableRenderPlan }) {
+  return (
+    <ExperiencesRoot {...browserConfig}>
+      <ConsentControls />
+      <ExperienceRenderer experience={plan} />
+    </ExperiencesRoot>
+  );
+}
 ```
 
-For separate access to the raw payload and rendered plan, use
-`useLivePreviewExperience` and `useExperiencePlan`:
+The factory is pure and safe at module scope. The managed root constructs Web
+after browser commit and destroys it during cleanup, including Strict Mode
+effect replay. Conflicting owners surface the Web singleton error through context.
+Structural configuration is captured for the mounted owner; use a deliberate
+React `key` replacement to change credentials or endpoints.
+Changes to the URL session replace the owned context automatically. Locale props use `setLocale`; consent and other mutable commands use
+actions. Direct Web callers create a new SDK context when changing sessions.
+
+`useExperiences()` returns the current `WebExperiencesRuntime` for SDK actions and
+tracking. It is distinct from singular `useExperience()`, the render context.
+`useRuntimeContext()` returns `{ sdk, error, isLive, isContentReady }`. Managed
+SSR and initial hydration use a cached inert snapshot; setup failure retains that
+snapshot and supplied content with `error`. The context is a discriminated union:
+checking `context.isLive` narrows `context.sdk` to concrete `ContentfulExperiences`
+when true; false retains the inert `WebExperiencesRuntime` snapshot. Keep the
+context object through that check when calling live-only fetch or preview methods.
+`isContentReady` means activation/state hydration has settled, including failure;
+it does not assert content, visitor identity or preview connection success.
+Supplied-plan rendering preserves content while either flag is false.
+Locale prop failures remain visible when hydration settles. Correcting or removing
+the locale prop clears its failure while preserving any activation/hydration error.
+
+Provide `snapshot` for stable server/browser state. Provider/root accept
+`handoff?: ExperiencesHandoff` for optional server handoff consumption.
+After activation, the existing effect subscribes to `sdk.states.consent`; its
+immediate emission and later consent changes invoke the complete
+`hydrateAndTrackCurrentPage(handoff, { routeKey, isCurrent })` operation using the
+current browser pathname/search. One stable `isCurrent` guard for that effect
+reaches SDK state application and admission; coalesced SDK work remains live while
+any joined caller is live. Cleanup invalidates that guard and unsubscribes without
+destroying an injected SDK or cancelling accepted queue delivery. Necessary state
+application is internal; matching
+identify/track-only replay never adds or falls back to a page. Replay-less aggregates
+return `{ accepted: false }` after internal state application unless `buildPayload`
+explicitly supplies page intent. Only page-bearing intent uses route deduplication,
+and page-bearing refusal retains gated fallback through the existing implicit
+page consent path. There is no dedicated retry facility or mode detector.
+Managed loading uses the same root for later navigation; pass an explicit
+`routeKey` when the host changes pathname/search without replacing
+the document. `buildPagePayload` supplies default page arguments for the first
+ordinary managed request of a route. Root/provider `initialPagePayload` is shorthand
+for static `PageViewBuilderArgs`; update route-varying values on navigation.
+An explicit `buildPagePayload` takes precedence, including when it returns
+`undefined`; neither form creates page intent when both are absent and `pageMode`
+is omitted. Explicit `personalization.events` remains complete caller intent.
+Payload callbacks and objects may be inline. Their latest committed values are
+read when page intent is needed; replacing them does not restart the current
+handoff operation. Adding or removing payload capability still updates the owner.
+Ordinary managed event-bearing XDA fetches request commitment with
+`personalization.preflight: false`. The page sequence supplies route identity and
+liveness to Web, which owns page admission and deduplication. Consent-grant attempts
+use `trackCurrentPage`: Web waits for any pending fetch preparation and suppresses
+a duplicate when its final batch admits a committing page, including after
+transport failure. A blocked page or explicit `preflight: true` retains eligibility.
+Admission is not proof of service commitment. Explicit replay and page/fallback
+operations use the same Web tracker.
+Handoff cache safety and receiving scope are asserted before SSR children render;
+unsafe public/static handoffs and mismatched space/environment IDs throw before
+their profile state can reach presentation. Scope follows the captured managed
+configuration or the actual injected SDK.
+An optional `handoffKey` carries an existing server-transfer ID, such as Next's
+`requestId`. Reset invalidates that ID, including edited payloads carrying it;
+supply the new transfer's ID for fresh data. Only unkeyed transfers use payload
+comparison to reject equivalent pre-reset copies. The provider generates no IDs,
+and the key does not replace SDK replay admission or event deduplication.
+Hydration rejection retains the live binding and exposes its error. Snapshot and
+handoff state never become startup `defaults`, which have separate persistence
+and consent semantics. `onStatesReady(states)` runs after commit, before this
+complete operation and passive child effects, and may return subscription cleanup.
+Its callback is captured for the binding; use an explicit new Provider key/remount
+when changing application subscription setup.
+
+For server-rendered content with browser-owned page events, set
+`pageMode="analytics"` on `ExperiencesRoot` or `ExperiencesProvider`. This optional
+readonly presentation prop opts the existing React page sequence into page handling
+without a managed content component. It waits for `beforeInitialPage` to settle
+and retains the same consent, preview and handoff rules. Supply server-rendered
+children and keep content updates on the server; the prop performs no content
+fetching, resolution or rendering. It configures React presentation, not Runtime
+policy.
+
+Inject an application-owned SDK through `<ExperiencesProvider sdk={sdk}>`.
+Without snapshot/handoff it is immediately available. The Provider captures `sdk`
+on first mount and ignores later `sdk` prop changes. To bind a fresh instance,
+retire the old SDK and explicitly key/remount the Provider; the application owns
+injected SDK destruction. Handoff and page-payload props remain dynamic; owned
+roots continue applying locale updates.
+Independent React roots can share one explicit `/host` binding and each use an
+injected provider. Activate the host outside React render with
+`createRootSdkBinding({ config, onStatesReady })`, then unmount its
+React roots before `disposeRootSdkBinding(binding)` during deliberate
+host replacement or teardown within a live document.
+`{ sdk }` creates a borrowed binding whose disposal leaves SDK destruction to the
+application. During document exit, keep the owner and attributed roots alive for
+Web's interaction completion and final hide flush; browser teardown releases that
+document. Persisted BFCache `pagehide` retains ownership for resumption.
+
+The state hooks are `useProfileState`, `useLocaleState`, `useConsentState`,
+`usePersistenceConsentState`, `usePersonalizationRequestState`, `useEventStreamState`,
+`useBlockedEventStreamState`, and `usePreviewState`. They preserve SDK value types,
+including `undefined` and `false`, and cache observable emissions for React.
+Event state reads the last attempt; it is not a new attempt notification. For an
+attempt log, subscribe early with `onStatesReady` and omit the subscription's
+immediate historical value when counting new attempts.
+
+`useExperiencesActions()` exposes receiver-safe `setConsent`, `flushEvents`,
+`identifyUser`, `trackPageView`, `resetUser`, `trackEvent`, `setLocale`, `trackView`,
+`trackClick`, `trackHover`, and `trackFlagView`. These preserve the underlying
+arguments, results, errors and runtime policy. Direct identify/page actions do not
+refresh content or coordinate navigation. Destruction remains an owner operation.
+
+The root's `preview` configuration owns credentials and optional session integration.
+`usePreviewState()` reads the single raw `states.preview` observable without resolving
+content. Pending initialization, static Preview and source errors do not change root
+readiness. A provider does not fetch snapshots or add per-view resolved bindings;
+managed presentations subscribe through their existing controller.
+
+### Optional router integration
+
+Install the peer for the router you use: `npm install react-router-dom` (6.4+ in
+major 6, or major 7) or `npm install @tanstack/react-router` (major 1). Both peers are optional; ordinary
+React imports and declarations remain independent of them. React Router requires
+a data router because the integration uses `useMatches`; a plain `BrowserRouter`
+is insufficient.
+
+Bind the registry once at module scope with `bindReactRouterExperiences({ config })`
+or `bindTanStackRouterExperiences({ config })`. Each returns the
+`createExperiences` result with router-aware `ExperiencesRoot` and
+`ExperiencesProvider`, plus bound `Experience`, `useManagedExperience` and
+`ExperienceRenderer`. Mount one stable wrapper inside the respective router,
+above the primary managed `Experience`. Keep it mounted across navigation rather
+than keying it by location.
+For React Router, use a shared layout route under `RouterProvider`:
 
 ```tsx
-const livePreview = useLivePreviewExperience({
-  previewSessionOptions: {
-    spaceId,
-    environmentId,
-    previewToken,
-    sessionId,
+import { Outlet } from 'react-router-dom';
+import { bindReactRouterExperiences } from '@contentful/experiences-react/router/react-router';
+
+const { ExperiencesRoot, Experience } = bindReactRouterExperiences({ config: browserRegistry });
+
+function ExperiencesLayout() {
+  return (
+    <ExperiencesRoot
+      {...browserConfig}
+      pagePayload={{ properties: { title: 'Catalog' } }}
+      getPagePayload={({ context }) => ({ properties: { title: context.pathname } })}
+    >
+      <Outlet />
+    </ExperiencesRoot>
+  );
+}
+```
+
+For TanStack Router, use the root route's component inside `RouterProvider`:
+
+```tsx
+import { Outlet } from '@tanstack/react-router';
+import { bindTanStackRouterExperiences } from '@contentful/experiences-react/router/tanstack-router';
+
+const { ExperiencesRoot, Experience } = bindTanStackRouterExperiences({ config: browserRegistry });
+
+function ExperiencesLayout() {
+  return (
+    <ExperiencesRoot
+      {...browserConfig}
+      pagePayload={{ properties: { title: 'Catalog' } }}
+      getPagePayload={({ context }) => ({ properties: { title: context.pathname } })}
+    >
+      <Outlet />
+    </ExperiencesRoot>
+  );
+}
+```
+
+Here `browserConfig` is the same browser SDK configuration used by
+`ExperiencesRoot`. Child routes render the registry-bound
+`<Experience experienceId={experienceId} />`, or a destination selector such as
+`<Experience destinationId={destinationId} path={pathname} />`, returned by the same
+router binding. Supply the destination path explicitly as a pathname, without the
+route key's query string. The bound component and hook default to the router's
+native replacement navigation on redirects. A callback passed to the binding
+factory or individual component/hook overrides that default.
+The router roots retain the existing root's construction and cleanup lifecycle.
+To inject an application-owned SDK instead, use the returned `ExperiencesProvider`
+with `sdk={sdk}`; the application retains responsibility for destroying it.
+
+Both wrappers accept their existing root/provider props, replacing `routeKey`,
+`buildPagePayload` and `initialPagePayload` with optional static `pagePayload` and
+`getPagePayload({ context, routeKey, isInitialEmission })`. Page arguments deeply
+merge nested records in this order: router metadata, static payload, dynamic
+payload. Later values win and undefined layers are skipped; overriding one nested
+field preserves its siblings. Router metadata supplies `properties.hash`, `path`,
+`query`, `search` and `url`, even without custom payloads.
+Query keys with one value map to strings; repeated keys map to ordered string arrays.
+Composition runs when the existing sequence requests page intent, using the
+latest committed options. Inline payload objects and callbacks need no memoization.
+The two bindings share their root/provider wrappers and composition; each reads
+only its own router's context.
+
+Each subpath exports its matching `*ExperiencesRootProps`,
+`*ExperiencesProviderProps` and `*AutoPageContext` types, plus `AutoPagePayload`
+(page builder arguments), `AutoPageEmissionContext<TRouteContext>` and
+`AutoPagePayloadOptions<TRouteContext>`. Both router contexts include `location`,
+`matches`, `hash`, `pathname`, `search`, `url` and `routeKey`; `TanStackRouterAutoPageContext` also includes `router`.
+For React Router, context `pathname`, page `properties.path`/`url` and route
+identity include the configured basename; `location` and `matches` remain the
+router's original objects. Payload `properties.url` resolves against the browser
+origin when available and uses the router URL unchanged during server rendering.
+Set `pagePayload.properties.url`
+or return it from `getPagePayload` when the application requires a canonical
+absolute URL on both server and client.
+
+Route keys always concatenate pathname and the router's original search string,
+without query re-encoding, matching the existing server-handoff contract. Hash is
+metadata only and does not create a new page identity. TanStack moves the URL
+with the presented route/search matches, including a successful parent whose
+child is pending. Location-only and loading-status updates retain the previous
+route; a child settling does not create another page identity. The SDK does not generate
+browser handoffs. These wrappers feed page intent into the existing managed XDA
+sequence; explicit `personalization.events` remains authoritative and Retry stays
+event-free.
+They add no tracker or direct page emitter. Existing consent, preview, handoff and
+lifetime rules continue to apply.
+
+### Live preview
+
+Use context-owned Preview through the public Web SDK. The existing `preview` object
+contains credentials plus optional session integration; renderer and fetch IDs stay
+ordinary:
+
+```ts
+import { createLivePreviewClient } from '@contentful/experiences-live-preview';
+
+import { ContentfulExperiences } from '@contentful/experiences-react/web-sdk';
+
+const sdk = new ContentfulExperiences({
+  ...browserConfig,
+  preview: {
+    accessToken: browserPreviewToken,
+    createClient: createLivePreviewClient,
   },
-  initialPayload,
 });
+const plan = await sdk.fetchExperience({ experienceId }, { config: experienceConfig });
+presentPlan(plan);
+const subscription = sdk.subscribeToPreview(
+  experienceId,
+  { config: experienceConfig },
+  ({ data, error }) => {
+    if (data) presentPlan(data);
+    showError(error);
+  }
+);
+// Teardown: subscription.unsubscribe(); sdk.destroy();
+```
+
+The SDK uses a session snapshot only when its successfully acquired raw `sys.id`
+matches the requested ID; see Runtime's [acquisition limits](../runtime/README.md#optional-runtime-live-preview).
+The shared connection publishes only to matching views; missing identity never
+broadcasts. Supplied initial plans need no startup snapshot fetch. Updates can carry
+both usable content and an error. Snapshot HTTP errors appear in fetch/managed
+results; connection/update errors appear in `states.preview`. Managed views retain
+usable content while pending or failed. `states.preview` exposes the single raw context;
+Preview mode suppresses visitor events. Changing sessions creates a new SDK context.
+See [Web](../web/README.md#shared-source-and-optional-live-preview) and
+[Runtime](../runtime/README.md#optional-runtime-live-preview) for endpoint mapping
+and transport limits.
+
+For application-supplied payloads, `useExperiencePlan` remains a general helper:
+
+```tsx
+import { ClientExperienceRenderer, useExperiencePlan } from '@contentful/experiences-react/client';
 
 const plan = useExperiencePlan({
-  payload: livePreview.data,
+  payload,
   initialPlan,
   resolveOptions: { config: experienceConfig },
 });
@@ -121,21 +675,202 @@ const plan = useExperiencePlan({
 <ClientExperienceRenderer experience={plan.data} config={experienceConfig} />;
 ```
 
-`useLivePreviewExperience` returns the latest raw Experience payload.
-`initialPayload` seeds the first value. `useExperiencePlan` turns that payload
-into the `PortableRenderPlan` consumed by the renderer and keeps the current rendered
-experience while an update is being resolved.
-
-The live-preview results also expose `error` when the Preview Session connection
-fails. The last valid `data` remains available.
+It keeps the current rendered plan while resolving an update. It does not create
+a runtime or a preview connection.
 
 ### Renderers
 
 ```ts
-ServerExperienceRenderer; // RSC-friendly renderer
-ClientExperienceRenderer; // Client renderer, alias: ExperienceRenderer
+ServerExperienceRenderer; // /server (also root): RSC-friendly renderer
+ClientExperienceRenderer; // /client: client renderer, alias: ExperienceRenderer
 MissingComponent; // Default fallback for unregistered component types
 ```
+
+### Attributed rendering and DOM roots
+
+Both renderers add one Experience boundary, a `div` with `display: contents`
+by default, and inject Core scope attributes into registered component/template
+props. Components must forward those attributes to their actual outermost HTML
+element. Existing registration lookup, prop precedence, named slots, context,
+unknown/error fallbacks and the `experience` prop retain their behavior. Rendering
+supplied plans performs no fetch and works identically for preview-derived plans.
+
+The boundary is a real DOM element even with `display: contents`, so direct-child
+and positional selectors and DOM snapshots may change. Update affected selectors
+or choose a suitable semantic container with `as`.
+
+```tsx
+import type { HTMLAttributes } from 'react';
+
+function Card({ title, ...rootProps }: HTMLAttributes<HTMLElement>) {
+  return (
+    <article {...rootProps}>
+      <h3>{title}</h3>
+    </article>
+  );
+}
+```
+
+Use `as="section"` (or another HTML element/custom forwarding component) and
+`rootProps` for the single container customization surface. For layout-sensitive
+markup, select its semantic root and style through those same props:
+
+```tsx
+<table>
+  <ServerExperienceRenderer
+    experience={tablePlan}
+    config={rowRegistry}
+    as="tbody"
+    rootProps={{ style: { display: 'table-row-group' } }}
+  />
+</table>
+```
+
+A custom `as` component forwards the boundary attributes, children and client ref
+to its actual root. Server root props exclude DOM refs. In development, the client
+renderer warns once if
+`onNodeRoot` is supplied but the boundary ref is missing. Root registration
+remains disabled until the boundary ref is forwarded.
+
+An empty attribution boundary is still emitted when the plan lacks a usable
+source map, so a nested Experience cannot borrow an ancestor's scopes. Obtain
+attribution with `extensions: { sourceMap: {} }` when application loading owns
+fetching; supplied plans use only the attribution they already carry. Repeated
+presentations receive distinct container elements, while each node's roots keep
+their shared plan-local scope keys. No per-node DOM wrapper is added.
+
+Ordinary single-root components forward HTML attributes and refs, using React
+`forwardRef` for React 18 compatibility. They need no SDK-specific root prop.
+For fragments, multiple HTML roots, or explicit ref composition, optionally declare
+a named root binding. Spread `getRootProps` onto every actual root, with distinct stable
+keys; pass customer attributes and refs as its second argument. SDK scope keys
+remain authoritative, and object/callback refs are composed, including React 19
+callback cleanup. Specialized HTML roots can use `getRootProps<HTMLTableRowElement>()`.
+
+```tsx
+import { defineComponent, type ExperienceRootBinding } from '@contentful/experiences-react/client';
+
+function SplitCard({ experienceRoot }: { experienceRoot: ExperienceRootBinding }) {
+  return (
+    <>
+      <article {...experienceRoot.getRootProps('body', { className: 'card' })}>Body</article>
+      <aside {...experienceRoot.getRootProps('aside')}>Related content</aside>
+    </>
+  );
+}
+
+const splitCard = defineComponent({
+  component: SplitCard,
+  root: { prop: 'experienceRoot' },
+});
+```
+
+The named prop is reserved for the binding. Keep it distinct from content and
+slot props. Text-only roots, dropped root props/refs, SVG roots and portals outside
+the enclosing boundary are unsupported. Named bindings report a development
+warning when attributed roots are not forwarded. A portal needs its own valid
+Experience boundary. Custom `as` implementations must forward the boundary
+attributes; client root callbacks require its ref too. For direct injected manual
+refs, React 18 components use `forwardRef`; React 19 components may forward a ref
+prop. The named binding works with ordinary function components in both versions.
+
+For RSC, default forwarding passes only serializable root attributes. Callable
+named bindings are created inside a client composition boundary: register client
+component references for that path, or create the bound `createExperienceNode`
+component in a client module and pass it serializable snapshots. A server-only
+registration should use direct attribute forwarding. Ordinary React SSR supports
+both paths. Do not pass server-created DOM refs or registration callbacks across
+an RSC boundary.
+
+Tracking controls follow Optimization: `clickable`, `trackViews`, `trackHovers`,
+and `trackClicks`. Undefined retains existing root attributes and Web defaults;
+false disables that automatic kind, and true opts it in subject to SDK consent.
+They apply to each node's real roots, including named-slot descendants. Attribution
+and scope attributes remain available even when all automatic kinds are disabled.
+
+```tsx
+<ExperienceRenderer
+  experience={plan}
+  config={registry}
+  trackViews={false}
+  trackHovers={true}
+  trackClicks={true}
+  clickable
+/>
+```
+
+Client `onNodeRoot` remains an optional low-level registration seam. It receives
+`{ element, node, attribution, data }` for actual HTML roots and can return cleanup
+for removal, effective node-data replacement or callback replacement. `node` is a
+`NodeSnapshot`; `data` is the SDK-selected innermost rooted scope, ready for the
+Web tracking API. It is undefined if the node roots no scope or attribution is
+unavailable. Stable rerenders and per-kind option changes preserve manual root
+registration. Memoize `onNodeRoot` with `useCallback`; changing its identity runs
+cleanup and registers roots again, which can restart manual measurements.
+Disable automatic views while explicitly registering manual views:
+
+```tsx
+import { useCallback } from 'react';
+import {
+  createExperiences,
+  useExperiences,
+  type OnExperienceNodeRoot,
+  type PortableRenderPlan,
+} from '@contentful/experiences-react/client';
+
+const { ExperienceRenderer } = createExperiences({ config: registry });
+
+function ManualContent({ plan }: { plan: PortableRenderPlan }) {
+  const sdk = useExperiences();
+  const registerView = useCallback<OnExperienceNodeRoot>(
+    ({ element, data }) => {
+      if (!data) return;
+      sdk.tracking.enableElement('views', element, { data });
+      return () => sdk.tracking.clearElement('views', element);
+    },
+    [sdk]
+  );
+  return <ExperienceRenderer experience={plan} trackViews={false} onNodeRoot={registerView} />;
+}
+```
+
+Mount `ManualContent` under the managed root or an injected provider. Snapshot-to-live
+activation updates its memoized callback. Explicit Provider remount cleans the old
+registration before the new mounted binding registers its SDK. Direct application-owned
+SDK registration remains supported. Neither path performs attribution
+selection or root collection. Web owns measurement, consent and delivery, and
+measures each manual element independently. The reference's single-root components
+use ordinary forwarding, with no root-count/readiness panel. Context SDK access
+and registry binding also apply to managed `Experience`: it forwards the same
+per-kind and optional root callback props, including seeded plans. The managed
+surface owns fetch/subscription work; consumers need no SDK prop threading,
+root maps or per-component fetch/subscription/page orchestration. Ordinary identity
+and content flows require no extra root/ref boilerplate.
+
+For manual views of opaque server-rendered content, wrap only the selected subtree
+with `ManualViewTracking` from `/client` (also available through Next's `/client`):
+
+```tsx
+import { ManualViewTracking } from '@contentful/experiences-react/client';
+
+<ManualViewTracking className="manual-content">{serverRenderedContent}</ManualViewTracking>;
+```
+
+The wrapper forwards ordinary div props and its ref and emits
+`data-ctfl-manual-views="true"`. It needs no SDK context itself; a live Web SDK owns
+discovery and measurement. The marker survives RSC and serialized HTML adoption,
+without a client Experience renderer, attribution parsing or registration effects
+in the application. Rendered roots must retain their normal scope and plan
+attribution attributes, including a requested source map.
+
+Each real root is measured independently using its final rooted scope, matching
+explicit manual registration rather than automatic multi-root grouping. Manual
+boundaries enable views even when `trackViews={false}`; hovers and clicks retain
+their existing policy. Explicit element overrides take precedence. Stable DOM and
+attribution preserve measurements; insertion, replacement and removal use the
+existing Web observer. Consent and preview still gate tracking. Reset discards old
+measurements and rediscovers the marker for the new visitor; removing the marker
+restores ordinary tracking policy. See [Web tracking](../web/README.md#interaction-tracking).
 
 ### Custom renderer (`@contentful/experiences-react/custom-renderer`)
 
@@ -148,7 +883,17 @@ createExperienceNode(components, experienceTemplates?); // ExperienceNode with i
 type ResolvedNode, NodeSnapshot, ExperienceNodeProps;
 ```
 
-### Styling + runtime context (hooks)
+Custom hosts must spread `getTrackingAttributes(plan.attribution ?? { scopes: {} })`
+onto one DOM container per rendered plan, including repeated presentations. These
+node primitives do not create that boundary. Keep the empty boundary when
+attribution is unavailable: automatic tracking resolves scope keys through the
+nearest boundary, so omitting it can resolve an inner plan's keys against an
+ancestor's attribution.
+
+### Styling + render context (hooks)
+
+Import hooks from `/client`; pure `toCss` and `getTrackingAttributes` are also
+available from the root and `/server`.
 
 ```ts
 useDesignValues<T>(); // Escape hatch: the same resolved design record that auto-fills props
@@ -267,6 +1012,26 @@ export function Section({ children }: { children?: ReactNode[] }) {
 For the full getting-started walkthrough, merge-precedence rules, and design rationale, see the [root README](../../README.md) and [`AGENTS.md`](../../AGENTS.md).
 
 ---
+
+## Source organization
+
+Public entry files stay at `src/` so the package's import paths remain explicit.
+Implementation and colocated tests are grouped by responsibility:
+
+- `rendering/`: server/client renderers, traversal, Experience boundaries and render context.
+- `nodes/`: node composition, snapshots and prop resolution.
+- `tracking/`: DOM-root bindings, refs and attribution types.
+- `diagnostics/`: error boundaries, fallbacks and the debug panel.
+- `hooks/`: supplied-plan resolution and design hooks.
+- `experience/`: supplied/managed `Experience`, its source controller and request hook, and the registry-bound factory.
+- `runtime/`: owned/injected activation, SDK binding and contexts, route/page sequencing, observable state and event/command hooks.
+- `router/`: optional React Router/TanStack Router wrappers and shared nested page-payload composition.
+- `design/`: CSS conversion utilities.
+- `registry/`: registration definitions, normalization and types.
+- `test/`: shared test utilities and fixture data, excluded from publication.
+
+The build remains unbundled and preserves nested module paths and client directives.
+Package entry checks cover the full source tree and its emitted declarations.
 
 ## License
 

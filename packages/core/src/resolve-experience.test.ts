@@ -58,6 +58,18 @@ function sysWithExperienceTemplate(typeId: string): ExperiencePayload['sys'] {
 const emptyConfig: ResolverConfig = { components: {} };
 
 describe('resolveExperience — IR construction', () => {
+  it('retains the actual nonempty payload Experience ID without inventing missing identity', async () => {
+    const plan = await resolveExperience(
+      { sys: { id: 'actual-experience' }, nodes: [] },
+      emptyConfig
+    );
+    expect(plan.experienceId).toBe('actual-experience');
+    for (const sys of [undefined, {}, { id: '' }, { id: '   ' }]) {
+      const withoutIdentity = await resolveExperience({ sys, nodes: [] }, emptyConfig);
+      expect(withoutIdentity).not.toHaveProperty('experienceId');
+    }
+  });
+
   it('emits a node per top-level instance with nested slot trees', async () => {
     const payload: ExperiencePayload = {
       nodes: [
@@ -857,15 +869,36 @@ describe('resolveExperience — render context carried on the plan', () => {
     });
   });
 
-  it('carries the XDA personalization profile id onto the plan', async () => {
+  it('carries the full XDA personalization profile onto the plan', async () => {
     const experience = payload();
+    const profile = {
+      id: 'profile-id',
+      stableId: 'stable-id',
+      random: 0.5,
+      audiences: ['audience'],
+      traits: { plan: 'pro' },
+      location: { countryCode: 'DE' },
+      session: {
+        isReturningVisitor: true,
+        landingPage: {
+          path: '/',
+          query: {},
+          referrer: '',
+          search: '',
+          url: 'https://example.com/',
+        },
+        count: 2,
+        activeSessionLength: 10,
+        averageSessionLength: 20,
+      },
+    };
     experience.extensions = {
-      personalization: { profile: { id: 'profile-id' } },
+      personalization: { profile },
     };
 
     const plan = await resolveExperience(experience, emptyConfig);
 
-    expect(plan.personalization).toEqual({ profileId: 'profile-id' });
+    expect(plan.personalization).toEqual({ profile });
   });
 
   it('omits personalization when XDA did not return a profile id', async () => {
@@ -873,6 +906,30 @@ describe('resolveExperience — render context carried on the plan', () => {
 
     expect('personalization' in plan).toBe(false);
   });
+
+  function personalizationProfile(id: string) {
+    return {
+      id,
+      stableId: id,
+      random: 0.5,
+      audiences: [],
+      traits: {},
+      location: {},
+      session: {
+        isReturningVisitor: false,
+        landingPage: {
+          path: '/',
+          query: {},
+          referrer: '',
+          search: '',
+          url: 'https://example.com/',
+        },
+        count: 1,
+        activeSessionLength: 0,
+        averageSessionLength: 0,
+      },
+    };
+  }
 
   it('preserves mixed XDA changes beside a valid profile id', async () => {
     const changes = [
@@ -888,12 +945,15 @@ describe('resolveExperience — render context carried on the plan', () => {
     ];
     const experience: ExperiencePayload = {
       nodes: [],
-      extensions: { personalization: { profile: { id: 'profile-id' }, changes } },
+      extensions: { personalization: { profile: personalizationProfile('profile-id'), changes } },
     };
 
     const plan = await resolveExperience(experience, emptyConfig);
 
-    expect(plan.personalization).toEqual({ profileId: 'profile-id', changes });
+    expect(plan.personalization).toEqual({
+      profile: personalizationProfile('profile-id'),
+      changes,
+    });
     expect(plan.personalization?.changes).toBe(changes);
     expect(JSON.parse(JSON.stringify(plan)).personalization).toEqual(plan.personalization);
   });
@@ -901,11 +961,17 @@ describe('resolveExperience — render context carried on the plan', () => {
   it('preserves an explicit empty changes array beside a valid profile id', async () => {
     const changes: unknown[] = [];
     const plan = await resolveExperience(
-      { nodes: [], extensions: { personalization: { profile: { id: 'profile-id' }, changes } } },
+      {
+        nodes: [],
+        extensions: { personalization: { profile: personalizationProfile('profile-id'), changes } },
+      },
       emptyConfig
     );
 
-    expect(plan.personalization).toEqual({ profileId: 'profile-id', changes: [] });
+    expect(plan.personalization).toEqual({
+      profile: personalizationProfile('profile-id'),
+      changes: [],
+    });
     expect(plan.personalization?.changes).toBe(changes);
     expect(JSON.parse(JSON.stringify(plan)).personalization).toEqual(plan.personalization);
   });

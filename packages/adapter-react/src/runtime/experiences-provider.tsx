@@ -1,0 +1,283 @@
+'use client';
+
+// Adapted from OptimizationProvider activation at
+// 04971a80eaf658b74ace7865472085877d96c98d (MIT).
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PropsWithChildren,
+} from 'react';
+import {
+  type ContentfulExperiences,
+  createWebSnapshotRuntime,
+  type ExperiencesHandoff,
+  type ExperiencesSnapshot,
+  type Config,
+  type CurrentPageOptions,
+} from '@contentful/experiences-web';
+import {
+  assertExperiencesCacheSafety,
+  assertExperiencesHandoffScope,
+  resolvePreviewSessionId,
+} from '@contentful/experiences-runtime';
+import { RuntimeContext, type RuntimeContextValue } from './context.js';
+import {
+  createRootSdkBinding,
+  disposeRootSdkBinding,
+  type RootSdkBinding,
+  type OnStatesReady,
+} from './root-sdk-binding.js';
+import { PageSequence, type BeforeInitialPageOptions } from './page-sequence.js';
+import { sameValue } from '../experience/source-controller.js';
+
+interface PresentationOptions {
+  readonly snapshot?: ExperiencesSnapshot;
+  readonly handoff?: ExperiencesHandoff;
+  /** Server-transfer identity; a fresh key can admit identical handoff data after reset. */
+  readonly handoffKey?: string;
+  readonly onStatesReady?: OnStatesReady;
+  readonly routeKey?: string;
+  readonly buildPagePayload?: CurrentPageOptions['buildPayload'];
+  /** Static page arguments; update route-varying values on navigation. The builder takes precedence. */
+  readonly initialPagePayload?: Exclude<ReturnType<CurrentPageOptions['buildPayload']>, undefined>;
+  readonly beforeInitialPage?: BeforeInitialPageOptions;
+  /** Analytics-only presentation emits browser page intent without managed content. */
+  readonly pageMode?: 'analytics';
+}
+
+export type ExperiencesProviderProps = PropsWithChildren<
+  PresentationOptions & { readonly sdk: ContentfulExperiences }
+>;
+export type ExperiencesRootProps = PropsWithChildren<Config & PresentationOptions>;
+
+type ActivationProps = ExperiencesProviderProps | ExperiencesRootProps;
+type Target = {
+  readonly props: ActivationProps;
+  readonly snapshot: RuntimeContextValue['sdk'];
+  readonly initial: RuntimeContextValue;
+};
+
+const useCommitEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+const toError = (error: unknown): Error =>
+  error instanceof Error ? error : new Error(String(error));
+
+function createTarget(props: ActivationProps): Target {
+  const ownedConfig = 'sdk' in props ? undefined : props;
+  const snapshot = createWebSnapshotRuntime(
+    props.snapshot ?? {
+      data: props.handoff?.state,
+      locale: ownedConfig?.locale,
+      consent: ownedConfig?.defaults?.consent,
+      persistenceConsent: ownedConfig?.defaults?.persistenceConsent,
+      allowedEventTypes: ownedConfig?.allowedEventTypes,
+    }
+  );
+  const immediate = 'sdk' in props && props.snapshot === undefined && props.handoff === undefined;
+  return {
+    props,
+    snapshot,
+    initial: {
+      error: undefined,
+      isContentReady: immediate,
+      ...(immediate
+        ? { sdk: props.sdk, isLive: true as const }
+        : { sdk: snapshot, isLive: false as const }),
+    },
+  };
+}
+
+function assertHandoff(handoff: ExperiencesHandoff | undefined, owner: ActivationProps): void {
+  if (!handoff) return;
+  assertExperiencesCacheSafety(handoff);
+  assertExperiencesHandoffScope(handoff, 'sdk' in owner ? owner.sdk : owner);
+}
+
+function ActivationProvider(props: ActivationProps) {
+  // Structural managed configuration is captured for this mounted owner. Use a key
+  // to replace it deliberately; mutable locale uses the existing SDK command.
+  const [target] = useState(() => createTarget(props));
+  // Validate later handoffs against the actual receiving owner, whose structural
+  // configuration stays captured until replacement. No child reads unsafe state.
+  assertHandoff(props.handoff, target.props);
+  const [context, setState] = useState<RuntimeContextValue>(target.initial);
+  const [localeError, setLocaleError] = useState<Error>();
+  const activeRef = useRef<RootSdkBinding | undefined>(undefined);
+  const latestProps = useRef(props);
+  // Retained page callbacks must not observe props from an abandoned render.
+  useCommitEffect(() => {
+    latestProps.current = props;
+  });
+  const pagePayloadEnabled =
+    props.buildPagePayload !== undefined || props.initialPagePayload !== undefined;
+  // Payload values can change without replacing the current handoff operation.
+  const buildPagePayload = useMemo<CurrentPageOptions['buildPayload'] | undefined>(
+    () =>
+      pagePayloadEnabled
+        ? (options) => {
+            const current = latestProps.current;
+            return current.buildPagePayload
+              ? current.buildPagePayload(options)
+              : current.initialPagePayload;
+          }
+        : undefined,
+    [pagePayloadEnabled]
+  );
+  const routeKey =
+    props.routeKey ??
+    (typeof window === 'undefined' ? '/' : window.location.pathname + window.location.search);
+  const [resetRevision, setResetRevision] = useState<object>(() => ({}));
+  const operationRevision = useRef(resetRevision);
+  const [resetHandoff, setResetHandoff] = useState<{
+    key?: string;
+    handoff?: ExperiencesHandoff;
+  }>();
+  const handoff =
+    resetHandoff &&
+    (resetHandoff.key !== undefined
+      ? props.handoffKey === resetHandoff.key
+      : props.handoffKey === undefined && sameValue(props.handoff, resetHandoff.handoff))
+      ? undefined
+      : props.handoff;
+  const resetRequests = useMemo(
+    () => () => {
+      const revision = {};
+      operationRevision.current = revision;
+      const { handoff, handoffKey } = latestProps.current;
+      setResetHandoff(handoffKey === undefined ? { handoff } : { key: handoffKey });
+      setResetRevision(revision);
+    },
+    []
+  );
+
+  function publishLive(sdk: ContentfulExperiences, isContentReady: boolean, error?: Error) {
+    setState({ sdk, isLive: true, isContentReady, error });
+  }
+
+  useCommitEffect(() => {
+    let binding: RootSdkBinding | undefined;
+    try {
+      const initial = target.props;
+      if ('sdk' in initial) {
+        binding = createRootSdkBinding({
+          sdk: initial.sdk,
+          onStatesReady: initial.onStatesReady,
+        });
+      } else {
+        const {
+          children: _children,
+          snapshot: _snapshot,
+          handoff: _handoff,
+          handoffKey: _handoffKey,
+          onStatesReady,
+          routeKey: _routeKey,
+          buildPagePayload: _buildPagePayload,
+          initialPagePayload: _initialPagePayload,
+          beforeInitialPage: _beforeInitialPage,
+          pageMode: _pageMode,
+          ...config
+        } = initial;
+        binding = createRootSdkBinding({ config, onStatesReady });
+      }
+      activeRef.current = binding;
+      publishLive(binding.sdk, initial.handoff === undefined);
+    } catch (error) {
+      setState({
+        sdk: target.snapshot,
+        error: toError(error),
+        isLive: false,
+        isContentReady: true,
+      });
+    }
+    return () => {
+      activeRef.current = undefined;
+      disposeRootSdkBinding(binding);
+    };
+  }, [target]);
+
+  useCommitEffect(() => {
+    const active = activeRef.current;
+    if (!active) return;
+    if (!handoff) {
+      publishLive(active.sdk, true);
+      return;
+    }
+    let cancelled = false;
+    const revision = operationRevision.current;
+    const isCurrent = () => !cancelled && operationRevision.current === revision;
+    publishLive(active.sdk, false);
+    // Like Optimization's useAutoPageEmitter, consent changes delegate to the
+    // complete SDK operation. The immediate emission starts it after onStatesReady.
+    const hydrate = async () => {
+      try {
+        await active.sdk.hydrateAndTrackCurrentPage(handoff, {
+          routeKey,
+          buildPayload: buildPagePayload,
+          isCurrent,
+        });
+        if (isCurrent()) publishLive(active.sdk, true);
+      } catch (error) {
+        if (isCurrent()) publishLive(active.sdk, true, toError(error));
+      }
+    };
+    const subscription = active.sdk.states.consent.subscribe(() => {
+      void hydrate();
+    });
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, [target, handoff, props.handoffKey, routeKey, buildPagePayload, resetRevision]);
+
+  const locale = 'sdk' in props ? undefined : props.locale;
+  useCommitEffect(() => {
+    const active = activeRef.current;
+    if (!active) return;
+    const sdk = active.sdk;
+    let error: Error | undefined;
+    try {
+      if (locale !== undefined && sdk.locale !== locale) sdk.setLocale(locale);
+    } catch (cause) {
+      error = toError(cause);
+    }
+    // Locale recovery must not clear a still-applicable hydration error, and a
+    // hydration result must not erase this command's failure.
+    setLocaleError(error);
+  }, [target, locale]);
+
+  const error = localeError ?? context.error;
+  const value = useMemo<RuntimeContextValue>(() => ({ ...context, error }), [context, error]);
+  return (
+    <RuntimeContext.Provider value={value}>
+      <PageSequence
+        routeKey={routeKey}
+        handoff={handoff}
+        buildPagePayload={buildPagePayload}
+        beforeInitialPage={props.beforeInitialPage}
+        pageMode={props.pageMode}
+        resetRevision={resetRevision}
+        onReset={resetRequests}
+      >
+        {props.children}
+      </PageSequence>
+    </RuntimeContext.Provider>
+  );
+}
+
+export function ExperiencesProvider(props: ExperiencesProviderProps) {
+  return <ActivationProvider {...props} />;
+}
+
+export function ExperiencesRoot(props: ExperiencesRootProps) {
+  const sessionId = props.preview
+    ? resolvePreviewSessionId(
+        new URL(
+          typeof window === 'undefined' ? (props.routeKey ?? '/') : window.location.href,
+          'https://react.invalid'
+        ).searchParams
+      )
+    : undefined;
+  return <ActivationProvider key={sessionId} {...props} />;
+}

@@ -3,84 +3,102 @@
 This standalone Express/EJS implementation consumes `@contentful/experiences-node`
 from locally built npm tarballs. It has its own dependencies, configuration, and
 tooling, outside the root npm workspaces. It follows Optimization's Express/EJS
-layout and request-facade pattern. A page event establishes the visitor profile;
-an optional built identify event accompanies each Experience fetch so XDA selects
-the content before rendering. `GET /health` makes no API calls.
+layout and request-facade pattern. It builds optional identify and one page into
+XDA evaluation through ordinary Node fetch and renders available plans. This SSR
+flow commits admitted XDA-carried intent through ordinary fetch. `GET /health` makes no API calls.
 
 ## Request flow
 
-`GET /` sends one page event through `request.page()` to establish the visitor
-profile, then fetches each configured Experience once. `GET /?userId=charles`
-also builds an identify event with `sdk.eventBuilder`, that user ID, and
-`traits: { identified: true }`. Each Experience fetch includes the built identify
-event in `personalization.events`, so XDA evaluates it while selecting content.
-The application does not independently call `identify()` or fetch an Experience
-twice in the same app request.
-A fixed identify user ID is acceptable; it is distinct from the API-issued profile ID.
+`GET /` supplies `{ type: 'page' }` in `personalization.events`.
+`GET /?userId=charles` also supplies identify arguments with that user ID and
+`traits: { identified: true }`; the owner builds admitted intent once. The SDK inherits locale, page and
+user agent from request context. No direct `request.identify()` / `request.page()`
+is required before rendering. Ordinary `request.fetchExperience` builds admitted
+type-tagged arguments once, also accepting raw built XDA events. XDA evaluates with
+`personalization.preflight: false` by default, committing admitted intent and returning
+a selected plan and locally adopted profile ID.
+This Node-only app creates no handoff and performs no aggregate commit.
 
-Profiles come only from Personalization API/XDA responses. The SDK carries the profile
-between fetches on the request facade. The app does not accept a profile-ID input,
-persist profiles, or add cookies or sessions. Requests assume `consent: true`, like
-the Optimization reference; this is not a consent-management implementation.
+The lightweight best-effort loop compares distinct configured Experiences only.
+Later IDs and same-ID content Retry use ordinary fetch without events, builders,
+event hooks or replay. Reuse plans for repeated presentations. Official support
+is one Experience per page, unenforced in code; this loop supplies no
+multi-Experience or cross-fetch guarantee. See
+[Runtime's XDA contract](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
 
-The page shows whether an identify event was included and renders the Experience
-content. Fetch results expose a profile ID, not profile traits, so that label does
-not assert a separately confirmed identification result. SDK exceptions
-produce a short error response. The app does not inspect raw XDA responses;
-application-level errors that the runtime does not surface remain an SDK limitation.
-Responses are private/no-store and profiles remain request-local. The rate limiter
-matches Optimization's 1000 requests per 30 seconds.
+Profiles come only from Personalization API/XDA responses and remain owned by the
+request facade. The app accepts no manual profile input and adds no persistence,
+cookies or sessions. Requests assume `consent: true`, like the Optimization
+reference; this is not a consent-management implementation. A fixed identify user
+ID is demonstration intent, distinct from the API-issued profile ID.
 
-## Current XDA limitations and workaround removal
+The page shows identify intent and renders Experience content. Fetch results retain
+the full profile, but the label describes application intent rather than interpreting
+its traits or asserting confirmed identification. Content or rendering exceptions produce
+a short error response. The app does not inspect raw XDA responses; application-level
+errors the runtime does not surface remain an SDK limitation. Responses are
+private/no-store and profiles remain request-local. The rate limiter matches
+Optimization's 1000 requests per 30 seconds.
 
-The request flow compensates for three observed XDA issues. Recheck the behavior
-below when XDA or the generated Delivery client is updated; do not preserve these
-workarounds merely because the reference already uses them.
+## Optional Preview Session snapshots
 
-1. **An identified profile ID alone does not select personalized content.** A
-   profile can be confirmed identified and in the intended audience, yet a
-   profile-only Experience fetch returns baseline content with no response errors.
-   Including the identify event returns the variant. The reference therefore
-   includes its built identify event, with `traits: { identified: true }`, in each
-   Experience fetch. Once a profile-only fetch selects the same variant for that
-   same established profile, stop including identify in subsequent content fetches.
-   Retain the identify event where the visitor is actually identified or their
-   traits change.
-2. **XDA rejects SDK-built consent context.** Sending an unmodified EventBuilder
-   event containing `context.gdpr` produces HTTP 422 (`ValidationFailed`,
-   `unrecognized_keys`). Client serializes personalization itself, removing
-   unsupported fields (`context.gdpr`, `context.screen` and `context.page.title`)
-   without mutating the original events; the generated delivery client no longer
-   ships request schemas to do this. This is an SDK/API contract incompatibility;
-   strict rejection itself may be intentional. Once upstream XDA supports the built
-   event shape, verify built page and identify events end to end and remove the
-   extra Client normalization if redundant. Keep consent metadata on ordinary SDK
-   events and retain coverage of the supported wire contract.
-3. **Initial identification without a profile can time out.** An initial XDA
-   request containing identify, including a page/identify batch, can return HTTP
-   200 with a personalization `TimeoutError`, baseline content, and no profile.
-   The reference sends page directly first so the facade holds an API-issued
-   profile, then fetches each Experience once with identify. Once an initial
-   event-bearing fetch can create the profile, apply `identified: true`, match the
-   audience, and return the variant without errors, move the page event into the
-   first Experience fetch and remove the independent page call. Preserve one fetch
-   per Experience and keep profile ownership in the SDK.
+Configure the existing local `.env`:
 
-Verify the delivered variant and personalization result during these checks;
-HTTP 200 alone is insufficient. The render plan does not currently expose all raw
-XDA personalization errors. Keep any direct API diagnosis outside the app rather
-than adding response interception to its runtime flow.
+```dotenv
+LIVE_PREVIEW_ENABLED=true
+PREVIEW_TOKEN=<server-only preview token>
+# PREVIEW_HOST=https://...          # optional snapshot endpoint
+```
 
-The SDK's required-`userId` return type on `buildIdentify()` is a typing correction,
-not a temporary XDA workaround, and should remain when the server issues are fixed.
+Visit `/?preview_session_id=<session>`. Session content is used only for the
+Experience ID carried by the returned payload.
+Preview activates only when app-local `LIVE_PREVIEW_ENABLED` is exactly `true` and
+the URL supplies a nonempty, trimmed `preview_session_id`. `LIVE_PREVIEW_SESSION_ID`
+is local convenience storage only; runtime/build code never reads it.
+The preview flag is read from the local file on each launch, including PM2 restart,
+so an older inherited environment value cannot keep preview enabled.
+Missing or empty session parameters, or a disabled flag even with a session URL,
+use ordinary mode and events. Optional `LIVE_PREVIEW_RESOURCE_RESOLUTION` is forwarded.
+The presentation ID list stays unchanged; other IDs use Delivery.
+`forRequest({ preview })` supplies the URL session on the request; configured Preview
+transport plus a nonempty session determines `request.isPreview`. Active preview skips page/identify work and fetches
+the snapshot with the configured Preview transport through ordinary
+`fetchExperience`. Node opens no socket and needs no live-update client.
+`request.destroy()` runs in `finally`. Reload for another snapshot.
+See [Runtime preview limits](../../packages/runtime/README.md#shared-limitations).
+
+## Personalization contract and validation limits
+
+XDA defaults to `preflight: true`, which evaluates without committing events or
+profile creation/changes. The SDK explicitly defaults supplied personalization to
+`preflight: false` for ordinary fetches, so this SSR reference commits admitted intent.
+Node `forRequest({ preflight })` supplies a request default; an explicit per-call
+`personalization.preflight` wins. Explicit true keeps new IDs provisional and
+changes uncommitted.
+Profile-only XDA internally uses Personalization API GET, returning 404 for an uncommitted ID even
+when the SDK-to-XDA request is POST. SDK local adoption is not finalization. See
+[XDA preflight and profile finalization](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
+
+This Node-only reference uses the ordinary committed path and creates no browser
+replay. Actual hybrid producers instead pin preflight true and reject explicit false.
+Direct event APIs remain callable without becoming an initial rendering prerequisite
+or compensation. Preserve transformed-event validation, consent metadata and
+caller-input immutability. Local adoption and storage do not prove upstream commit.
+
+Keep built titles and consent context intact. Live validation must inspect
+delivered variants and personalization
+outcomes; HTTP 200 or profile presence alone is insufficient. Plans do not expose
+all raw XDA personalization errors. Keep direct API diagnosis outside the app
+rather than adding response interception. The SDK's required-`userId` return type
+on `buildIdentify()` remains a typing contract.
 
 ## Rendering and differences from Optimization
 
 The EJS shell uses Optimization's CSS, including its font stack, 1040px width,
 spacing, centered gray panels, and fixed 75dvh rows. Branding and the Experiences
-section label reflect this SDK. The States link includes an identify event on the
-next request. Unlike Optimization’s separate event and CDA-resolution flow, XDA
-evaluates these events while selecting the Experience content.
+section label reflect this SDK. The States link requests one identify action on
+the next request. XDA selects Experience content from the embedded built events
+and chained SDK-owned profile ID during evaluation.
 
 Experiences returns nested plans instead of CDA entries. The recursive `nodes.ejs` partial
 renders this space's `title`, plain `text`, `richText.document`, and slot children.
@@ -107,13 +125,12 @@ Do not edit that copy. Its current output describes CDA entries, not the Experie
 component/template properties, so those declarations are not imported by this app.
 The app uses the SDK's `PortableRenderPlan` type; no local content interfaces are
 maintained. The installed generator is 3.0.1 and produces only CDA declarations;
-running it requires Node 24 or later. Custom Experience type generation is outside this task’s scope.
+running it requires Node 24 or later. Custom Experience type generation is not included in this reference.
 
 ## Prerequisites
 
 - Node.js 24 or later for repository tooling, including content-type generation.
-  The standalone app declares Node.js 22.13 or later. Validation uses Node 24.15
-  and npm 12.0.2.
+  The standalone app declares Node.js 22.13 or later.
 - The repository's root dependencies installed with `npm ci`.
 
 ## Setup
@@ -124,7 +141,8 @@ Run from the repository root:
 npx nx run implementation-node-sdk:setup
 ```
 
-Nx builds, checks, and packs the Node SDK's local dependency chain, then installs
+Nx builds, checks, and packs the Node SDK's local dependency chain and packs the
+optional preview package through `package-tools:pack-preview`, then installs
 this app's dependencies and prepares the local environment file. Installation uses npm with
 workspace participation, lifecycle scripts, and package-lock generation disabled.
 It removes only this app's `node_modules` before installing, so rebuilt tarballs
@@ -195,8 +213,8 @@ npx nx run implementation-node-sdk:clean
 ```
 
 The app uses ordinary package scripts for its local tools, with Nx coordinating
-them. There are no implementation-owned runner or verification scripts. Isolation
-is demonstrated by installing and running a copy outside the repository.
+them. There are no implementation-owned runner or verification scripts. To verify
+isolation, install and run a copy outside the repository.
 
 `clean` removes only `dist` and `coverage`; it preserves `.env`, dependencies, and
 processes. Root build/test/lint/typecheck commands exclude implementations, so a
@@ -223,8 +241,3 @@ npx nx run-many -t typecheck,lint --projects=tag:scope:implementation
 
 - [Node SDK](../../packages/node/README.md)
 - [Local package artifacts](../../CONTRIBUTING.md#local-npm-artifacts)
-
-The reference converts the incoming `preview_session_id` to an `isPreview` boolean
-and passes it to `forRequest()` before page/fetch work.
-Session-marked requests skip events and omit embedded personalization; delivery requests keep
-the existing flow. This reference adds no Session rendering/subscription.
