@@ -18,6 +18,7 @@ import {
   useRequestRedirect,
 } from '../presentation/router-lifetime.js';
 import { ServerPreviewRefresh } from './server-preview-refresh.js';
+import { localRedirectPath } from '../presentation/redirect-path.js';
 
 import type {
   BoundRootProps,
@@ -104,7 +105,7 @@ export function bindAppRouterClientExperiences(options: ClientConfig) {
     const router = useRouter();
     return useCallback(
       (target: { path: string }) => {
-        router.replace(target.path);
+        router.replace(localRedirectPath(target.path));
       },
       [router]
     );

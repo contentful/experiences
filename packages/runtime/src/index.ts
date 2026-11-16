@@ -77,6 +77,7 @@ export type {
   PreviewSessionIdentity,
   PreviewStatus,
 } from './preview/live-preview.js';
+export { isPreviewSessionFetchError } from '@contentful/experiences-client';
 export type { ApiClient, OptimizationConfig } from './runtime/create-optimization-client.js';
 export { default as EventBuilder } from './events/event-builder.js';
 export * from './events/event-builder.js';

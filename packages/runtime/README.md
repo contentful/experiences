@@ -121,9 +121,11 @@ retry after acquisition failure; Web shares only in-flight snapshot acquisition.
 Managed views retain existing usable content while pending or failed. Web subscriptions
 use the same identity check; payloads without an ID are never broadcast to arbitrary
 Experiences. Snapshot HTTP errors surface through the fetch or managed result;
-all snapshot acquisition failures, including HTTP 404, use the existing
-`PreviewSessionFetchError` wrapper with the original error as `cause`. A missing
-session is distinct from missing Delivery content for `isNotFoundError` checks.
+all snapshot acquisition failures, including HTTP 404, retain the
+`PreviewSessionFetchError` wrapper with the original error as `cause`.
+`isPreviewSessionFetchError(error)` recognizes it without the optional Preview package. A missing session is distinct from missing Delivery content for
+`isNotFoundError` checks. Retry acquisition or reopen preview if the session has
+expired; preview event suppression remains active during failure and recovery.
 `states.preview` reports connection/update state and errors.
 `createPreviewClient` evaluates token suppliers and passes the session options
 to the configured factory, without requiring
@@ -288,7 +290,9 @@ Malformed selectors reject with `TypeError` before Preview acquisition or event
 preparation. Required selector fields must be nonempty strings; paths start with
 `/`, and selector families cannot be combined. Values are not normalized.
 All selectors accept `locale` and Runtime's builder-or-built `personalization.events`.
-Destinations are master-only and do not accept by-ID `parameters` or `extensions`.
+Destinations are master-only. Defined by-ID `parameters` or `extensions` on a
+destination selector, including empty objects, reject with `TypeError` at the same
+early validation boundary; `undefined` is treated as absent.
 `plan.experienceId`, when present, comes from the acquired payload's actual `sys.id`.
 No destination lookup cache or second by-ID fetch is introduced.
 

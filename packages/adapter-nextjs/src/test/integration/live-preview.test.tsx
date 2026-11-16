@@ -257,6 +257,49 @@ describe('managed Next Live Preview', () => {
   );
 
   it.each(['app', 'pages'] as const)(
+    '%s presents an error-only Preview result without fetching',
+    async (family) => {
+      const options = {
+        config: { components: {} },
+        spaceId: 'space',
+        environmentId: 'master',
+        delivery: { accessToken: 'delivery' },
+        preview: { accessToken: 'preview', createClient: clientFactory() },
+      };
+      route.search = '?preview_session_id=session';
+      window.history.replaceState(null, '', route.path + route.search);
+      const bound = (
+        family === 'app'
+          ? bindAppRouterClientExperiences(options)
+          : bindPagesRouterExperiences(options)
+      ).request;
+      const result: RequestResult = {
+        requestId: 'preview-error',
+        routeKey: route.path + route.search,
+        experience: { experienceId: 'hero' },
+        contentError: 'Preview Session content unavailable.',
+      };
+      const onError = vi.fn();
+      await act(async () =>
+        root.render(
+          <bound.ExperiencesRoot result={result}>
+            <Probe />
+            <bound.Experience
+              onExperienceError={onError}
+              errorFallback={({ error }) => <p role="alert">{error?.message}</p>}
+            />
+          </bound.ExperiencesRoot>
+        )
+      );
+      expect(container.querySelector('[role="alert"]')?.textContent).toBe(result.contentError);
+      expect(onError).toHaveBeenCalledOnce();
+      expect(onError.mock.calls[0]![0]).not.toHaveProperty('statusCode');
+      expect(sdk.isPreview).toBe(true);
+      expect(network).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['app', 'pages'] as const)(
     '%s preserves initial content and history guards while reconnecting session selections',
     async (family) => {
       const createClient = clientFactory();

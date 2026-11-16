@@ -169,6 +169,7 @@ export {
   ExperienceFetchError,
   NotFoundError,
   isNotFoundError,
+  isPreviewSessionFetchError,
   PREVIEW_HOST,
   createClient,
   fetchExperience,

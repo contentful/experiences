@@ -5,6 +5,7 @@ import {
   type ServerExperienceRendererProps,
 } from '@contentful/experiences-react/server';
 import {
+  assertExperienceSelector,
   isNotFoundError,
   type ExperiencesHandoff,
   type FetchExperienceOptions,
@@ -44,6 +45,7 @@ import {
 } from '../request/server-config.js';
 import { loadPrimaryExperience, resolveRequestPolicy } from '../request/request-policy.js';
 import { mergePreview } from '../request/preview.js';
+import { localRedirectPath } from '../presentation/redirect-path.js';
 import { AppRouterRequestRoot, AppRouterRequestAnalyticsRoot } from './app-router-client.js';
 
 export { serializeRequestResult } from '../request/server-config.js';
@@ -231,7 +233,7 @@ function createAppRouterServerExperiences<
 
   async function RequestExperiencesRoot(props: BoundServerRequestRootProps) {
     const result = await loadExperience();
-    if (result.redirect) redirect(result.redirect.path);
+    if (result.redirect) redirect(localRedirectPath(result.redirect.path));
     if (result.notFound) notFound();
     return ExperiencesRoot({ ...props, result: browserResult(result) });
   }
@@ -250,7 +252,7 @@ function createAppRouterServerExperiences<
 
   async function RequestExperiencesAnalyticsRoot(props: BoundServerRequestRootProps) {
     const loaded = await loadExperience();
-    if (loaded.redirect) redirect(loaded.redirect.path);
+    if (loaded.redirect) redirect(localRedirectPath(loaded.redirect.path));
     if (loaded.notFound) notFound();
     const { plan: _plan, ...result } = browserResult(loaded);
     return ExperiencesAnalyticsRoot({ ...props, result });
@@ -258,7 +260,7 @@ function createAppRouterServerExperiences<
 
   async function RequestExperience(props: PresentationProps) {
     const result = await loadExperience();
-    if (result.redirect) redirect(result.redirect.path);
+    if (result.redirect) redirect(localRedirectPath(result.redirect.path));
     if (result.notFound) notFound();
     if (result.plan === undefined && result.contentError === undefined) return null;
     if (client?.request?.Experience)
@@ -272,6 +274,7 @@ function createAppRouterServerExperiences<
     if (props.experience !== undefined) {
       return <ServerExperienceRenderer {...props} config={config} experience={props.experience} />;
     }
+    assertExperienceSelector(props);
     const {
       experienceId,
       destinationId,
@@ -320,7 +323,7 @@ function createAppRouterServerExperiences<
           if (isNotFoundError(error)) notFound();
           throw error;
         });
-      if ('redirect' in plan) redirect(plan.redirect.path);
+      if ('redirect' in plan) redirect(localRedirectPath(plan.redirect.path));
       return <ServerExperienceRenderer {...presentation} experience={plan} config={config} />;
     } finally {
       request.destroy();

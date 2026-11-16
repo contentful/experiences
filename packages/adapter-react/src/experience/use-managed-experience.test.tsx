@@ -50,18 +50,14 @@ describe('useManagedExperience', () => {
     </RuntimeContext.Provider>
   );
 
-  it('rejects raw selectors before a seed can bypass normalization and fetching', () => {
+  it.each([
+    { experienceId: 'home', destinationId: 'site', path: '/' },
+    { destinationId: 'site', path: '/', parameters: {} },
+    { destinationId: 'site', nodeId: 'node', extensions: {} },
+  ])('validates raw selectors before seeded presentation (%j)', (selector) => {
     const source = sourceSdk();
     expect(() =>
-      renderToStaticMarkup(
-        content(source, {
-          experienceId: 'home',
-          destinationId: 'site',
-          path: '/',
-          config,
-          initialPlan: plan(),
-        } as never)
-      )
+      renderToStaticMarkup(content(source, { ...selector, config, initialPlan: plan() } as never))
     ).toThrow(TypeError);
     expect(source.fetchExperience).not.toHaveBeenCalled();
     expect(source.subscribeToPreview).not.toHaveBeenCalled();

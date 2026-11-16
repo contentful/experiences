@@ -942,7 +942,10 @@ Renaming the folder needs all three updated. Cross-reference: `project.json#sour
 One internal Client assertion checks selector shape, nonempty strings and absolute
 paths. Owners validate before Preview/event work, and managed React validates raw
 selectors before normalization or seeds. Next's explicit server descriptor retains
-all selector fields until Node validates them. Keep the invalid-input matrix in
+all selector fields until Node validates them. Defined destination `parameters` or
+`extensions`, including empty objects, reject with `TypeError` before source or
+event work; `undefined` is treated as absent. Raw Next server props preserve this
+validation before normalization. Keep the invalid-input matrix in
 Client; other layers cover only their normalization or early-return boundaries.
 
 ### Missing-content classification across Next results (fixed)
@@ -951,8 +954,12 @@ Next request results retain `notFound: true` for missing primary Delivery conten
 across serialization; App server conveniences use native `notFound()`, and Pages
 GSSP callers map the flag. Public `isNotFoundError` recognizes Delivery's class or
 numeric `statusCode: 404`, including seeded browser errors. Empty content and other
-fetch failures remain distinct. Preview Session acquisition wraps its own 404
-with the existing session-fetch error and cause, so it cannot become a route 404.
+fetch failures remain distinct. `isPreviewSessionFetchError` recognizes Runtime's
+session-acquisition wrapper, including for HTTP 404. Next returns
+a safe session-specific `contentError` without `notFound`; raw errors and causes
+stay server-local. Existing browser fallback, event-free Retry and matching live
+updates provide recovery without published-content fallback or lifting preview
+event suppression.
 
 ### Next request result source typing (fixed)
 
@@ -981,7 +988,10 @@ Rendering a managed `Experience` in a layout's `Suspense` fallback before its
 browser root caused a missing-provider error and an HTTP 500. The example now
 uses the managed App Router request composition: the server binding injects the
 client request root and presentation, keeping ordinary and Preview Session
-rendering under the same request owner.
+rendering under the same request owner. Server request roots own primary route
+redirect/not-found decisions; put URL-dependent roots in a page or fresh template,
+not a retained server layout. Optional content uses raw loader decisions followed
+by the appropriate client request root or ordinary/supplied-plan composition.
 
 ### Managed page consent retry
 

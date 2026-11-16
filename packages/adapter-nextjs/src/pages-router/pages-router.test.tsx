@@ -93,20 +93,31 @@ describe('native adapter owner', () => {
     }
   });
 
-  it('uses native navigation for browser-managed destination redirects', async () => {
-    const binding = bindPagesRouterExperiences({ config: { components: {} } });
-    const { sdk, fetchExperience } = sdkFixture();
-    fetchExperience.mockResolvedValueOnce({ redirect: { path: '/selected' } });
-    await act(async () =>
-      root.render(
-        <binding.ExperiencesRoot sdk={sdk}>
-          <binding.Experience destinationId="site" path="/pages" />
-        </binding.ExperiencesRoot>
-      )
-    );
-    expect(router.replace).toHaveBeenCalledExactlyOnceWith('/selected');
-    expect(fetchExperience).toHaveBeenCalledOnce();
-  });
+  it.each(['/selected', '//example.com/outside'])(
+    'validates default destination navigation: %s',
+    async (path) => {
+      const binding = bindPagesRouterExperiences({ config: { components: {} } });
+      const { sdk, fetchExperience } = sdkFixture();
+      fetchExperience.mockResolvedValueOnce({ redirect: { path } });
+      const rendering = Promise.resolve(
+        act(async () =>
+          root.render(
+            <binding.ExperiencesRoot sdk={sdk}>
+              <binding.Experience destinationId="site" path="/pages" />
+            </binding.ExperiencesRoot>
+          )
+        )
+      );
+      if (path === '/selected') {
+        await rendering;
+        expect(router.replace).toHaveBeenCalledExactlyOnceWith(path);
+      } else {
+        await expect(rendering).rejects.toThrow(TypeError);
+        expect(router.replace).not.toHaveBeenCalled();
+      }
+      expect(fetchExperience).toHaveBeenCalledOnce();
+    }
+  );
 
   it('navigates a terminal destination result without resolving or replaying it', async () => {
     const binding = bindPagesRouterExperiences({ config: { components: {} } });

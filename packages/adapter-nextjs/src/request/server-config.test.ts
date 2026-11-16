@@ -1,8 +1,12 @@
 import { expect, it } from 'vitest';
 import { serializeRequestResult } from './server-config.js';
 
-it.each([{ redirect: { path: '/target' } }, { notFound: true as const }])(
-  'retains payload identity and projects routing outcome %j',
+it.each([
+  { redirect: { path: '/target' } },
+  { notFound: true as const },
+  { contentError: 'Preview Session content unavailable.' },
+])(
+  'retains payload identity and projects routing/content outcomes without raw errors: %j',
   (outcome) => {
     const projected = serializeRequestResult({
       requestId: 'request',

@@ -16,6 +16,7 @@ import {
   useRequestRedirect,
 } from '../presentation/router-lifetime.js';
 import { mergePreview, resolvePreviewSession } from '../request/preview.js';
+import { localRedirectPath } from '../presentation/redirect-path.js';
 import type { ClientConfig } from '../app-router/app-router-client.js';
 import type {
   BoundRootProps,
@@ -49,7 +50,7 @@ export function bindPagesRouterExperiences(config: PagesRouterConfig) {
     const router = useRouter();
     return useCallback(
       (target: { path: string }) => {
-        void router.replace(target.path);
+        void router.replace(localRedirectPath(target.path));
       },
       [router]
     );

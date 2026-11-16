@@ -563,12 +563,14 @@ describe('fetchExperience — destinationId + nodeId', () => {
   });
 
   it('rejects extensions on destination-shaped options at compile time', () => {
-    void fetchExperience(
-      // @ts-expect-error — destination selectors do not support extensions.
-      { ...destinationOptions, extensions: { sourceMap: {} } },
-      { accessToken: 'token-123' },
-      resolveOptions
-    );
+    const invalidCall = () =>
+      fetchExperience(
+        // @ts-expect-error — destination selectors do not support extensions.
+        { ...destinationOptions, extensions: { sourceMap: {} } },
+        { accessToken: 'token-123' },
+        resolveOptions
+      );
+    expectTypeOf(invalidCall).toBeFunction();
   });
 
   it('rejects mixing experienceId with destinationId at compile time', () => {
@@ -680,12 +682,14 @@ describe('fetchExperience — destinationId + path', () => {
   });
 
   it('rejects extensions on destination-shaped options at compile time', () => {
-    void fetchExperience(
-      // @ts-expect-error — destination selectors do not support extensions.
-      { ...destinationOptions, extensions: { sourceMap: {} } },
-      { accessToken: 'token-123' },
-      resolveOptions
-    );
+    const invalidCall = () =>
+      fetchExperience(
+        // @ts-expect-error — destination selectors do not support extensions.
+        { ...destinationOptions, extensions: { sourceMap: {} } },
+        { accessToken: 'token-123' },
+        resolveOptions
+      );
+    expectTypeOf(invalidCall).toBeFunction();
   });
 
   it('rejects mixing experienceId with destinationId at compile time', () => {
@@ -792,6 +796,13 @@ describe('Experience selector validation', () => {
     { destinationId: 'destination', nodeId: null },
     { destinationId: 'destination', path: 42 },
     { destinationId: 'destination', path: 'private-selector-value' },
+    ...[{ path: '/' }, { nodeId: 'node' }].flatMap((selector) =>
+      ['parameters', 'extensions'].flatMap((field) =>
+        [{}, null, false, 'private-selector-value', { secret: 'private-selector-value' }].map(
+          (value) => ({ destinationId: 'destination', ...selector, [field]: value })
+        )
+      )
+    ),
   ];
 
   it.each(invalidSelectors.map((selector, index) => ({ selector, index })))(
@@ -804,6 +815,11 @@ describe('Experience selector validation', () => {
       );
       await expect(result).rejects.toBeInstanceOf(TypeError);
       await expect(result).rejects.not.toThrow('private-selector-value');
+      for (const field of ['parameters', 'extensions']) {
+        if (selector && typeof selector === 'object' && field in selector) {
+          await expect(result).rejects.toThrow(`${field} is only supported with experienceId.`);
+        }
+      }
       expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
       for (const method of [
         mockGet,
@@ -845,6 +861,8 @@ describe('Experience selector validation', () => {
       nodeId: ' node ',
       path: undefined,
       locale: 'en-US',
+      parameters: undefined,
+      extensions: undefined,
       ignored: { value: true },
     });
     const before = { ...input, ignored: { ...input.ignored } };
@@ -854,6 +872,8 @@ describe('Experience selector validation', () => {
     expect(input).toEqual(before);
     expect(mockResolveByNodeId).toHaveBeenCalledWith(' destination ', ' node ', {
       locale: 'en-US',
+      parameters: undefined,
+      extensions: undefined,
     });
   });
 });

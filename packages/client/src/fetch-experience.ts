@@ -117,6 +117,13 @@ export function assertExperienceSelector(value: unknown): void {
   if (byPath && !(selector.path as string).startsWith('/')) {
     throw new TypeError('path must start with /.');
   }
+  if (byDestination) {
+    for (const field of ['parameters', 'extensions']) {
+      if (selector[field] !== undefined) {
+        throw new TypeError(`${field} is only supported with experienceId.`);
+      }
+    }
+  }
 }
 
 /**

@@ -11,6 +11,18 @@ export function isNotFoundError(error: unknown): boolean {
   );
 }
 
+/** Recognizes Preview acquisition failures without depending on the optional Preview package. */
+export function isPreviewSessionFetchError(error: unknown): error is Error {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    error.name === 'PreviewSessionFetchError' &&
+    'message' in error &&
+    typeof error.message === 'string'
+  );
+}
+
 /**
  * Thrown by `fetchExperience` for a fetch failure that is not "experience not
  * found" — network failure, an invalid/expired token, a 5xx from the

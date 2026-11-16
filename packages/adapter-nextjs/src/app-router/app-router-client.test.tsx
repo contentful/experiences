@@ -84,24 +84,35 @@ describe('native adapter owner', () => {
     });
   });
 
-  it('uses native navigation for the managed destination hook', async () => {
-    const binding = bindAppRouterClientExperiences({ config: { components: {} } });
-    const { sdk, fetchExperience } = sdkFixture();
-    fetchExperience.mockResolvedValue({ redirect: { path: '/selected' } });
-    function Destination() {
-      binding.useManagedExperience({ destinationId: 'site', path: '/page' });
-      return null;
+  it.each(['/selected', 'https://example.com/outside'])(
+    'validates default destination navigation: %s',
+    async (path) => {
+      const binding = bindAppRouterClientExperiences({ config: { components: {} } });
+      const { sdk, fetchExperience } = sdkFixture();
+      fetchExperience.mockResolvedValue({ redirect: { path } });
+      function Destination() {
+        binding.useManagedExperience({ destinationId: 'site', path: '/page' });
+        return null;
+      }
+      const rendering = Promise.resolve(
+        act(async () =>
+          root.render(
+            <binding.ExperiencesRoot sdk={sdk}>
+              <Destination />
+            </binding.ExperiencesRoot>
+          )
+        )
+      );
+      if (path === '/selected') {
+        await rendering;
+        expect(navigation.router.replace).toHaveBeenCalledExactlyOnceWith(path);
+      } else {
+        await expect(rendering).rejects.toThrow(TypeError);
+        expect(navigation.router.replace).not.toHaveBeenCalled();
+      }
+      expect(fetchExperience).toHaveBeenCalledOnce();
     }
-    await act(async () =>
-      root.render(
-        <binding.ExperiencesRoot sdk={sdk}>
-          <Destination />
-        </binding.ExperiencesRoot>
-      )
-    );
-    expect(navigation.router.replace).toHaveBeenCalledExactlyOnceWith('/selected');
-    expect(fetchExperience).toHaveBeenCalledOnce();
-  });
+  );
 
   it('navigates a terminal destination result without resolving or replaying it', async () => {
     const binding = bindAppRouterClientExperiences({ config: { components: {} } });
