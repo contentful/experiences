@@ -1,5 +1,5 @@
 /** Validate only SDK-owned navigation; raw results and custom callbacks remain application-owned. */
-export function localRedirectPath(path: string): string {
+export function getRedirectError(path: string): TypeError | undefined {
   if (
     typeof path !== 'string' ||
     !path.startsWith('/') ||
@@ -7,7 +7,7 @@ export function localRedirectPath(path: string): string {
     /[\\\t\r\n]/.test(path) ||
     new globalThis.URL(path, 'https://redirect.invalid').pathname.startsWith('//')
   ) {
-    throw new TypeError('Destination redirect must be a local absolute path.');
+    return new TypeError('Destination redirect must be a local absolute path.');
   }
-  return path;
+  return undefined;
 }

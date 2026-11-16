@@ -1,10 +1,13 @@
 import { expect, it } from 'vitest';
-import { localRedirectPath } from './redirect-path.js';
+import { getRedirectError } from './redirect-path.js';
 
-it.each(['/', '/target?from=source#content', '/%2f%2fexample.com', '/a/../target'])(
-  'retains a local redirect unchanged: %s',
-  (path) => expect(localRedirectPath(path)).toBe(path)
-);
+it.each([
+  '/',
+  '/target?from=source#content',
+  '/%2f%2fexample.com',
+  '/%5Cexample.com',
+  '/a/../target',
+])('accepts a local redirect: %s', (path) => expect(getRedirectError(path)).toBeUndefined());
 
 it.each([
   undefined,
@@ -24,5 +27,7 @@ it.each([
   '/\t/example.com',
   '/local\npath',
 ])('rejects unsafe redirect syntax: %j', (path) => {
-  expect(() => localRedirectPath(path as string)).toThrow(TypeError);
+  expect(getRedirectError(path as string)).toEqual(
+    new TypeError('Destination redirect must be a local absolute path.')
+  );
 });

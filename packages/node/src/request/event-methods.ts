@@ -74,13 +74,7 @@ class BoundEventMethods implements EventMethods {
     this.#owner = {
       ...bindings,
       getAllowedEventTypes: () => bindings.allowedEventTypes,
-      reportBlockedEvent: (event) => {
-        try {
-          onEventBlocked?.(event);
-        } catch {
-          // Diagnostic callbacks must not interrupt initial event admission.
-        }
-      },
+      reportBlockedEvent: (event) => reportBlockedEvent(() => onEventBlocked?.(event)),
       onMissingProfile: (method) => {
         throw new EventProfileRequiredError(method);
       },
@@ -163,7 +157,6 @@ class BoundEventMethods implements EventMethods {
 
   private async sendPersonalization(event: PersonalizationEvent): Promise<EventEmissionResult> {
     const { bindings, api } = this;
-    const profile = this.profile;
     const profileRevision = bindings.getProfileRevision?.();
     const interceptors = bindings.eventInterceptors;
     if (interceptors !== undefined && interceptors.count?.() !== 0) {
@@ -173,7 +166,7 @@ class BoundEventMethods implements EventMethods {
     const options = { ...bindings.getPersonalizationOptions?.(), locale: bindings.getLocale?.() };
     if (!bindings.isActive()) return { accepted: false };
     const data = await api.personalization.upsertProfile(
-      { profileId: profile?.id, events: [event] },
+      { profileId: this.profile?.id, events: [event] },
       options
     );
     if (
@@ -200,21 +193,27 @@ class BoundEventMethods implements EventMethods {
   }
 }
 
+function reportBlockedEvent(report: () => void): void {
+  try {
+    report();
+  } catch {
+    // Diagnostic callbacks must not interrupt event admission.
+  }
+}
+
 function admitInterceptedEvent(
   event: PersonalizationEvent | AnalyticsEvent,
   bindings: DirectEventBindings
 ): boolean {
   if (hasEventTypeConsent(event.type, bindings.getConsent(), bindings.allowedEventTypes))
     return true;
-  try {
+  reportBlockedEvent(() => {
     bindings.onEventBlocked?.({
       reason: 'consent',
       method: methodForEventType(event.type) ?? event.type,
       args: [event],
     });
-  } catch {
-    // Diagnostic callbacks do not interrupt direct event admission.
-  }
+  });
   return false;
 }
 

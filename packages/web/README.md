@@ -605,10 +605,12 @@ persisted and restored from LocalStorage once persistence consent is granted.
 precedence over the active profile id. The default provider reads the stored
 anonymous id only when persistence consent is `true`; an `undefined` result falls
 back to the current profile or adopted handoff identity.
-Web event methods retain the original consent gate, run interceptors, then
+Web event methods check consent before reading application context or building
+events, recheck after construction, run interceptors, then
 validate transformed output and recheck its final type against current consent
-before publication or admission. `trackView` preserves Optimization's early consent check before its
-view-specific validation. `BlockedEvent.method` is a string, matching the
+before publication or admission. Denied calls return `{ accepted: false }` without
+validating arguments; permitted calls still reject invalid arguments.
+`BlockedEvent.method` is a string, matching the
 reference's public payload type.
 
 The seven event methods are bound fields on the same SDK receiver; detached
@@ -673,9 +675,10 @@ their original event bodies. `destroy()` makes one best-effort attempt to drain
 queued batches in order, without a delivery guarantee after the runtime exits.
 The queue is not durable. Analytics methods
 are queued in memory rather than sent one by one. Every Analytics method resolves
-`{ accepted: true }` when admitted and `{ accepted: false }` when blocked or destroyed. Acceptance is consent admission, not delivery. Without a complete profile, such as a
+`{ accepted: true }` when admitted to delivery and `{ accepted: false }` when blocked, destroyed or missing a complete profile. Acceptance does not guarantee delivery. Without a complete profile, such as a
 new visitor's call made while the first profile request is still pending, the call
-warns and is dropped, as in Optimization, and does not throw. A cookie or handoff
+warns, is dropped and resolves `{ accepted: false }` without throwing or reporting
+a consent block. No event is queued for later delivery. A cookie or handoff
 continuation ID is sufficient for Personalization requests but not Analytics. The queue flushes when it holds 25 events, every 30 seconds while
 events remain queued, when the browser comes back online, and when the page is hidden
 or unloaded (`visibilitychange`, `pagehide`, `beforeunload`). On hide, active views and

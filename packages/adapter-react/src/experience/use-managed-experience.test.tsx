@@ -92,6 +92,27 @@ describe('useManagedExperience', () => {
     expect(replacement).not.toHaveBeenCalled();
   });
 
+  it('presents redirect callback failures as content errors without repeating navigation', async () => {
+    const source = sourceSdk();
+    source.fetchExperience.mockResolvedValue({ redirect: { path: '/new' } });
+    const error = new TypeError('Unsupported redirect');
+    const onRedirect = vi.fn(() => {
+      throw error;
+    });
+    const onExperienceError = vi.fn();
+    const options = { destinationId: 'site', path: '/old', config, onRedirect, onExperienceError };
+    const tree = content(source, options);
+    await act(async () => root.render(tree));
+    await act(async () => root.render(tree));
+    expect(result.status).toBe('error');
+    expect(result.error).toBe(error);
+    expect(result.redirect).toBeUndefined();
+    expect(result.data).toBeUndefined();
+    expect(onRedirect).toHaveBeenCalledOnce();
+    expect(onExperienceError).toHaveBeenCalledExactlyOnceWith(error, result);
+    expect(source.fetchExperience).toHaveBeenCalledOnce();
+  });
+
   it('starts fetch only after the parent layout guard is installed, without a content-readiness gate', async () => {
     const source = sourceSdk();
     let ready = false;

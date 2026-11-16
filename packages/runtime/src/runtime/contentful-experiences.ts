@@ -204,12 +204,9 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
     const library = { ...DEFAULT_EVENT_CONTEXT_LIBRARY, ...config.eventBuilder.library };
     const userAgentHeaders = createUserAgentHeaders(library, config.eventBuilder.app);
     const identity = { spaceId: config.spaceId, environmentId: config.environmentId };
-    this.#deliveryClient = createDeliveryClient(
-      config.delivery,
-      identity,
-      undefined,
-      userAgentHeaders
-    );
+    this.#deliveryClient = createDeliveryClient(config.delivery, identity, {
+      defaultHeaders: userAgentHeaders,
+    });
     if (config.preview !== undefined) {
       const {
         sessionHost: _sessionHost,
@@ -217,13 +214,11 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
         createClient: _createClient,
         ...transport
       } = config.preview;
-      this.#previewClient = createDeliveryClient(
-        transport,
-        identity,
-        PREVIEW_HOST,
-        userAgentHeaders,
-        'preview'
-      );
+      this.#previewClient = createDeliveryClient(transport, identity, {
+        defaultHost: PREVIEW_HOST,
+        defaultHeaders: userAgentHeaders,
+        configuration: 'preview',
+      });
     }
     this.api = createOptimizationClient({
       spaceId: config.spaceId,

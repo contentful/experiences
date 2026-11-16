@@ -328,6 +328,11 @@ Personalization and content-request continuity. An ID-only request must receive 
 complete XDA or Personalization profile before sending Analytics. Runtime's internal
 call helpers share construction, consent ordering and Analytics profile validation
 with Web; Node owns direct transport, interception and request-profile adoption.
+Direct Personalization sends select the current request profile after interception;
+the revision captured before interception guards response publication.
+All direct methods check consent before reading application context or building
+events, then recheck after construction. Denied calls return `{ accepted: false }`
+without argument validation; permitted calls still reject invalid arguments.
 Event locale precedence is the
 runtime default, `eventContext.locale`, `forRequest({ locale })`, then a method's explicit `locale`.
 Personalization request locale uses `forRequest({ locale })` with the constructor locale as

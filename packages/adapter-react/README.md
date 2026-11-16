@@ -159,6 +159,10 @@ for that presentation: default rendering shows no loading/error fallback, and
 result. Pending page fallback and later consent retry for the abandoned presentation
 stop; events already submitted remain submitted.
 
+If `onRedirect` throws, the presentation instead reports the failure through
+`error`, `onExperienceError` and `errorFallback`. It does not repeat navigation
+automatically; an explicit `retry()` can fetch the content again without events.
+
 Generic React leaves navigation to the application. Set a shared callback through
 `createExperiences({ config, onRedirect: ({ path }) => navigate(path) })`, or pass
 `onRedirect` to an individual `Experience` or `useManagedExperience` call. An explicit

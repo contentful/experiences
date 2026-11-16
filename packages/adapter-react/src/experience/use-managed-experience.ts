@@ -20,6 +20,7 @@ export interface ExperienceNotifications {
   readonly onExperienceResolved?: (
     result: ManagedExperienceResult & { readonly data: PortableRenderPlan }
   ) => void;
+  /** Navigation failures thrown by this callback become managed content errors. */
   readonly onRedirect?: (
     redirect: DestinationRedirectResult['redirect'],
     result: ManagedExperienceResult
@@ -48,7 +49,8 @@ const noRefresh = async (): Promise<void> => {};
 function useExperienceNotifications(
   result: ManagedExperienceResult,
   { onExperienceResolved, onExperienceError, onRedirect }: ExperienceNotifications,
-  isCurrent: () => boolean
+  isCurrent: () => boolean,
+  rejectRedirect: (error: unknown) => void
 ): void {
   const reported = useRef<{
     data?: PortableRenderPlan;
@@ -62,7 +64,14 @@ function useExperienceNotifications(
     const changedError = error !== undefined && reported.current.error !== error;
     const changedRedirect = redirect !== undefined && reported.current.redirect !== redirect;
     reported.current = { data, error, redirect };
-    if (changedRedirect) onRedirect?.(redirect, result);
+    if (changedRedirect) {
+      try {
+        onRedirect?.(redirect, result);
+      } catch (error) {
+        if (isCurrent()) rejectRedirect(error);
+        return;
+      }
+    }
     if (changedData) onExperienceResolved?.({ ...result, data });
     // A resolution callback can synchronously unmount or supersede this owner.
     if (changedError && isCurrent()) onExperienceError?.(error, result);
@@ -174,6 +183,11 @@ export function useExperienceSource(
     refresh: managed ? controller.refresh : noRefresh,
     retry: managed ? controller.retry : noRefresh,
   };
-  useExperienceNotifications(result, options, () => controller.isCurrentSnapshot(presentation));
+  useExperienceNotifications(
+    result,
+    options,
+    () => controller.isCurrentSnapshot(presentation),
+    (error) => controller.rejectRedirect(error)
+  );
   return result;
 }

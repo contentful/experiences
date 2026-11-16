@@ -148,10 +148,10 @@ describe('App Router request family', () => {
       path: '/lookup',
       as: 'section',
     });
-    expect(element.props.experience).toBe(plan);
-    expect(element.props.as).toBe('section');
-    expect(element.props).not.toHaveProperty('destinationId');
-    expect(element.props).not.toHaveProperty('path');
+    expect(element?.props.experience).toBe(plan);
+    expect(element?.props.as).toBe('section');
+    expect(element?.props).not.toHaveProperty('destinationId');
+    expect(element?.props).not.toHaveProperty('path');
     expect(doubles.fetch).toHaveBeenCalledExactlyOnceWith(
       {
         destinationId: 'site',
@@ -176,16 +176,34 @@ describe('App Router request family', () => {
       const composeRequest = vi.fn();
       const binding = bindAppRouterServerExperiences({
         ...config,
+        browser: { delivery: { accessToken: 'browser-token' } },
         request: { experience: { destinationId: 'site', path: '/' }, composeRequest },
       });
       expect(await binding.request.loadExperience()).toMatchObject({ redirect, handoff });
-      const expected = path === '/target' ? 'NEXT_REDIRECT:/target' : TypeError;
-      await expect(binding.request.Experience({})).rejects.toThrow(expected);
-      await expect(binding.request.ExperiencesRoot({})).rejects.toThrow(expected);
-      await expect(binding.request.ExperiencesAnalyticsRoot({})).rejects.toThrow(expected);
+      if (path === '/target') {
+        await expect(binding.request.Experience({})).rejects.toThrow('NEXT_REDIRECT:/target');
+        await expect(binding.request.ExperiencesRoot({})).rejects.toThrow('NEXT_REDIRECT:/target');
+        await expect(binding.request.ExperiencesAnalyticsRoot({})).rejects.toThrow(
+          'NEXT_REDIRECT:/target'
+        );
+      } else {
+        expect(await binding.request.Experience({})).toBeNull();
+        const root = await binding.request.ExperiencesRoot({});
+        const analytics = await binding.request.ExperiencesAnalyticsRoot({});
+        for (const element of [root, analytics]) {
+          expect(element.props.result).toMatchObject({
+            redirect,
+            contentError: 'Destination redirect must be a local absolute path.',
+          });
+          expect(element.props.result).not.toHaveProperty('notFound');
+        }
+        doubles.fetch.mockResolvedValueOnce({ redirect });
+        await expect(binding.Experience({ destinationId: 'site', path: '/' })).resolves.toBeNull();
+        expect(await binding.request.loadExperience()).toMatchObject({ redirect, handoff });
+      }
       expect(doubles.transfer).toHaveBeenCalledOnce();
       expect(composeRequest).toHaveBeenCalledOnce();
-      expect(doubles.destroy).toHaveBeenCalledOnce();
+      expect(doubles.destroy).toHaveBeenCalledTimes(path === '/target' ? 1 : 2);
     }
   );
 
@@ -258,7 +276,7 @@ describe('App Router request family', () => {
   it('explicit/static rendering reads no framework request state', async () => {
     const binding = bindAppRouterServerExperiences(config);
     const rendered = await binding.Experience({ experience: plan });
-    expect(rendered.props.experience).toBe(plan);
+    expect(rendered?.props.experience).toBe(plan);
     expect(doubles.headers).not.toHaveBeenCalled();
     expect(doubles.cookies).not.toHaveBeenCalled();
     expect(doubles.bind).not.toHaveBeenCalled();
@@ -351,7 +369,7 @@ describe('App Router request family', () => {
       request: { ...config.request, mode },
     });
     const rendered = await binding.Experience({ experience: plan, renderError, renderUnknown });
-    expect(rendered.props).toMatchObject({ renderError, renderUnknown });
+    expect(rendered?.props).toMatchObject({ renderError, renderUnknown });
     const requestRendered = await binding.request.Experience({ renderError, renderUnknown });
     expect(requestRendered?.props).toMatchObject({ renderError, renderUnknown });
     expect((await binding.request.loadExperience()).initialPageOwner).toBe('server');

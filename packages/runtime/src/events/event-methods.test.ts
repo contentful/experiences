@@ -90,29 +90,48 @@ describe('shared event preparation', () => {
     expect(build).toHaveBeenLastCalledWith(context);
   });
 
-  it('checks view consent before construction and leaves invalid arguments unbuilt', async () => {
-    const policy = owner({ getConsent: () => ({ events: false }), getEventContext: vi.fn() });
-    const build = vi.fn(() => {
-      throw new Error('invalid arguments');
-    });
-    const send = vi.fn();
+  it.each([
+    'identify',
+    'page',
+    'track',
+    'trackView',
+    'trackClick',
+    'trackHover',
+    'trackFlagView',
+  ] as const)(
+    'refuses %s before context, construction, or profile lookup when consent is denied',
+    async (method) => {
+      const policy = owner({
+        getConsent: () => ({ events: false }),
+        getAllowedEventTypes: () => [],
+        getEventContext: vi.fn(),
+      });
+      const build = vi.fn(() => {
+        throw new Error('invalid arguments');
+      });
+      const send = vi.fn();
 
-    await expect(emitAnalyticsEvent(policy, 'trackView', {}, build, send)).resolves.toEqual({
-      accepted: false,
-    });
-    expect(policy.reportBlockedEvent).toHaveBeenCalledExactlyOnceWith({
-      reason: 'consent',
-      method: 'trackView',
-      args: [{}],
-    });
-    expect(policy.getEventContext).not.toHaveBeenCalled();
-    expect(build).not.toHaveBeenCalled();
-    expect(policy.getProfile).not.toHaveBeenCalled();
-    expect(send).not.toHaveBeenCalled();
-  });
+      const emission =
+        method === 'identify' || method === 'page' || method === 'track'
+          ? emitPersonalizationEvent(policy, method, {}, build, send)
+          : emitAnalyticsEvent(policy, method, {}, build, send);
+      await expect(emission).resolves.toEqual({
+        accepted: false,
+      });
+      expect(policy.reportBlockedEvent).toHaveBeenCalledExactlyOnceWith({
+        reason: 'consent',
+        method,
+        args: [{}],
+      });
+      expect(policy.getEventContext).not.toHaveBeenCalled();
+      expect(build).not.toHaveBeenCalled();
+      expect(policy.getProfile).not.toHaveBeenCalled();
+      expect(send).not.toHaveBeenCalled();
+    }
+  );
 
-  it('propagates ordinary construction errors before consent reporting', async () => {
-    const policy = owner({ getConsent: () => ({ events: false }) });
+  it('propagates construction errors for permitted calls', async () => {
+    const policy = owner();
     const error = new Error('invalid arguments');
     const build = () => {
       throw error;
@@ -126,12 +145,17 @@ describe('shared event preparation', () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it('rechecks view consent after construction', async () => {
+  it('rechecks consent after application context changes during construction', async () => {
     let consent: ConsentState = { events: true };
-    const policy = owner({ getConsent: () => consent });
+    const policy = owner({
+      getConsent: () => consent,
+      getEventContext: () => {
+        consent = { events: false };
+        return {};
+      },
+    });
     const args = { ...interaction, viewId: 'view', viewDurationMs: 10 };
     const build = vi.fn(() => {
-      consent = { events: false };
       return builder.buildView(args);
     });
     const send = vi.fn();
@@ -253,7 +277,7 @@ describe('event delivery owners', () => {
       const send = vi.fn();
       await expect(
         emitAnalyticsEvent(policy, 'trackClick', interaction, build, send)
-      ).resolves.toEqual({ accepted: true });
+      ).resolves.toEqual({ accepted: false });
       expect(policy.onMissingProfile).toHaveBeenCalledExactlyOnceWith('trackClick');
       expect(send).not.toHaveBeenCalled();
     }

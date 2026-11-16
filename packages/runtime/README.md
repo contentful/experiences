@@ -31,8 +31,8 @@ Delivery and Preview options accept a token or token supplier. A tokenless trust
 The base owns one `EventBuilder`, configured with a default library identity of `@contentful/experiences-runtime` when a leaf does not supply one. Node and Web supply their own library metadata. The builder's schemas, defaults, IDs, timestamps, context assembly, consent metadata, and event construction are colocated here. `identify`, `page`, and `track` use Personalization; view, click, hover, and flag-view events use Analytics. Node prepares one noncommitting request handoff batch. Web uses the Runtime-owned `PersonalizationDelivery` sender for ordinary online/offline events and imperative prepared-batch admission.
 
 Runtime's internal `emitPersonalizationEvent` and `emitAnalyticsEvent` helpers
-share the Node/Web call sequence: lifecycle and Preview refusal, argument/context
-construction, consent admission and stamping, and complete Analytics profile
+share the Node/Web call sequence: lifecycle and Preview refusal, initial consent
+admission, argument/context construction, consent rechecking and stamping, and complete Analytics profile
 validation. They read leaf-owned state at the point it is needed and retain no
 request or browser state. They are package integration helpers, not consumer
 configuration or a custom-dispatch API.
@@ -41,23 +41,30 @@ Node owns its direct event factory, request transport, interception and response
 adoption. Web keeps bound methods on the browser SDK receiver and delivers through
 its existing queues, which own interception, final admission and publication.
 Node throws `EventProfileRequiredError` without a complete Analytics profile;
-Web uses `warnMissingEventProfile` and drops the event with `{ accepted: true }`.
+Web uses `warnMissingEventProfile` and drops the event with `{ accepted: false }`.
+This refusal does not report a consent block or enqueue work for later delivery.
 
 The former Runtime direct-event factory and `DirectEventBindings` now live in
 Node's internal implementation; the Runtime base no longer exposes that factory.
-Consumers use Node request methods or Web instance methods. Their call signatures,
-results and missing-profile policies are unchanged. There is no `requireProfile`
+Consumers use Node request methods or Web instance methods. Their call signatures
+are unchanged. There is no `requireProfile`
 option or exported custom-dispatch strategy.
 
-Event methods build and validate arguments before consent admission or a
-missing-profile drop. `trackView` follows Optimization's early consent guard
-before its view-specific validation. Node and Web run event interceptors after the original consent gate and before
+All direct event methods check consent before reading application context or
+building arguments. Denied calls return `{ accepted: false }` without validation;
+permitted calls still reject invalid arguments. Consent is checked again after
+construction because application context providers can change it. Node and Web run event interceptors after construction and before
 wire-event revalidation. Valid transformed events pass a second gate using their
 final type and current consent before publication, transport, or queue admission.
 Invalid output is a schema failure rather than a consent refusal. Post-hook
 blocks report the transformed method/type; every event method returns `{ accepted: false }`. Node sends
 directly. `BlockedEvent.method` is typed as `string`, matching
 Optimization's public event payload contract.
+
+The early gate for every direct method and Web's missing-profile refusal are
+intentional DX differences from the Optimization reference, intended for later
+porting there. They make denied calls predictable and reserve acceptance for work
+that enters delivery; acceptance still does not guarantee transport success.
 
 XDA plans retain the complete response profile in `plan.personalization.profile`.
 Core mirrors Delivery's profile shape without adding a runtime dependency. Node and Web

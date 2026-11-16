@@ -221,7 +221,7 @@ describe('Node direct event methods', () => {
       expect(f.setProfile).not.toHaveBeenCalled();
     });
 
-    it('captures the profile revision before awaiting hooks', async () => {
+    it('selects the current profile after hooks while guarding publication with the original revision', async () => {
       let release!: (event: unknown) => void;
       const run = vi.fn<EventInterceptors['run']>(
         () =>
@@ -231,13 +231,16 @@ describe('Node direct event methods', () => {
       );
       const f = createFixture({ profile: { id: 'visitor' }, eventInterceptors: { run } });
       const sending = f.methods.page();
+      expect(f.upsertProfile).not.toHaveBeenCalled();
+      const currentProfile = completeProfile('current-visitor');
+      f.setProfile(currentProfile);
       f.invalidateProfile();
       release(builder.buildPageView());
 
       await expect(sending).resolves.toMatchObject({ accepted: true });
-      expect(f.upsertProfile.mock.calls[0]?.[0].profileId).toBe('visitor');
-      expect(f.setProfile).not.toHaveBeenCalled();
-      expect(f.methods.profile).toEqual({ id: 'visitor' });
+      expect(f.upsertProfile.mock.calls[0]?.[0].profileId).toBe('current-visitor');
+      expect(f.setProfile).toHaveBeenCalledExactlyOnceWith(currentProfile);
+      expect(f.methods.profile).toEqual(currentProfile);
     });
 
     it('preserves immediate transport start with an empty registry', async () => {

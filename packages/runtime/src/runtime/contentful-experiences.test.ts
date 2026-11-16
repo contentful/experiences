@@ -222,16 +222,17 @@ describe('ContentfulExperiences', () => {
       1,
       { accessToken: 'delivery' },
       { spaceId: 'space', environmentId: 'env' },
-      undefined,
-      userAgentHeaders
+      { defaultHeaders: userAgentHeaders }
     );
     expect(mockCreateDeliveryClient).toHaveBeenNthCalledWith(
       2,
       { accessToken: 'preview' },
       { spaceId: 'space', environmentId: 'env' },
-      'https://preview.xdn.contentful.com',
-      userAgentHeaders,
-      'preview'
+      {
+        defaultHost: 'https://preview.xdn.contentful.com',
+        defaultHeaders: userAgentHeaders,
+        configuration: 'preview',
+      }
     );
     await runtime.resolveExperience(
       { sys: { type: 'Experience' }, nodes: [] },
@@ -426,9 +427,11 @@ describe('ContentfulExperiences', () => {
         environment: 'https://preview-environment.example',
       },
       { spaceId: 'space', environmentId: 'env' },
-      'https://preview.xdn.contentful.com',
-      userAgentHeaders,
-      'preview'
+      {
+        defaultHost: 'https://preview.xdn.contentful.com',
+        defaultHeaders: userAgentHeaders,
+        configuration: 'preview',
+      }
     );
   });
 
@@ -454,9 +457,11 @@ describe('ContentfulExperiences', () => {
         host: 'https://preview-host.example',
       },
       { spaceId: 'space', environmentId: 'env' },
-      'https://preview.xdn.contentful.com',
-      userAgentHeaders,
-      'preview'
+      {
+        defaultHost: 'https://preview.xdn.contentful.com',
+        defaultHeaders: userAgentHeaders,
+        configuration: 'preview',
+      }
     );
   });
 
@@ -477,11 +482,12 @@ describe('ContentfulExperiences', () => {
     expect(mockCreateDeliveryClient).toHaveBeenCalledWith(
       expect.anything(),
       { spaceId: 'space', environmentId: 'env' },
-      undefined,
       {
-        'X-Contentful-User-Agent': expect.stringMatching(
-          /^app my-site\/2\.1\.0; sdk experiences-node\/0\.6\.0; platform node\.js\//
-        ),
+        defaultHeaders: {
+          'X-Contentful-User-Agent': expect.stringMatching(
+            /^app my-site\/2\.1\.0; sdk experiences-node\/0\.6\.0; platform node\.js\//
+          ),
+        },
       }
     );
   });

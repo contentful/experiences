@@ -127,9 +127,9 @@ function prepareEvent<TArgs extends UniversalEventBuilderArgs, TEvent>(
     owner.reportBlockedEvent({ reason: 'preview', method, args: [args] });
     return { result: { accepted: false, reason: 'preview' } };
   }
-  // Views check consent before validation; all methods recheck after construction.
-  if (method === 'trackView' && !admit(owner, method, args)) return { result: { accepted: false } };
+  if (!admit(owner, method, args)) return { result: { accepted: false } };
   const event = build({ ...owner.getEventContext?.(), ...args });
+  // Application context providers can change consent during construction.
   if (!admit(owner, method, args)) return { result: { accepted: false } };
   return { event };
 }
@@ -167,7 +167,7 @@ export async function emitAnalyticsEvent<TArgs extends UniversalEventBuilderArgs
   const profile = EventProfileSchema.safeParse(owner.getProfile());
   if (!profile.success) {
     owner.onMissingProfile(method);
-    return { accepted: true };
+    return { accepted: false };
   }
   const admitted = await send(stampConsent(owner, prepared.event), profile.data);
   return { accepted: admitted !== false };

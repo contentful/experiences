@@ -4,7 +4,12 @@ import type {
 } from '@contentful/experiences-runtime';
 import { resolvePreviewSessionId } from '@contentful/experiences-runtime';
 
-/** Partial overrides are merged; active browser Preview still requires accessToken or a proxy host. */
+/**
+ * Partial overrides are merged: defined values win, while omitted or explicitly
+ * undefined values inherit the configured value. Undefined cannot clear a field.
+ * Active browser Preview still requires accessToken or a trusted proxy host;
+ * sessionHost alone does not provide API authentication.
+ */
 export type PreviewConfig = Partial<SessionPreviewConfig>;
 export type PreviewContext = Pick<PreviewConfig, 'sessionHost' | 'resourceResolution'>;
 

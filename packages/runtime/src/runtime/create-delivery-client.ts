@@ -35,9 +35,15 @@ export type DeliveryClientOptions = DeliveryClientBaseOptions &
 export function createDeliveryClient(
   options: DeliveryClientOptions,
   identity: DeliveryClientIdentity,
-  defaultHost?: NonNullable<ContentfulViewDeliveryClient.Options['baseUrl']>,
-  defaultHeaders?: Record<string, string>,
-  configuration: 'delivery' | 'preview' = 'delivery'
+  {
+    defaultHost,
+    defaultHeaders,
+    configuration = 'delivery',
+  }: {
+    defaultHost?: NonNullable<ContentfulViewDeliveryClient.Options['baseUrl']>;
+    defaultHeaders?: Record<string, string>;
+    configuration?: 'delivery' | 'preview';
+  } = {}
 ): ContentfulViewDeliveryClient {
   const { accessToken, host, ...configured } = options;
   const rest =

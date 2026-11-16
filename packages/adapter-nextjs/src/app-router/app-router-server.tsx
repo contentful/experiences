@@ -45,7 +45,7 @@ import {
 } from '../request/server-config.js';
 import { loadPrimaryExperience, resolveRequestPolicy } from '../request/request-policy.js';
 import { mergePreview } from '../request/preview.js';
-import { localRedirectPath } from '../presentation/redirect-path.js';
+import { getRedirectError } from '../presentation/redirect-path.js';
 import { AppRouterRequestRoot, AppRouterRequestAnalyticsRoot } from './app-router-client.js';
 
 export { serializeRequestResult } from '../request/server-config.js';
@@ -187,6 +187,17 @@ function createAppRouterServerExperiences<
     serializeRequestResult(result, { metadataKeys: options.request?.metadataKeys })
   );
 
+  async function loadPresentation() {
+    const result = await loadExperience();
+    if (result.redirect) {
+      const error = getRedirectError(result.redirect.path);
+      if (error) return { ...result, contentError: error.message };
+      redirect(result.redirect.path);
+    }
+    if (result.notFound) notFound();
+    return result;
+  }
+
   function inheritedRootProps() {
     return {
       spaceId: options.spaceId,
@@ -232,9 +243,7 @@ function createAppRouterServerExperiences<
   }
 
   async function RequestExperiencesRoot(props: BoundServerRequestRootProps) {
-    const result = await loadExperience();
-    if (result.redirect) redirect(localRedirectPath(result.redirect.path));
-    if (result.notFound) notFound();
+    const result = await loadPresentation();
     return ExperiencesRoot({ ...props, result: browserResult(result) });
   }
 
@@ -251,17 +260,13 @@ function createAppRouterServerExperiences<
   }
 
   async function RequestExperiencesAnalyticsRoot(props: BoundServerRequestRootProps) {
-    const loaded = await loadExperience();
-    if (loaded.redirect) redirect(localRedirectPath(loaded.redirect.path));
-    if (loaded.notFound) notFound();
+    const loaded = await loadPresentation();
     const { plan: _plan, ...result } = browserResult(loaded);
     return ExperiencesAnalyticsRoot({ ...props, result });
   }
 
   async function RequestExperience(props: PresentationProps) {
-    const result = await loadExperience();
-    if (result.redirect) redirect(localRedirectPath(result.redirect.path));
-    if (result.notFound) notFound();
+    const result = await loadPresentation();
     if (result.plan === undefined && result.contentError === undefined) return null;
     if (client?.request?.Experience)
       return createElement(client.request.Experience, { ...props, result: browserResult(result) });
@@ -323,7 +328,10 @@ function createAppRouterServerExperiences<
           if (isNotFoundError(error)) notFound();
           throw error;
         });
-      if ('redirect' in plan) redirect(localRedirectPath(plan.redirect.path));
+      if ('redirect' in plan) {
+        if (getRedirectError(plan.redirect.path)) return null;
+        redirect(plan.redirect.path);
+      }
       return <ServerExperienceRenderer {...presentation} experience={plan} config={config} />;
     } finally {
       request.destroy();

@@ -93,52 +93,79 @@ describe('native adapter owner', () => {
     }
   });
 
-  it.each(['/selected', '//example.com/outside'])(
-    'validates default destination navigation: %s',
-    async (path) => {
+  it.each([
+    ['/selected', false],
+    ['//example.com/outside', false],
+    ['//example.com/outside', true],
+  ] as const)(
+    'uses native or application-owned destination navigation (%s, custom=%s)',
+    async (path, custom) => {
       const binding = bindPagesRouterExperiences({ config: { components: {} } });
       const { sdk, fetchExperience } = sdkFixture();
       fetchExperience.mockResolvedValueOnce({ redirect: { path } });
-      const rendering = Promise.resolve(
-        act(async () =>
-          root.render(
-            <binding.ExperiencesRoot sdk={sdk}>
-              <binding.Experience destinationId="site" path="/pages" />
-            </binding.ExperiencesRoot>
-          )
+      const onRedirect = custom ? vi.fn() : undefined;
+      await act(async () =>
+        root.render(
+          <binding.ExperiencesRoot sdk={sdk}>
+            <binding.Experience
+              destinationId="site"
+              path="/pages"
+              onRedirect={onRedirect}
+              errorFallback={({ error }) => <output>{error?.message}</output>}
+            />
+          </binding.ExperiencesRoot>
         )
       );
-      if (path === '/selected') {
-        await rendering;
+      if (custom) {
+        expect(onRedirect).toHaveBeenCalledExactlyOnceWith(
+          { path },
+          expect.objectContaining({ status: 'redirect' })
+        );
+        expect(router.replace).not.toHaveBeenCalled();
+      } else if (path === '/selected') {
         expect(router.replace).toHaveBeenCalledExactlyOnceWith(path);
       } else {
-        await expect(rendering).rejects.toThrow(TypeError);
+        expect(container.textContent).toBe('Destination redirect must be a local absolute path.');
         expect(router.replace).not.toHaveBeenCalled();
       }
       expect(fetchExperience).toHaveBeenCalledOnce();
     }
   );
 
-  it('navigates a terminal destination result without resolving or replaying it', async () => {
-    const binding = bindPagesRouterExperiences({ config: { components: {} } });
-    const fetch = vi.fn();
-    vi.stubGlobal('fetch', fetch);
-    await act(async () =>
-      root.render(
-        <binding.request.Experience
-          result={{
-            requestId: 'redirect',
-            routeKey: '/pages',
-            experience: { destinationId: 'site', nodeId: 'node' },
-            redirect: { path: '/target' },
-          }}
-        />
-      )
-    );
-    expect(router.replace).toHaveBeenCalledExactlyOnceWith('/target');
-    expect(fetch).not.toHaveBeenCalled();
-    expect(container.textContent).toBe('');
-  });
+  it.each(['/target', 'https://example.com/outside'])(
+    'presents a terminal destination result without resolving or replaying it: %s',
+    async (path) => {
+      const binding = bindPagesRouterExperiences({ config: { components: {} } });
+      const { sdk, fetchExperience, hydrateAndTrackCurrentPage } = sdkFixture();
+      const fetch = vi.fn();
+      vi.stubGlobal('fetch', fetch);
+      const result = {
+        requestId: 'redirect',
+        routeKey: '/pages',
+        experience: { destinationId: 'site', nodeId: 'node' },
+        redirect: { path },
+        handoff: startup.handoff,
+      };
+      await act(async () =>
+        root.render(
+          <binding.request.ExperiencesRoot sdk={sdk} result={result}>
+            <binding.request.Experience
+              errorFallback={({ error }) => <output>{error?.message}</output>}
+            />
+          </binding.request.ExperiencesRoot>
+        )
+      );
+      if (path === '/target') expect(router.replace).toHaveBeenCalledExactlyOnceWith(path);
+      else expect(router.replace).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
+      expect(fetchExperience).not.toHaveBeenCalled();
+      expect(hydrateAndTrackCurrentPage).not.toHaveBeenCalled();
+      expect(sdk.trackCurrentPage).not.toHaveBeenCalled();
+      expect(container.textContent).toBe(
+        path === '/target' ? '' : 'Destination redirect must be a local absolute path.'
+      );
+    }
+  );
 
   it('ignores hash, shallow and canceled transitions and waits for matching query props', async () => {
     const { sdk, fetchExperience } = sdkFixture();

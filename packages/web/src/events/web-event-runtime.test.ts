@@ -214,7 +214,7 @@ describe('WebEventRuntime direct events', () => {
     consent.value = true;
     const warn = vi.spyOn(logger, 'warn');
     const send = vi.spyOn(runtime.analyticsQueue, 'send');
-    await expect(runtime.trackClick(entity)).resolves.toEqual({ accepted: true });
+    await expect(runtime.trackClick(entity)).resolves.toEqual({ accepted: false });
     expect(warn).toHaveBeenCalledExactlyOnceWith(
       'Experiences:Events',
       'Attempting to emit an event without a complete Optimization profile'
@@ -223,6 +223,7 @@ describe('WebEventRuntime direct events', () => {
     expect(profile.value).toBeUndefined();
     expect(runtime.continuationId).toBe('server-profile');
     expect(emittedEvent.value).toBeUndefined();
+    expect(runtime.onEventBlocked).not.toHaveBeenCalled();
   });
 
   it('refuses preview and destroyed calls before building or queueing', async () => {
@@ -759,7 +760,7 @@ it('drops Analytics while its first profile request is pending and accepts track
   const pending = runtime.page();
   await expect(
     runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
-  ).resolves.toEqual({ accepted: true });
+  ).resolves.toEqual({ accepted: false });
   response.resolve({
     profile: completeProfile('issued-profile'),
     changes: [],
@@ -768,7 +769,9 @@ it('drops Analytics while its first profile request is pending and accepts track
   await pending;
   await runtime.flush();
   expect(analytics).not.toHaveBeenCalled();
-  await runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' });
+  await expect(
+    runtime.trackClick({ entityId: 'experience', entityKind: 'Experience' })
+  ).resolves.toEqual({ accepted: true });
   await runtime.flush();
   expect(analytics).toHaveBeenCalledWith([
     expect.objectContaining({ profile: completeProfile('issued-profile') }),
