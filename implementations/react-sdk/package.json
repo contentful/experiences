@@ -2,7 +2,7 @@
   "name": "@implementation/experiences-react-sdk",
   "version": "0.0.0",
   "private": true,
-  "description": "Standalone React reference foundation for Contentful Experiences",
+  "description": "Standalone React rendering reference for Contentful Experiences",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -24,7 +24,9 @@
     "@contentful/experiences-react": "file:../../pkgs/contentful-experiences-react-local.tgz",
     "@contentful/experiences-web": "file:../../pkgs/contentful-experiences-web-local.tgz",
     "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "react-dom": "19.3.1",
+    "@contentful/rich-text-react-renderer": "16.1.6",
+    "@contentful/rich-text-types": "17.2.7"
   },
   "devDependencies": {
     "dotenv": "17.4.2",
@@ -40,7 +42,8 @@
     "jiti": "2.6.1",
     "@types/node": "22.20.1",
     "@types/react": "19.3.0",
-    "@types/react-dom": "19.3.0"
+    "@types/react-dom": "19.3.0",
+    "contentful": "11.12.10"
   },
   "overrides": {
     "@contentful/experiences-react": "$@contentful/experiences-react",

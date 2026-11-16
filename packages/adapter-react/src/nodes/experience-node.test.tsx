@@ -4,11 +4,15 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { PortableRenderNode, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
-import { useContentfulComponent, useContentfulExperienceTemplate, useExperience } from './context';
-import { createExperienceNode, ExperienceNode, resolveNodeProps } from './custom-renderer';
-import { ServerExperienceRenderer } from './server-renderer';
-import { defineComponent, type Config } from './types';
-import { useDesignValues } from './use-design-values';
+import {
+  useContentfulComponent,
+  useContentfulExperienceTemplate,
+  useExperience,
+} from '../rendering/context';
+import { createExperienceNode, ExperienceNode, resolveNodeProps } from '../custom-renderer';
+import { ServerExperienceRenderer } from '../rendering/server-renderer';
+import { defineComponent, type Config } from '../registry/types';
+import { useDesignValues } from '../hooks/use-design-values';
 
 function planNode(
   kind: 'component' | 'experienceTemplate',
@@ -70,7 +74,7 @@ const cardNode = planNode(
 const experience = { debug: false, metadata: { slug: 'home' } };
 
 describe('ExperienceNode', () => {
-  it('renders a resolved node exactly as ServerExperienceRenderer does', () => {
+  it("wraps resolved node markup in ServerExperienceRenderer's plan boundary", () => {
     const host = renderToStaticMarkup(
       <ExperienceNode node={resolve(cardNode, config)} experience={experience} />
     );
@@ -82,7 +86,9 @@ describe('ExperienceNode', () => {
       />
     );
 
-    expect(host).toBe(sdk);
+    expect(sdk).toBe(
+      `<div data-ctfl-attribution="{&quot;scopes&quot;:{}}" style="display:contents">${host}</div>`
+    );
     expect(host).toBe('<article data-node="c1" data-slug="home" style="color:red">Hi</article>');
   });
 

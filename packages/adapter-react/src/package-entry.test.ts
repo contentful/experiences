@@ -65,11 +65,13 @@ describe('published package entry points', () => {
 
   it('preserves every per-file client directive in the unbundled output', () => {
     const directory = new URL('.', import.meta.url);
-    for (const file of readdirSync(directory).filter((name) => /\.(?:ts|tsx)$/.test(name))) {
+    for (const file of readdirSync(directory, { recursive: true, encoding: 'utf8' }).filter(
+      (name) => /\.(?:ts|tsx)$/.test(name)
+    )) {
       if (
         file.endsWith('.test.ts') ||
         file.endsWith('.test.tsx') ||
-        file.startsWith('use-live-preview')
+        file.replaceAll('\\', '/').startsWith('preview/legacy/')
       )
         continue;
       const source = readFileSync(new URL(file, directory), 'utf8');
@@ -99,6 +101,10 @@ describe('published package entry points', () => {
       );
       expect(manifest.dependencies[name]).toBe(dependency.version);
     }
-    expect(readdirSync(new URL('../dist/', import.meta.url))).not.toContain('use-live-preview.js');
+    expect(
+      readdirSync(new URL('../dist/', import.meta.url), { recursive: true, encoding: 'utf8' }).some(
+        (file) => /use-live-preview|preview[/\\]legacy/.test(file)
+      )
+    ).toBe(false);
   });
 });

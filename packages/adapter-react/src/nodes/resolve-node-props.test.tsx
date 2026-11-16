@@ -4,9 +4,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { NodeAttribution, PortableRenderNode } from '@contentful/experiences-sdk-core';
 
-import { resolveNodeProps } from './custom-renderer';
-import { ServerExperienceRenderer } from './server-renderer';
-import { defineComponent, type Config } from './types';
+import { resolveNodeProps } from '../custom-renderer';
+import { ServerExperienceRenderer } from '../rendering/server-renderer';
+import { defineComponent, type Config } from '../registry/types';
 
 function planNode(
   kind: 'component' | 'experienceTemplate',
@@ -149,7 +149,7 @@ describe('resolveNodeProps', () => {
     });
   });
 
-  it('gives a host-rendered node the same markup as ServerExperienceRenderer', () => {
+  it("wraps host-rendered node markup in the standard renderer's plan boundary", () => {
     function Card({ title, color, badge }: { title: string; color: string; badge: string }) {
       return (
         <article style={{ color }}>
@@ -176,6 +176,8 @@ describe('resolveNodeProps', () => {
       />
     );
 
-    expect(hostMarkup).toBe(sdkMarkup);
+    expect(sdkMarkup).toBe(
+      `<div data-ctfl-attribution="{&quot;scopes&quot;:{}}" style="display:contents">${hostMarkup}</div>`
+    );
   });
 });

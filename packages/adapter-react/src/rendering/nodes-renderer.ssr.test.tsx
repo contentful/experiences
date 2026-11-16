@@ -31,7 +31,7 @@ import type { ComponentNode, ExperiencePayload } from '@contentful/experiences-s
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 
 import { ServerExperienceRenderer } from './server-renderer';
-import type { Config } from './types';
+import type { Config } from '../registry/types';
 
 function componentNode(typeId: string, rest: Omit<ComponentNode, 'component'> = {}): ComponentNode {
   return {

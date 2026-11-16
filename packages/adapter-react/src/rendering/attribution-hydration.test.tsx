@@ -8,9 +8,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 
 import { useContentfulComponent } from './context';
-import { getTrackingAttributes } from './index';
+import { getTrackingAttributes } from '../index';
 import { ServerExperienceRenderer } from './server-renderer';
-import type { Config } from './types';
+import type { Config } from '../registry/types';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

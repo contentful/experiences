@@ -8,11 +8,15 @@ import { Fragment, createElement, type ReactNode } from 'react';
 
 import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
 
-import type { ComponentErrorProps } from './component-error.js';
-import { ExperienceNode } from './experience-node.js';
-import type { MissingComponentProps } from './missing-component.js';
-import { resolveNodeProps } from './resolve-node-props.js';
-import type { Config } from './types.js';
+import type { ComponentErrorProps } from '../diagnostics/component-error.js';
+import { ExperienceNode } from '../nodes/experience-node.js';
+import type { MissingComponentProps } from '../diagnostics/missing-component.js';
+import { resolveNodeProps } from '../nodes/resolve-node-props.js';
+import type { Config } from '../registry/types.js';
+import type {
+  ExperienceTrackingOptions,
+  OnExperienceNodeRoot,
+} from '../tracking/root-binding-types.js';
 
 export type RenderUnknown = (props: MissingComponentProps) => ReactNode;
 export type RenderError = (props: ComponentErrorProps) => ReactNode;
@@ -27,12 +31,13 @@ export type RenderError = (props: ComponentErrorProps) => ReactNode;
  */
 export type DiagnosticReporter = (error: Error) => void;
 
-export interface NodesRendererProps {
+export interface NodesRendererProps extends ExperienceTrackingOptions {
   nodes: PortableRenderNode[];
   config: Config;
   renderUnknown: RenderUnknown;
   renderError: RenderError;
   onDiagnostic: DiagnosticReporter;
+  onNodeRoot?: OnExperienceNodeRoot;
 }
 
 export function NodesRenderer({
@@ -41,6 +46,11 @@ export function NodesRenderer({
   renderUnknown,
   renderError,
   onDiagnostic,
+  clickable,
+  trackClicks,
+  trackHovers,
+  trackViews,
+  onNodeRoot,
 }: NodesRendererProps): ReactNode {
   if (!nodes.length) return null;
   return (
@@ -53,18 +63,24 @@ export function NodesRenderer({
           renderUnknown={renderUnknown}
           renderError={renderError}
           onDiagnostic={onDiagnostic}
+          clickable={clickable}
+          trackClicks={trackClicks}
+          trackHovers={trackHovers}
+          trackViews={trackViews}
+          onNodeRoot={onNodeRoot}
         />
       ))}
     </Fragment>
   );
 }
 
-interface NodeRendererProps {
+interface NodeRendererProps extends ExperienceTrackingOptions {
   node: PortableRenderNode;
   config: Config;
   renderUnknown: RenderUnknown;
   renderError: RenderError;
   onDiagnostic: DiagnosticReporter;
+  onNodeRoot?: OnExperienceNodeRoot;
 }
 
 function NodeRenderer({
@@ -73,6 +89,11 @@ function NodeRenderer({
   renderUnknown,
   renderError,
   onDiagnostic,
+  clickable,
+  trackClicks,
+  trackHovers,
+  trackViews,
+  onNodeRoot,
 }: NodeRendererProps): ReactNode {
   const { kind, id } = node.registration;
   const isExperienceTemplate = kind === 'experienceTemplate';
@@ -124,6 +145,11 @@ function NodeRenderer({
         renderUnknown={renderUnknown}
         renderError={renderError}
         onDiagnostic={onDiagnostic}
+        clickable={clickable}
+        trackClicks={trackClicks}
+        trackHovers={trackHovers}
+        trackViews={trackViews}
+        onNodeRoot={onNodeRoot}
       />
     ));
   }
@@ -153,5 +179,16 @@ function NodeRenderer({
   }
   // Slots go through the explicit `slots` prop so a slot can't collide with one
   // of ExperienceNode's own prop names.
-  return <ExperienceNode node={resolved} renderError={renderError} slots={slotProps} />;
+  return (
+    <ExperienceNode
+      node={resolved}
+      renderError={renderError}
+      slots={slotProps}
+      clickable={clickable}
+      trackClicks={trackClicks}
+      trackHovers={trackHovers}
+      trackViews={trackViews}
+      onNodeRoot={onNodeRoot}
+    />
+  );
 }
