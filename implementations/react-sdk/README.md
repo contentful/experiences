@@ -7,7 +7,7 @@ supported product usage or a cross-fetch guarantee.
 **Current Phase 6 correction:** Complete and explicitly accepted on 2026-11-02;
 current checks and acceptance review are recorded in the implementation plan.
 Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification.
-Phase 8 is complete and accepted on 2026-11-02; Phase 9 is in progress; phases 10–13 have not started; the Phase 6 gate is satisfied. Earlier remedy
+Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied. Earlier remedy
 checks/review remain historical; Phase 7 package and live observations are recorded
 in its implementation-plan entry.
 

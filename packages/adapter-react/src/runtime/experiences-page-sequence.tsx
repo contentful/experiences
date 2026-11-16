@@ -136,6 +136,7 @@ export function ExperiencesPageSequence({
     };
   }, [sdk, routeKey, resetRevision, onReset, owner]);
 
+  const beforeInitialPageEnabled = beforeInitialPage !== undefined;
   // Optional app callback authority lasts until completion, matching handoff,
   // reset, owner replacement or unmount. It never gates XDA content.
   useEffect(() => {
@@ -191,7 +192,7 @@ export function ExperiencesPageSequence({
       clearTimeout(timer);
       finish();
     };
-  }, [isLive, sdk, owner, matchingHandoff]);
+  }, [isLive, sdk, owner, matchingHandoff, beforeInitialPageEnabled]);
 
   useEffect(() => {
     if (!isLive || sdk.isPreview || handoff) return;
@@ -231,7 +232,7 @@ export function ExperiencesPageSequence({
       disposed = true;
       subscription.unsubscribe();
     };
-  }, [isLive, sdk, routeKey, handoff, requestContext, owner, pageMode]);
+  }, [isLive, sdk, routeKey, handoff, requestContext, owner, pageMode, beforeInitialPageEnabled]);
 
   return (
     <ExperienceRequestContext.Provider value={requestContext}>

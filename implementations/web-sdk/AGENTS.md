@@ -46,7 +46,7 @@ supported product usage or a cross-fetch guarantee.
   registry and actual named slots recursively; do not invent composed hierarchy.
 - Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and
   acceptance review are recorded in the implementation plan. Earlier checks/review
-  remain historical. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is in progress; phases 10–13 have not started; the Phase 6 gate is satisfied. Follow the [Runtime aggregate contract](../../packages/runtime/README.md#shared-handoff-primitives).
+  remain historical. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied. Follow the [Runtime aggregate contract](../../packages/runtime/README.md#shared-handoff-primitives).
 - Supply explicit page/optional initial URL identify intent through ordinary Web
   fetch, accepting existing type-tagged arguments or raw built events with SDK
   construction once. CSR needs no handoff or direct initial event prerequisite.

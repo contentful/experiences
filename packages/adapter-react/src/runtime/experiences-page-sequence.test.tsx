@@ -113,6 +113,9 @@ describe('React route request and page coordination', () => {
   it('orders analytics-only page intent after the optional callback without loading content', async () => {
     const pending = deferred<void>();
     const beforeInitialPage = { run: vi.fn(() => pending.promise) };
+    await render();
+    expect(beforeInitialPage.run).not.toHaveBeenCalled();
+    expect(runtime.trackCurrentPage).not.toHaveBeenCalled();
     await render({ pageMode: 'analytics', beforeInitialPage });
     expect(beforeInitialPage.run).toHaveBeenCalledOnce();
     expect(runtime.trackCurrentPage).not.toHaveBeenCalled();

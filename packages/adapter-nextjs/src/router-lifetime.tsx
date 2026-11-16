@@ -109,6 +109,7 @@ export function NextjsRequestPresentation({
 }) {
   const canAdopt = useNextjsInitialData(result?.requestId);
   const matchingResult = canAdopt && result?.routeKey === routeKey ? result : undefined;
+  const waiting = !ready || (result !== undefined && result.routeKey !== routeKey);
   const initialPagePayload = matchingResult?.initialPagePayload;
   const events = matchingResult?.experience.personalization?.events;
   const pageFree = events !== undefined && !events.some((event) => event.type === 'page');
@@ -125,13 +126,14 @@ export function NextjsRequestPresentation({
   return (
     <Root
       {...props}
+      {...(waiting ? { beforeInitialPage: undefined } : {})}
       routeKey={routeKey}
       handoff={ready || typeof window === 'undefined' ? matchingResult?.handoff : undefined}
       handoffKey={matchingResult?.requestId}
       // Returning undefined from a builder still permits Web's empty page fallback.
-      buildPagePayload={pageFree ? undefined : buildPagePayload}
+      buildPagePayload={waiting || pageFree ? undefined : buildPagePayload}
       initialPagePayload={undefined}
-      pageMode={pageFree ? undefined : props.pageMode}
+      pageMode={waiting || pageFree ? undefined : props.pageMode}
     />
   );
 }

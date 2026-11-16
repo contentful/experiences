@@ -1,6 +1,10 @@
 /** @vitest-environment jsdom */
 import { act } from 'react';
-import { useExperiences, useExperiencesActions } from '@contentful/experiences-react/client';
+import {
+  useExperiences,
+  useExperiencesActions,
+  type ManagedExperienceResult,
+} from '@contentful/experiences-react/client';
 import { createRoot, type Root } from 'react-dom/client';
 import {
   CONSENT_CACHE_KEY,
@@ -344,7 +348,7 @@ describe('App committed route inputs', () => {
     const render = async (value: ReturnType<typeof result>) => {
       await act(async () =>
         root.render(
-          <bound.request.ExperiencesRoot sdk={sdk} result={value}>
+          <bound.request.ExperiencesRoot sdk={sdk} result={value} pageMode="analytics">
             <bound.request.Experience result={value}>
               {(state) => (
                 <output>
@@ -382,7 +386,7 @@ describe('App committed route inputs', () => {
     expect(fetchExperience).not.toHaveBeenCalled();
   });
 
-  it('loads Web-owned content on committed routes without server request results', async () => {
+  it('continues Web-owned navigation after the initial server result in a retained root', async () => {
     const plan = { nodes: [], debug: false, diagnostics: [], metadata: { label: 'Web plan' } };
     const fetchExperience = vi.fn().mockResolvedValue(plan);
     const sdk = {
@@ -394,25 +398,52 @@ describe('App committed route inputs', () => {
       subscribeToPreview: () => ({ unsubscribe() {} }),
     } as unknown as ContentfulExperiences;
     const bound = bindNextjsAppRouterClientExperiences({ config: { components: {} } });
-    const render = async () =>
-      act(async () =>
+    const initial = {
+      requestId: 'initial',
+      routeKey: '/page?q=hello+world',
+      experience: { experienceId: 'primary' },
+      plan,
+    };
+    const show = (state: ManagedExperienceResult) => (
+      <output>{String(state.data?.metadata.label ?? 'Waiting')}</output>
+    );
+    const render = async () => {
+      const currentResult =
+        initial.routeKey === window.location.pathname + window.location.search
+          ? initial
+          : undefined;
+      await act(async () =>
         root.render(
-          <bound.request.ExperiencesRoot sdk={sdk}>
-            <bound.Experience experienceId="primary">
-              {(state) => <output>{String(state.data?.metadata.label ?? 'Waiting')}</output>}
-            </bound.Experience>
+          <bound.request.ExperiencesRoot sdk={sdk} result={currentResult}>
+            {currentResult ? (
+              <bound.request.Experience result={currentResult}>{show}</bound.request.Experience>
+            ) : (
+              <bound.Experience experienceId="primary">{show}</bound.Experience>
+            )}
           </bound.request.ExperiencesRoot>
         )
       );
+    };
     await render();
     expect(container.textContent).toBe('Web plan');
-    expect(fetchExperience).toHaveBeenCalledTimes(1);
+    expect(fetchExperience).not.toHaveBeenCalled();
     navigation.pathname = '/destination';
     navigation.search = '';
     window.history.replaceState(null, '', '/destination');
     await render();
     expect(container.textContent).toBe('Web plan');
+    expect(fetchExperience).toHaveBeenCalledTimes(1);
+    expect(fetchExperience.mock.calls[0]![0]).toMatchObject({
+      personalization: { events: [{ type: 'page', properties: { path: '/destination' } }] },
+    });
+    navigation.pathname = '/page';
+    navigation.search = 'q=hello%20world';
+    window.history.replaceState(null, '', initial.routeKey);
+    await render();
     expect(fetchExperience).toHaveBeenCalledTimes(2);
+    expect(fetchExperience.mock.calls[1]![0]).toMatchObject({
+      personalization: { events: [{ type: 'page', properties: { path: '/page' } }] },
+    });
   });
 
   it('passes client configuration and prop overrides to the shared request presentation', async () => {

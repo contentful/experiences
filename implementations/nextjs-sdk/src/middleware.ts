@@ -5,5 +5,12 @@ import { createNextjsExperiencesContextHandler } from '@contentful/experiences-n
 export const middleware = createNextjsExperiencesContextHandler();
 export const config = {
   runtime: 'nodejs',
-  matcher: ['/', '/page-two', '/single-experience'],
+  matcher: [
+    '/',
+    '/page-two',
+    '/pages',
+    '/pages/page-two',
+    '/single-experience',
+    '/pages/single-experience',
+  ],
 };

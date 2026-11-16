@@ -6,7 +6,7 @@ supported product usage or a cross-fetch guarantee.
 
 - Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and
   acceptance review are recorded in the implementation plan. Earlier checks/review
-  remain historical. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is in progress; phases 10–13 have not started; the Phase 6 gate is satisfied. Replay-less aggregates apply state
+  remain historical. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied. Replay-less aggregates apply state
   internally and return `{ accepted: false }` unless explicit `buildPayload` supplies
   page intent. Only page-bearing intent participates in route deduplication.
 - Read the parent implementation instructions and this app's README before editing.
