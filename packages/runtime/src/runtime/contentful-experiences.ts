@@ -42,11 +42,6 @@ import {
   type OptimizationConfig,
 } from './create-optimization-client.js';
 import { DEFAULT_EVENT_CONTEXT_LIBRARY } from '../sdk-info.js';
-import {
-  createEventMethods,
-  type DirectEventBindings,
-  type EventMethods,
-} from '../events/event-methods.js';
 
 export type ResolveOptions = {
   config: ResolverConfig;
@@ -257,13 +252,6 @@ export class ContentfulExperiences<TConfig extends Config = Config> implements E
   /** Pure lookup in caller-owned changes; no state is retained or exposure emitted. */
   getFlag(name: string, changes?: readonly unknown[]): Json | undefined {
     return resolveFlagChange(name, changes)?.value;
-  }
-
-  protected createEventMethods(bindings: DirectEventBindings): EventMethods {
-    return createEventMethods(this.api, this.eventBuilder, {
-      getLocale: () => this.locale,
-      ...bindings,
-    });
   }
 
   resolveExperience(

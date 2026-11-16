@@ -1,6 +1,7 @@
 import type { PersonalizationOptions } from '@contentful/experiences-client';
 import {
   ExperienceEvent as PersonalizationEventSchema,
+  InsightsEvent as AnalyticsEventSchema,
   parseWithFriendlyError as parseOptimizationSchema,
   type ExperienceEvent as PersonalizationEvent,
   type InsightsEvent as AnalyticsEvent,
@@ -13,6 +14,11 @@ export type OptimizationEventStreamEvent =
 /** Validate transformed Personalization events before consent or batch admission. */
 export function validatePersonalizationEvent(event: unknown): PersonalizationEvent {
   return parseOptimizationSchema(PersonalizationEventSchema, event);
+}
+
+/** Validate transformed Analytics events before consent or transport admission. */
+export function validateAnalyticsEvent(event: unknown): AnalyticsEvent {
+  return parseOptimizationSchema(AnalyticsEventSchema, event);
 }
 
 /** Owner-provided event interception; delivery validates the resulting wire event. */

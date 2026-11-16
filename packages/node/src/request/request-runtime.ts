@@ -1,3 +1,4 @@
+import type { DirectEventBindings } from './event-methods.js';
 import { assertHandoffRequest, fetchHandoff } from './handoff.js';
 import { RequestPersonalization, type BuiltFetchOptions } from './personalization.js';
 import {
@@ -15,7 +16,6 @@ import {
   type UniversalEventBuilderArgs,
   type PersonalizationOptions,
   EventProfileSchema,
-  type DirectEventBindings,
   type EventMethods,
   type FetchByDestinationNodeOptions,
   type FetchByDestinationPathOptions,

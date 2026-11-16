@@ -85,6 +85,8 @@ export {
   EventProfileRequiredError,
   EventProfileSchema,
   warnMissingEventProfile,
+  emitPersonalizationEvent,
+  emitAnalyticsEvent,
 } from './events/event-methods.js';
 export type {
   PersonalizationRequestOptions,
@@ -105,7 +107,10 @@ export type {
   PersonalizationRequestState,
   PersonalizationRequestFailureReason,
 } from './delivery/personalization-request-state.js';
-export { validatePersonalizationEvent } from './events/event-interceptors.js';
+export {
+  validatePersonalizationEvent,
+  validateAnalyticsEvent,
+} from './events/event-interceptors.js';
 export type {
   EventInterceptors,
   OptimizationEventStreamEvent,
@@ -140,6 +145,7 @@ export type {
   EventProfile,
   AnalyticsEventMethod,
   PersonalizationEventMethod,
-  DirectEventBindings,
+  EventOwner,
+  AnalyticsEventOwner,
   EventMethods,
 } from './events/event-methods.js';

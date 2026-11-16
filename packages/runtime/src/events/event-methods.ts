@@ -7,8 +7,6 @@ import type {
 import { createScopedLogger } from '@contentful/optimization-api-client/logger';
 import {
   Profile as EventProfileSchema,
-  InsightsEvent as AnalyticsEventSchema,
-  parseWithFriendlyError as parseOptimizationSchema,
   type ExperienceEvent as PersonalizationEvent,
   type InsightsEvent as AnalyticsEvent,
   type OptimizationData as EventOptimizationData,
@@ -20,11 +18,7 @@ import {
   type ConsentState,
   type EventMethod,
   hasEventConsent,
-  hasEventTypeConsent,
-  methodForEventType,
 } from './consent.js';
-import { validatePersonalizationEvent, type EventInterceptors } from './event-interceptors.js';
-import type EventBuilder from './event-builder.js';
 import type { EventEmissionResult } from './event-emission-result.js';
 import { withEventConsent } from './prepared-events.js';
 import type {
@@ -67,40 +61,20 @@ export interface EventApi {
   readonly analytics: Pick<AnalyticsApiClient, 'sendBatchEvents'>;
 }
 
-/** Private transport operations for direct event methods. */
-interface EventDispatch {
-  personalization(
-    event: PersonalizationEvent,
-    profile: ReturnType<DirectEventBindings['getProfile']>
-  ): Promise<EventEmissionResult>;
-  analytics(event: AnalyticsEvent, profile: EventProfile): Promise<void | false>;
+/** @internal Live policy supplied by the Node request or Web event owner. */
+export interface EventOwner {
+  isActive: () => boolean;
+  getIsPreview: () => boolean;
+  getEventContext?: () => UniversalEventBuilderArgs;
+  getConsent: () => ConsentState;
+  getAllowedEventTypes: () => readonly AllowedEventType[] | undefined;
+  reportBlockedEvent: (event: BlockedEvent) => void;
 }
 
-/** Owner bindings for direct transport, which publishes returned profiles. */
-export interface DirectEventBindings {
+/** @internal Analytics policy; state remains with the leaf owner. */
+export interface AnalyticsEventOwner extends EventOwner {
   getProfile: () => EventProfile | Pick<EventProfile, 'id'> | undefined;
-  /** Fixed preview intent of the owning instance/request. */
-  getIsPreview?: () => boolean;
-  getEventContext?: () => UniversalEventBuilderArgs;
-  /** Content/request locale for Personalization; event context does not override it. */
-  getLocale?: () => string | undefined;
-  /** Current event consent; an undecided state gates events to `allowedEventTypes`. */
-  getConsent?: () => ConsentState | undefined;
-  /** Event types emitted while event consent is not granted. Defaults to identify and page. */
-  allowedEventTypes?: readonly AllowedEventType[];
-  /** Analytics API options forwarded with each direct Analytics send, such as `beacon`. */
-  getAnalyticsOptions?: () => AnalyticsRequestOptions | undefined;
-  /** Personalization API options forwarded with each direct Personalization send. */
-  getPersonalizationOptions?: () => PersonalizationRequestOptions | undefined;
-  /** Configured diagnostic callback; its errors must not interrupt event delivery. */
-  onEventBlocked?: (event: BlockedEvent) => void;
-  setProfile: (profile: EventProfile) => void;
-  /** Changes when an external session boundary must invalidate an in-flight profile response. */
-  getProfileRevision?: () => number;
-  /** Request disposal guard for transport admission and late profile publication. */
-  isActive?: () => boolean;
-  /** Instance-owned transformation stage for direct Node emissions. */
-  eventInterceptors?: EventInterceptors;
+  onMissingProfile: (method: AnalyticsEventMethod) => void;
 }
 
 /**
@@ -111,7 +85,7 @@ export interface DirectEventBindings {
  * blocked Analytics call resolves `{ accepted: false }`.
  */
 export interface EventMethods {
-  readonly profile: ReturnType<DirectEventBindings['getProfile']>;
+  readonly profile: EventProfile | Pick<EventProfile, 'id'> | undefined;
   identify(args: IdentifyBuilderArgs): Promise<EventEmissionResult>;
   page(args?: PageViewBuilderArgs): Promise<EventEmissionResult>;
   track(args: TrackBuilderArgs): Promise<EventEmissionResult>;
@@ -134,240 +108,67 @@ export class EventProfileRequiredError extends Error {
   }
 }
 
-class BoundEventMethods implements EventMethods {
-  constructor(
-    private readonly eventBuilder: EventBuilder,
-    private readonly bindings: DirectEventBindings,
-    private readonly reportBlockedEvent: (event: BlockedEvent) => void,
-    private readonly dispatch: EventDispatch
-  ) {}
+type PreparedEvent<TEvent> = { event: TEvent } | { result: EventEmissionResult };
 
-  get profile(): ReturnType<DirectEventBindings['getProfile']> {
-    return this.bindings.getProfile();
-  }
-
-  async identify(args: IdentifyBuilderArgs): Promise<EventEmissionResult> {
-    const skipped = this.skipPreview('identify', args);
-    if (skipped) return skipped;
-    return this.sendPersonalizationEvent(
-      'identify',
-      args,
-      this.eventBuilder.buildIdentify(this.withEventContext(args))
-    );
-  }
-
-  async page(args: PageViewBuilderArgs = {}): Promise<EventEmissionResult> {
-    const skipped = this.skipPreview('page', args);
-    if (skipped) return skipped;
-    return this.sendPersonalizationEvent(
-      'page',
-      args,
-      this.eventBuilder.buildPageView(this.withEventContext(args))
-    );
-  }
-
-  async track(args: TrackBuilderArgs): Promise<EventEmissionResult> {
-    const skipped = this.skipPreview('track', args);
-    if (skipped) return skipped;
-    return this.sendPersonalizationEvent(
-      'track',
-      args,
-      this.eventBuilder.buildTrack(this.withEventContext(args))
-    );
-  }
-
-  /**
-   * Like Optimization's non-sticky view, the result reports consent admission: an admitted
-   * view resolves `{ accepted: true }` and a blocked one `{ accepted: false }`. It is not a
-   * delivery result. A missing complete profile throws as for other Analytics methods.
-   */
-  async trackView(args: ViewBuilderArgs): Promise<EventEmissionResult> {
-    const skipped = this.skipPreview('trackView', args);
-    if (skipped) return skipped;
-    if (!this.admit('trackView', [args])) return { accepted: false };
-
-    return this.sendAnalyticsEvent(
-      'trackView',
-      args,
-      this.eventBuilder.buildView(this.withEventContext(args))
-    );
-  }
-
-  async trackClick(args: ClickBuilderArgs): Promise<EventEmissionResult> {
-    const skipped = this.skipPreview('trackClick', args);
-    if (skipped) return skipped;
-    return this.sendAnalyticsEvent(
-      'trackClick',
-      args,
-      this.eventBuilder.buildClick(this.withEventContext(args))
-    );
-  }
-
-  async trackHover(args: HoverBuilderArgs): Promise<EventEmissionResult> {
-    const skipped = this.skipPreview('trackHover', args);
-    if (skipped) return skipped;
-    return this.sendAnalyticsEvent(
-      'trackHover',
-      args,
-      this.eventBuilder.buildHover(this.withEventContext(args))
-    );
-  }
-
-  async trackFlagView(args: FlagViewBuilderArgs): Promise<EventEmissionResult> {
-    const skipped = this.skipPreview('trackFlagView', args);
-    if (skipped) return skipped;
-    return this.sendAnalyticsEvent(
-      'trackFlagView',
-      args,
-      this.eventBuilder.buildFlagView(this.withEventContext(args))
-    );
-  }
-
-  private skipPreview(method: EventMethod, args: unknown): EventEmissionResult | undefined {
-    if (this.bindings.getIsPreview?.() !== true) return undefined;
-    this.reportBlockedEvent({ reason: 'preview', method, args: [args] });
-    return { accepted: false, reason: 'preview' };
-  }
-
-  private withEventContext<TArgs extends UniversalEventBuilderArgs>(args: TArgs): TArgs {
-    return { ...this.bindings.getEventContext?.(), ...args } as TArgs;
-  }
-
-  private withConsent<TEvent extends PersonalizationEvent | AnalyticsEvent>(event: TEvent): TEvent {
-    const consent = this.bindings.getConsent?.();
-    if (consent === undefined) return event;
-
-    return withEventConsent(event, consent.events === true);
-  }
-
-  /** Whether `method` may emit; reports a blocked event to its owner otherwise. */
-  private admit(method: EventMethod, args: readonly unknown[]): boolean {
-    const { getConsent, allowedEventTypes } = this.bindings;
-    if (getConsent === undefined || hasEventConsent(method, getConsent(), allowedEventTypes)) {
-      return true;
-    }
-    this.reportBlockedEvent({ reason: 'consent', method, args });
-    return false;
-  }
-
-  private async sendPersonalizationEvent(
-    method: PersonalizationEventMethod,
-    args: unknown,
-    event: PersonalizationEvent
-  ): Promise<EventEmissionResult> {
-    if (!this.admit(method, [args])) return { accepted: false };
-
-    const eventWithConsent = this.withConsent(event);
-    return this.dispatch.personalization(eventWithConsent, this.profile);
-  }
-
-  private async sendAnalyticsEvent(
-    method: AnalyticsEventMethod,
-    args: unknown,
-    event: AnalyticsEvent
-  ): Promise<EventEmissionResult> {
-    if (!this.admit(method, [args])) return { accepted: false };
-    const profile = EventProfileSchema.safeParse(this.profile);
-    if (!profile.success) {
-      throw new EventProfileRequiredError(method);
-    }
-    const admitted = await this.dispatch.analytics(this.withConsent(event), profile.data);
-    return { accepted: admitted !== false };
-  }
-}
-
-/** @internal Deliver a finalized, admitted batch and publish only to its current owner. */
-export async function deliverPersonalizationEvents(
-  api: EventApi['personalization'],
-  events: readonly PersonalizationEvent[],
-  profileId: string | undefined,
-  options: (PersonalizationRequestOptions & { preflight?: boolean }) | undefined,
-  bindings: Pick<DirectEventBindings, 'setProfile' | 'getProfileRevision' | 'isActive'>,
-  profileRevision = bindings.getProfileRevision?.()
-): Promise<EventEmissionResult> {
-  if (bindings.isActive?.() === false) return { accepted: false };
-  const data = await api.upsertProfile({ profileId, events: [...events] }, options);
-  if (
-    bindings.isActive?.() !== false &&
-    (profileRevision === undefined || bindings.getProfileRevision?.() === profileRevision)
-  ) {
-    bindings.setProfile(data.profile);
-  }
-  return { accepted: true, data };
-}
-
-function createDirectEventDispatch(api: EventApi, bindings: DirectEventBindings): EventDispatch {
-  return {
-    personalization: async (event, profile) => {
-      const profileRevision = bindings.getProfileRevision?.();
-      const interceptors = bindings.eventInterceptors;
-      if (interceptors !== undefined && interceptors.count?.() !== 0) {
-        event = validatePersonalizationEvent(await interceptors.run(event));
-        if (!admitInterceptedEvent(event, bindings)) return { accepted: false };
-      }
-      return deliverPersonalizationEvents(
-        api.personalization,
-        [event],
-        profile?.id,
-        { ...bindings.getPersonalizationOptions?.(), locale: bindings.getLocale?.() },
-        bindings,
-        profileRevision
-      );
-    },
-    analytics: async (event, profile) => {
-      const interceptors = bindings.eventInterceptors;
-      if (interceptors !== undefined && interceptors.count?.() !== 0) {
-        event = parseOptimizationSchema(AnalyticsEventSchema, await interceptors.run(event));
-        if (!admitInterceptedEvent(event, bindings)) return false;
-      }
-      if (bindings.isActive?.() === false) return false;
-      const batches = [{ profile, events: [event] }];
-      const options = bindings.getAnalyticsOptions?.();
-      // As in Optimization's stateless request, the options argument is omitted when unset.
-      if (options === undefined) await api.analytics.sendBatchEvents(batches);
-      else await api.analytics.sendBatchEvents(batches, options);
-      return undefined;
-    },
-  };
-}
-
-function admitInterceptedEvent(
-  event: PersonalizationEvent | AnalyticsEvent,
-  bindings: DirectEventBindings
-): boolean {
-  if (
-    bindings.getConsent === undefined ||
-    hasEventTypeConsent(event.type, bindings.getConsent(), bindings.allowedEventTypes)
-  )
-    return true;
-  try {
-    bindings.onEventBlocked?.({
-      reason: 'consent',
-      method: methodForEventType(event.type) ?? event.type,
-      args: [event],
-    });
-  } catch {
-    // Diagnostic callbacks do not interrupt direct event admission.
-  }
+function admit(owner: EventOwner, method: EventMethod, args: unknown): boolean {
+  if (hasEventConsent(method, owner.getConsent(), owner.getAllowedEventTypes())) return true;
+  owner.reportBlockedEvent({ reason: 'consent', method, args: [args] });
   return false;
 }
 
-export function createEventMethods(
-  api: EventApi,
-  eventBuilder: EventBuilder,
-  bindings: DirectEventBindings
-): EventMethods {
-  const { onEventBlocked, ...ownerBindings } = bindings;
-  return new BoundEventMethods(
-    eventBuilder,
-    { ...ownerBindings },
-    (event) => {
-      try {
-        onEventBlocked?.(event);
-      } catch {
-        // A failing diagnostic callback must not break event delivery.
-      }
-    },
-    createDirectEventDispatch(api, bindings)
-  );
+function prepareEvent<TArgs extends UniversalEventBuilderArgs, TEvent>(
+  owner: EventOwner,
+  method: EventMethod,
+  args: TArgs,
+  build: (args: TArgs) => TEvent
+): PreparedEvent<TEvent> {
+  if (!owner.isActive()) return { result: { accepted: false } };
+  if (owner.getIsPreview()) {
+    owner.reportBlockedEvent({ reason: 'preview', method, args: [args] });
+    return { result: { accepted: false, reason: 'preview' } };
+  }
+  // Views check consent before validation; all methods recheck after construction.
+  if (method === 'trackView' && !admit(owner, method, args)) return { result: { accepted: false } };
+  const event = build({ ...owner.getEventContext?.(), ...args });
+  if (!admit(owner, method, args)) return { result: { accepted: false } };
+  return { event };
+}
+
+function stampConsent<TEvent extends PersonalizationEvent | AnalyticsEvent>(
+  owner: EventOwner,
+  event: TEvent
+): TEvent {
+  return withEventConsent(event, owner.getConsent().events === true);
+}
+
+/** @internal Shared call ordering; the leaf owns delivery, interception and final admission. */
+export async function emitPersonalizationEvent<TArgs extends UniversalEventBuilderArgs>(
+  owner: EventOwner,
+  method: PersonalizationEventMethod,
+  args: TArgs,
+  build: (args: TArgs) => PersonalizationEvent,
+  send: (event: PersonalizationEvent) => Promise<EventEmissionResult>
+): Promise<EventEmissionResult> {
+  const prepared = prepareEvent(owner, method, args, build);
+  if ('result' in prepared) return prepared.result;
+  return send(stampConsent(owner, prepared.event));
+}
+
+/** @internal Shared Analytics preparation with the leaf's missing-profile policy. */
+export async function emitAnalyticsEvent<TArgs extends UniversalEventBuilderArgs>(
+  owner: AnalyticsEventOwner,
+  method: AnalyticsEventMethod,
+  args: TArgs,
+  build: (args: TArgs) => AnalyticsEvent,
+  send: (event: AnalyticsEvent, profile: EventProfile) => Promise<void | false>
+): Promise<EventEmissionResult> {
+  const prepared = prepareEvent(owner, method, args, build);
+  if ('result' in prepared) return prepared.result;
+  const profile = EventProfileSchema.safeParse(owner.getProfile());
+  if (!profile.success) {
+    owner.onMissingProfile(method);
+    return { accepted: true };
+  }
+  const admitted = await send(stampConsent(owner, prepared.event), profile.data);
+  return { accepted: admitted !== false };
 }

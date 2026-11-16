@@ -616,9 +616,13 @@ calls retain that receiver. Internal Web layers over Runtime own browser state,
 event construction/admission and queues, then ordinary and Preview content
 operations. The public browser class coordinates constructor activation,
 resources, consent, reset, destruction and current-page handoff operations.
-Protected queue, consent, blocked-event and flush hooks retain their behavior.
-Web events use these browser queues rather than Runtime's direct request factory.
-Missing complete Analytics profiles retain the warning/drop behavior.
+Runtime's internal event-call helpers share construction, consent ordering and
+Analytics profile validation with Node. Web supplies live browser policy and
+queue delivery; the helpers retain no browser state. Protected queue, consent,
+blocked-event and flush hooks retain their behavior. The redundant
+`eventEmissionActive` hook is removed; initial calls check the owner's destroyed
+state directly. Missing complete Analytics profiles retain the warning/drop
+behavior.
 
 Call `reset()` at logout or another browser session boundary. It clears queued
 Personalization work and the current profile; the next successful event response

@@ -225,27 +225,8 @@ describe('WebEventRuntime direct events', () => {
     expect(emittedEvent.value).toBeUndefined();
   });
 
-  it('checks trackView consent before construction and suppresses preview before building any event', async () => {
-    const runtime = new TestEventRuntime([]);
-    const buildView = vi.spyOn(runtime.eventBuilder, 'buildView');
-    await expect(
-      runtime.trackView({ ...entity, viewId: 'v', viewDurationMs: -1 })
-    ).resolves.toEqual({ accepted: false });
-    expect(buildView).not.toHaveBeenCalled();
-    expect(runtime.onEventBlocked).toHaveBeenLastCalledWith({
-      reason: 'consent',
-      method: 'trackView',
-      args: [{ ...entity, viewId: 'v', viewDurationMs: -1 }],
-    });
-    await expect(runtime.track({ event: 'blocked' })).resolves.toEqual({ accepted: false });
-    expect(runtime.onEventBlocked).toHaveBeenLastCalledWith({
-      reason: 'consent',
-      method: 'track',
-      args: [{ event: 'blocked' }],
-    });
-    const invalidClick = { ...entity, entityKind: 'invalid' };
-    // @ts-expect-error Preserve runtime validation before the ordinary Analytics consent gate.
-    await expect(runtime.trackClick(invalidClick)).rejects.toThrow();
+  it('refuses preview and destroyed calls before building or queueing', async () => {
+    const runtime = new TestEventRuntime();
     runtime.preview = true;
     const buildTrack = vi.spyOn(runtime.eventBuilder, 'buildTrack');
     await expect(runtime.track({ event: 'preview' })).resolves.toEqual({
