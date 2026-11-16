@@ -80,9 +80,8 @@ Direct event APIs remain callable without becoming an initial rendering prerequi
 or compensation. Preserve transformed-event validation, consent metadata and
 caller-input immutability. Local adoption and storage do not prove upstream commit.
 
-The current service's observed `context.page.title` 422 remains unresolved. Keep
-built titles and consent context intact; do not strip them or add a prior-page
-workaround. Live validation must inspect delivered variants and personalization
+Keep built titles and consent context intact. Live validation must inspect
+delivered variants and personalization
 outcomes; HTTP 200 or profile presence alone is insufficient. Plans do not expose
 all raw XDA personalization errors. Keep direct API diagnosis outside the app
 rather than adding response interception. The SDK's required-`userId` return type

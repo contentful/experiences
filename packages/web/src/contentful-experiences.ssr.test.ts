@@ -20,6 +20,7 @@ describe('Web public entry on the server', () => {
       query: {},
       referrer: '',
       search: '',
+      title: '',
       url: '',
     });
     expect(web.getUserAgent()).toBeUndefined();

@@ -20,21 +20,27 @@ export function buildPagePersonalization(options: {
   searchParams: SearchParams;
 }) {
   const url = new URL(options.path, options.origin);
-  const query: Record<string, string> = {};
 
   for (const [key, value] of Object.entries(options.searchParams)) {
     if (value === undefined) continue;
-    query[key] = Array.isArray(value) ? (value.at(-1) ?? '') : value;
     for (const item of Array.isArray(value) ? value : [value]) {
       url.searchParams.append(key, item);
     }
   }
+
+  const query = Object.fromEntries(
+    Array.from(new Set(url.searchParams.keys()), (key) => {
+      const values = url.searchParams.getAll(key);
+      return [key, values.length === 1 ? (values[0] ?? '') : values];
+    })
+  );
 
   const page = {
     path: options.path,
     query,
     referrer: options.referrer,
     search: url.search,
+    title: 'Contentful Experiences — Angular example',
     url: url.toString(),
   };
 
@@ -42,7 +48,7 @@ export function buildPagePersonalization(options: {
     locale: options.locale,
     location: EU_LOCATION,
     page,
-    properties: { ...page, title: 'Contentful Experiences — Angular example' },
+    properties: page,
   });
 
   return { events: [event] };
