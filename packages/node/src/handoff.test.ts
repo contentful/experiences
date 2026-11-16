@@ -63,6 +63,27 @@ afterEach(() => {
 });
 
 describe('Node browser-handoff producer', () => {
+  it.each([
+    { changes: [] },
+    {
+      changes: [
+        {
+          type: 'Variable' as const,
+          key: 'banner',
+          value: false,
+          meta: { experienceId: 'experiment', variantIndex: 0 },
+        },
+      ],
+    },
+  ])('carries returned flag snapshots through private handoffs (%j)', async ({ changes }) => {
+    const { request, options, fetch } = setup();
+    const response = payload();
+    response.extensions!.personalization!.changes = changes;
+    fetch.mockResolvedValueOnce(response);
+    const { handoff } = await request.fetchExperienceForHandoff(options, resolver, route);
+    expect(handoff.state).toEqual({ profile: profileFixture('xda-profile'), changes });
+  });
+
   it.each(['home', '', undefined, null])(
     'rejects invalid route descriptors (%s) before XDA',
     async (routeKey) => {

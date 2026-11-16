@@ -75,7 +75,11 @@ function node() {
 }
 
 function web(options: Partial<ConstructorParameters<typeof WebExperiences>[0]> = {}) {
-  const sdk = new WebExperiences({ ...config, ...options });
+  const sdk = new WebExperiences({
+    ...config,
+    preview: { accessToken: 'preview-token' },
+    ...options,
+  });
   active.add(sdk);
   return sdk;
 }
@@ -122,12 +126,12 @@ afterEach(() => {
 });
 
 describe('Session preview event isolation', () => {
-  it.each([undefined, { accessToken: 'preview-token' }])(
-    'skips all browser calls before a profile or connection (CPA %j)',
-    async (preview) => {
+  it.each([{ preview: undefined, isPreview: true }, { preview: { accessToken: 'preview-token' } }])(
+    'skips all browser calls before a profile or connection (%j)',
+    async (options) => {
       const fetch = http();
       const blocked = vi.fn();
-      const sdk = web({ preview, onEventBlocked: blocked });
+      const sdk = web({ ...options, onEventBlocked: blocked });
       const hook = vi.fn((event) => event);
       sdk.interceptors.event.add(hook);
       const emitted = vi.fn();
@@ -302,11 +306,14 @@ describe('Session preview event isolation', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('honors explicit false over a URL Session ID', async () => {
-    const fetch = http();
-    const sdk = web({ isPreview: false });
-    expect(sdk.isPreview).toBe(false);
-    expect((await sdk.page()).accepted).toBe(true);
-    expect(fetch).toHaveBeenCalledOnce();
-  });
+  it.each([{ isPreview: false }, { preview: undefined }])(
+    'keeps delivery with a URL Session ID when preview is disabled (%j)',
+    async (options) => {
+      const fetch = http();
+      const sdk = web(options);
+      expect(sdk.isPreview).toBe(false);
+      expect((await sdk.page()).accepted).toBe(true);
+      expect(fetch).toHaveBeenCalledOnce();
+    }
+  );
 });

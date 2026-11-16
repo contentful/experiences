@@ -246,7 +246,11 @@ XDA. Normal SDK builder XPAPI validation and Client XDA validation suffice; manu
 built/raw transmission remains the consumer's compatibility risk. Receiving replay
 validation may refuse events while available content remains usable. The existing
 wire type unions raw Client and normal SDK events; no new DTO or SDK safety layer
-is introduced. Preview suppresses visitor work.
+is introduced. Returned XDA changes travel alongside the profile in the private
+handoff state, including `[]` to clear browser flags; omitted changes remain absent.
+This uses the same snapshot assumption as
+[Web flag state](../web/README.md#custom-flags), pending live-backend verification.
+Node retains no global flag state. Preview suppresses visitor work.
 
 Retry of the same Experience is ordinary fetch without events:
 

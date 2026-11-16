@@ -113,6 +113,19 @@ it('delivers usable preview nodes and every resolver diagnostic', async () => {
   const subscription = sdk.subscribeToPreview('hero', resolve, next);
   await vi.waitFor(() => expect(f.implementation.createLivePreviewClient).toHaveBeenCalled());
   f.emit({
+    extensions: {
+      personalization: {
+        profile: profileFixture('preview-profile'),
+        changes: [
+          {
+            type: 'Variable',
+            key: 'banner',
+            value: false,
+            meta: { experienceId: 'experiment', variantIndex: 0 },
+          },
+        ],
+      },
+    },
     nodes: [
       {
         component: {
@@ -134,6 +147,8 @@ it('delivers usable preview nodes and every resolver diagnostic', async () => {
   expect(update.data.nodes[0].props.content.text).toBe('fresh');
   expect(update.data.diagnostics).toHaveLength(2);
   expect(update.error).toBeUndefined();
+  expect(sdk.getFlag('banner')).toBe(false);
+  expect(sdk.states.profile.current).toBeUndefined();
   subscription.unsubscribe();
 });
 
@@ -223,8 +238,23 @@ it('shares preview resolution, does not fetch in the binding, and ignores detach
   f.emit();
   await vi.waitFor(() => expect(resolvePlan).toHaveBeenCalledTimes(1));
   a.unsubscribe();
-  pending.resolve(plan);
-  await vi.waitFor(() => expect(second).toHaveBeenCalledWith({ data: plan, error: undefined }));
+  const selected = {
+    ...plan,
+    personalization: {
+      profile: profileFixture('preview-profile'),
+      changes: [
+        {
+          type: 'Variable',
+          key: 'banner',
+          value: false,
+          meta: { experienceId: 'experiment', variantIndex: 0 },
+        },
+      ],
+    },
+  };
+  pending.resolve(selected);
+  await vi.waitFor(() => expect(second).toHaveBeenCalledWith({ data: selected, error: undefined }));
+  expect(sdk.getFlag('banner')).toBe(false);
   expect(first).not.toHaveBeenCalled();
   expect(f.implementation.fetchPreviewSession).not.toHaveBeenCalled();
   b.unsubscribe();
