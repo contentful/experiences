@@ -25,7 +25,7 @@ it('retains supplied-plan renderer and helper types on their explicit entries', 
   expectTypeOf<ReturnType<typeof useExperiencePlan>>().toEqualTypeOf<UseExperiencePlanResult>();
 });
 
-it('exposes the structural lazy preview options through direct Web configuration', () => {
+it('exposes the structural preview configuration through direct Web configuration', () => {
   expectTypeOf<
     ConstructorParameters<typeof ContentfulExperiences>[0]['livePreview']
   >().toEqualTypeOf<RuntimeLivePreviewOptions | undefined>();

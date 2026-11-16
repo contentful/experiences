@@ -290,6 +290,18 @@ noncommitting content preflight. This app uses state-only hydration data for a
 committed server request; it does not exercise prepared replay or introduce a
 suppression mechanism.
 
+In the browser, `initializeVisitor` owns the standalone page, pre-fetch profile
+prerequisite, and page-specific recovery for missing or failed identity.
+Identify/Retry joins pending page work, and failed initialization requires recovery
+even if an older profile remains. Reassess these accommodations together when the
+first event-bearing XDA fetch can establish identity and select the expected variant;
+preserve route ownership/lifetime checks.
+
+Repeated identify makes server and browser fetches potentially profile-producing;
+later fetches can depend on earlier SDK profile updates. Reassess serialization
+when repeated identify is removed, retaining only actual dependencies. Package the
+server handoff after all profile-producing operations.
+
 Live verification did not encounter empty/missing-Experience, transport/render/
 initialization or startup failures. Client partial-warning handling, HTTPS cookies,
 final-exit subscription/timer disposal and BFCache restoration were reviewed in
