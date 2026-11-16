@@ -23,10 +23,9 @@ supported product usage or a cross-fetch guarantee.
   manual input, cookies or sessions.
 - XDA preflight leaves this SSR intent uncommitted. This is a tolerated service bug
   awaiting upstream force-commit support; add no SDK workaround or current force flag.
-  Remove the Node aggregate commit path. This app has no actual server-to-browser
+  This app has no aggregate commit path or actual server-to-browser
   transfer and uses no handoff producer. Direct event APIs remain callable without
-  becoming prerequisites or compensation. Current Phase 6 implementation/checks
-  are pending; acceptance/completion remains withdrawn. See
+  becoming prerequisites or compensation. See
   [Runtime's XDA contract](../../packages/runtime/README.md#xda-preflight-and-profile-finalization)
   and the README's [personalization contract](./README.md#personalization-contract-and-validation-limits).
 - Use the public runtime for SDK operations. Do not inspect raw responses or

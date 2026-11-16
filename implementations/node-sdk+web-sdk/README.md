@@ -4,8 +4,6 @@ Official support is one Experience fetch per page, without code enforcement.
 Reference multi-ID loops exist only to compare rendering scenarios, not as
 supported product usage or a cross-fetch guarantee.
 
-**Current Phase 6 correction:** Complete and explicitly accepted on 2026-11-02; current checks and acceptance review are recorded in the implementation plan. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied. Earlier remedy checks and no-production-findings review are historical evidence for a superseded design; no new live-service validation is claimed.
-
 This standalone Express/EJS application consumes locally packed public
 `@contentful/experiences-node` and `@contentful/experiences-web` packages. It has its
 own dependencies and tools and stays outside root npm workspaces.
@@ -46,7 +44,6 @@ applies. Later comparison IDs and same-ID content Retry use ordinary event-free
 fetch and never use the handoff as content input. Later SDK profile adoption does
 not replace the transferred batch/identity/route/locale. See
 [Runtime's XDA contract](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
-Current implementation and checks remain pending.
 
 Home fetches all configured IDs and reuses the first plan for its manual
 presentation. Page Two fetches the last ID for its automatic presentation and the
@@ -345,7 +342,7 @@ The operation follows Optimization PR #549 at
 `f76f1ff04df1b466c98fc6ce5db6b569f9212438`; it uses XDA content evaluation in
 place of local selected-optimization resolution. Its current multiple-ID loop is application-owned
 best-effort behavior, not an SDK architecture or cross-fetch guarantee. Only actual server transfer intent produces a full aggregate; browser-local
-navigation, Identify and custom track use ordinary Web fetch without a new server handoff. Separate preparation/producers/public hydration are removed. See
+navigation, Identify and custom track use ordinary Web fetch without a new server handoff. See
 [XDA preflight and profile finalization](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
 
 ## Current live behavior and limits
@@ -364,18 +361,14 @@ The default Web page provider omits `title`, `hash`, `width` and `height` under 
 [SDK workaround comment](../../packages/web/src/browser-event-context.ts). Custom providers/arguments,
 raw caller-built events and Node/Client metadata remain unchanged. Refresh the
 installed SDK artifacts to use the updated provider.
-Earlier direct visits displayed baseline content; some identify-bearing responses
-selected the composed fragment variant and reversed Personalized Composed content,
-while other responses retained baseline or partial delivery. Those observations
-are not validation of this corrected flow. Inspect actual selected content using
+Inspect actual selected content using
 refreshed installed artifacts; URL intent and HTTP 200 do not prove personalization.
 
-Earlier live verification did not encounter empty/missing-Experience,
-transport/render/initialization or startup failures. Client partial-warning handling,
-HTTPS cookies, final-exit subscription/timer disposal and BFCache restoration were
-reviewed in source, not observed live. TypeScript does not check EJS or browser
+Validate empty/missing-Experience, transport/render/initialization and startup
+failures, client partial-warning handling, HTTPS cookies, final-exit
+subscription/timer disposal and BFCache restoration directly. TypeScript does not check EJS or browser
 content property accesses/live bindings. Local static checks do not establish new
-service behavior or event counts; root records phase 6 validation.
+service behavior or event counts.
 
 ## DX assessment
 
@@ -385,18 +378,18 @@ cookie/consent bridge, private HTML-safe serialization, content renderers/bindin
 and route/action sequencing with lifecycle guards. The file mappings above expose
 these application responsibilities; the sidebar remains optional.
 
-Local package refresh now has one aggregate command, while focused setup remains
+Local package refresh has one aggregate command, while focused setup remains
 available. Remaining limits include provisional IDs and browser continuity
 superseding the evaluated identity during submission, as described in the
 [Runtime contract](../../packages/runtime/README.md#xda-preflight-and-profile-finalization),
 no DOM hydration engine, and unknown-valued content through plans. EJS/browser
 property accesses require live inspection because the app typecheck does not cover
-them. Existing service-selection variability and unobserved failure/HTTPS/BFCache
-paths limit the evidence; the reference adds no alternate mechanism to hide them.
+them. Service-selection variability and failure/HTTPS/BFCache paths require
+direct validation; the reference adds no alternate mechanism to hide them.
 
 ## Setup and refresh
 
-Use Node 24 for repository tooling (validated with Node 24.15.0 and npm 12.0.2).
+Use Node 24 for repository tooling.
 The standalone manifest declares Node >=22.13.0, matching the sibling references.
 Start with root dependencies installed using the repository's `npm ci` workflow.
 Run these commands from the repository root:
@@ -510,7 +503,7 @@ Health returns `ok`; missing assets and unknown routes must return 404.
 No automated tests, verification harnesses, mocks, fixtures or test-only hooks
 are included. Installed public exports/types and the copied UMD distribution
 remain required artifact checks after installation refreshes. Live checks must
-inspect delivered content, not just HTTP success. The live verification limits
+inspect delivered content, not just HTTP success. The validation requirements
 are described above.
 
 ## Files and provenance
@@ -557,8 +550,8 @@ are described above.
   license. Its source was `lib/e2e-web/src/theme.css`; this is stylesheet provenance,
   not a testing dependency. No adjacent checkout is needed at build/runtime.
 
-The pinned Optimization hybrid reference
-`70dfa7fba9b62f0920b712b3da261a412436b4b7` supplies the structural comparison;
+The active Optimization parity baseline is PR #549 at
+`f76f1ff04df1b466c98fc6ce5db6b569f9212438`, read with `git show <commit>:<path>`;
 Experiences retains this repository's npm/Nx, Vite, ESLint and scoped PM2 workflow.
 Existing [Node](../node-sdk/README.md) and [Web](../web-sdk/README.md) references
 remain independent. SDK contracts are documented in the public

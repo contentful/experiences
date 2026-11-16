@@ -4,13 +4,6 @@ Official support is one Experience fetch per page, without code enforcement.
 Reference multi-ID loops exist only to compare rendering scenarios, not as
 supported product usage or a cross-fetch guarantee.
 
-**Current Phase 6 correction:** Complete and explicitly accepted on 2026-11-02;
-current checks and acceptance review are recorded in the implementation plan.
-Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification.
-Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied. Earlier remedy
-checks/review remain historical; Phase 7 package and live observations are recorded
-in its implementation-plan entry.
-
 This private standalone React/Vite application loads and renders real Experience
 plans. It consumes locally packed SDK artifacts outside the
 root npm workspaces.
@@ -31,27 +24,23 @@ Utilities expose consent, Identify, Reset, Retry content and Page Two's separate
 CUSTOM TRACK; the sidebar reports actual event-attempt notifications. Optional
 Preview Sessions use the same SDK loading and rendering surfaces. Credentials are
 unnecessary to build and start; real content requires app-local browser-approved
-Delivery configuration. Phase 6 corrects the
-existing Node/Web/hybrid references and owner checks, plus the necessary React
-provider/root migration to `handoff?: ExperiencesHandoff`, replacing
-`initialization: { routeKey, handoff }` and `ExperiencesStateInitialization`.
+Delivery configuration. The React provider/root accepts
+`handoff?: ExperiencesHandoff`.
 Lifecycle consumes the complete operation using current browser route. Matching
 nonpage replay has no page fallback; replay-less state applies internally and returns
 `{ accepted: false }` unless explicit `buildPayload` supplies page intent. Managed React loading uses ordinary Web fetch for CSR and browser-local
 navigation/actions; normal fetch requires no handoff.
 Optional Web/React handoff consumption is mode agnostic and consumer supplied
-only for an actual server transfer, independently of display. No local CSR/
-navigation producer remains. Retry is ordinary event-free fetch of the same ID;
+only for an actual server transfer, independently of display. CSR/navigation
+uses no local handoff producer. Retry is ordinary event-free fetch of the same ID;
 accepted incoming replay delivery retry remains queue-owned. Page Two's CUSTOM TRACK
 action is nonpage; navigation still carries a page. Preserve pinned ownership,
 consent/lifetime and the page consent-retry exception without direct initial
 emission as a prerequisite. See the tracked
 [React ownership contract](../../packages/adapter-react/README.md#managed-content)
 and [Runtime XDA contract](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
-Planning/history records under `tmp/` are local review material and are not needed
-to run this reference from a clean checkout.
 
-The API refinements distinguish supplied `<Experience experience={plan} />`
+The API distinguishes supplied `<Experience experience={plan} />`
 presentation from managed `experienceId` loading with optional `initialPlan` and
 `initialError` seeds.
 Supplied presentation performs no content request, resolution or preview binding.
@@ -60,9 +49,6 @@ usable plan alongside an error; node/function fallbacks and custom children reta
 the full result. `isLive` narrows the context SDK for concrete operations, while
 root/provider `initialPagePayload` supplies static `PageViewBuilderArgs` with explicit
 `buildPagePayload` precedence. See the [adapter contract](../../packages/adapter-react/README.md#managed-content).
-Reference reduction and source organization are implemented. Local SDK checks,
-installed setup/build/lint/typecheck, bounded review and live reference checks have
-passed; Phase 7 is complete and explicitly accepted on 2026-11-02.
 
 ## Setup and local commands
 
@@ -199,7 +185,7 @@ Browser rendering uses the public `@contentful/experiences-react/client` entry;
 static/server integration uses `@contentful/experiences-react/server` where
 applicable. This browser app uses `/client` for managed loading, hooks, supplied
 primary-plan rendering and seeded comparison rendering. Preview integration uses
-the frozen package's public exports and Runtime's supported preview configuration; see
+the installed package's public exports and Runtime's supported preview configuration; see
 [Runtime preview limits](../../packages/runtime/README.md#optional-runtime-live-preview).
 
 - `src/main.tsx`, `index.html`: bootstrap and document/BFCache lifetime; no application components live in the entrypoint.
@@ -304,8 +290,8 @@ The automatic section leaves `trackViews`, `trackHovers` and `trackClicks` undef
 to inherit Web automatic defaults. The manual-view section sets all three to false,
 preserving its original all-automatic-off behavior while retaining scope attribution.
 This adapts the refs/per-kind pattern from Optimization's
-[`ContentEntry.tsx`](https://github.com/contentful/optimization/blob/59add9d6ebff503b9033a59a2eee0149d4b4e925/implementations/react-web-sdk/src/sections/ContentEntry.tsx)
-at the historical revision. That example disables only automatic views; this section
+[`ContentEntry.tsx`](https://github.com/contentful/optimization/blob/f76f1ff04df1b466c98fc6ce5db6b569f9212438/implementations/react-web-sdk/src/sections/ContentEntry.tsx)
+at the active parity baseline. That example disables only automatic views; this section
 also disables hovers and clicks to preserve the existing reference behavior.
 The manual presentation obtains `sdk` from `useExperiences()`, registers only
 roots with normalized `onNodeRoot` data through
@@ -344,15 +330,15 @@ do not establish successful transport delivery.
 Page/identify/reset/retry and preview content use the managed integration. Ordinary
 content remains independent of event submission, identity finalization and socket status.
 
-The user accepted the live ID-only profile/Insights HTTP 400 mismatch as a tolerated
-service limitation on 2026-11-02. See [Runtime's canonical record](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
+The ID-only profile/Insights HTTP 400 mismatch is a current service limitation.
+See [Runtime's canonical record](../../packages/runtime/README.md#xda-preflight-and-profile-finalization).
 View/hover/click notifications show measurement/admission, not delivery. Complete
 XPAPI profiles produced HTTP 200; fresh XDA ID-only profiles were rejected for
 missing profile fields. No profile fields or compensating commits are fabricated.
 
 The stable `onStatesReady` callback attaches the optional sidebar's retained
 subscription during activation, before root-driven work. It ignores the immediate
-historical `.current` emission on every attachment. Each later event notification
+`.current` emission on every attachment. Each later event notification
 increments the attempt count, even when message IDs repeat. Only real view/hover
 interval IDs with durations group into one row; the row shows the latest duration,
 first-observed age and notification count. React renders labels as text. These
@@ -371,16 +357,12 @@ uses renderer/provider cleanup to release manual registrations, subscriptions an
 the owned SDK. Persisted `pagehide` retains the root, subscriptions and SDK for
 BFCache resumption; no new load or runtime is created.
 
-The ownership/consent/sidebar patterns were historically traced with `git show`
-at Optimization commit `59add9d6ebff503b9033a59a2eee0149d4b4e925`: React `OptimizationProvider`,
-Web `presentation/optimizationRootRuntime.ts`, and the maintained React reference's
-`main.tsx`, `ControlPanel.tsx` and `AnalyticsEventDisplay.tsx`. The retained
-Experiences differences are supplied XDA plans rather than local CDA variant
+The active parity baseline is Optimization PR #549 at
+`f76f1ff04df1b466c98fc6ce5db6b569f9212438`, read with `git show <commit>:<path>`.
+The retained Experiences differences are supplied XDA plans rather than local CDA variant
 resolution, XDA-carried ordinary intent, SDK-normalized attribution data,
-and skipping historical notifications when attaching diagnostics. The pinned
-reference is historical evidence only, with no adjacent-checkout runtime dependency.
-The active parity baseline is PR #549 at
-`f76f1ff04df1b466c98fc6ce5db6b569f9212438`, rather than that historical pin.
+and skipping the current notification when attaching diagnostics. There is no
+adjacent-checkout runtime dependency.
 
 Use scoped build/lint/typecheck and direct inspection of this maintained app for
 validation after refreshing the installed tarballs. Inspect both routes, repeated

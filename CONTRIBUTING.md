@@ -200,7 +200,6 @@ presentation, diagnostic Home/Page Two comparisons and optional Preview Sessions
 `npx nx run implementation-nextjs-sdk:setup`, then
 `npx nx run implementation-nextjs-sdk:dev`. Its README describes preserved server
 startup, browser navigation, server-only updates and supported response boundaries.
-Phase 10 remains in progress and unaccepted; current integrated validation is pending.
 
 All five references activate Live Preview only with `LIVE_PREVIEW_ENABLED=true`
 and a nonempty URL `preview_session_id`. The local `.env` session ID is retained

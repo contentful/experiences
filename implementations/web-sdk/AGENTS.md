@@ -11,7 +11,7 @@ supported product usage or a cross-fetch guarantee.
   setup/install after SDK artifacts change; do not add workspace source aliases.
 - Follow the pinned Optimization reference's compatible structure and visual
   patterns while retaining Experiences npm/Nx, Vite asset tooling, ESLint,
-  Prettier and scoped PM2 commands. Do not replace accepted Web Rslib/UMD tooling.
+  Prettier and scoped PM2 commands. Do not replace the Web Rslib/UMD tooling.
 - Browser application files may be vanilla JavaScript. Lint them separately from
   TypeScript server/build scripts; do not claim typecheck validates browser
   property accesses. Do not add handwritten content schemas or custom generators.
@@ -44,9 +44,7 @@ supported product usage or a cross-fetch guarantee.
 - Keep one SDK instance, SDK-owned profile/consent/persistence, and empty SDK resolver
   registries. Render the two current registration kinds through the app DOM
   registry and actual named slots recursively; do not invent composed hierarchy.
-- Phase 6 is complete and explicitly accepted on 2026-11-02; current checks and
-  acceptance review are recorded in the implementation plan. Earlier checks/review
-  remain historical. Phase 7 is complete and explicitly accepted on 2026-11-02, including its API refinements and simplification. Phase 8 is complete and accepted on 2026-11-02; Phase 9 is complete and explicitly accepted on 2026-11-02; Phase 10 is in progress and not accepted; phases 11–14 have not started; the Phase 6 gate is satisfied. Follow the [Runtime aggregate contract](../../packages/runtime/README.md#shared-handoff-primitives).
+- Follow the [Runtime aggregate contract](../../packages/runtime/README.md#shared-handoff-primitives).
 - Supply explicit page/optional initial URL identify intent through ordinary Web
   fetch, accepting existing type-tagged arguments or raw built events with SDK
   construction once. CSR needs no handoff or direct initial event prerequisite.
@@ -76,7 +74,7 @@ supported product usage or a cross-fetch guarantee.
 - Automatic tracking uses the existing getTrackingAttributes helper on each plan
   container and each node's roots. Web fetches request source maps automatically
   while any automatic type is enabled. Do not restore application lookup maps,
-  namespaces or the removed session API, or add a parallel public setup API.
+  namespaces or a tracking-session API, or add a parallel public setup API.
 - Use default automatic tracking and viewport view geometry, including scroll-container clipping.
   The SDK discovers boundaries and finalizes removed occurrences; preserve its
   consent/reset guards and multi-root grouping. No app-owned automatic teardown.
