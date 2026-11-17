@@ -162,8 +162,9 @@ routers use the incoming request URL. Bare Node integrations pass request-local
 Without capability configuration or an ID, the owner uses ordinary Delivery.
 `Node RequestContext.isPreview` and `Web Config.isPreview` do not exist; read-only
 `isPreview` gates all events, automatic tracking, embedded fetch personalization
-and handoff preparation/replay before event work. Managed browser owners replace
-the SDK on session changes and preview entry/exit without consumer keys or wrappers.
+and handoff preparation/replay before event work. Managed browser integration ends
+the current activation and starts a new one on session changes and preview entry/exit
+without consumer keys or wrappers; each activation retains its owned SDK.
 No iframe detection, CPA toggle, `debug` or socket status selects this policy.
 Socket/factory failure preserves isolated preview mode and the last usable content.
 Raw `sdk.api` and free Delivery fetches remain outside owner policy.
@@ -189,7 +190,7 @@ or owns per-view state. Web shares in-flight fetching/resolution and owns
 mode/event/profile/lifetime policy; views retain presentation state. Do not add
 SDK per-view state. View subscriptions detach independently; SDK destruction
 closes the one context connection. Changing session replaces the context; React
-and Next handle their owned SDK replacement without a consumer key. SSR-only adapters
+and Next handle Preview teardown/new activation without a consumer key. SSR-only adapters
 observe matching content revisions for server refresh without browser resolution.
 Snapshot runtimes expose inert undefined Preview state; other states are unchanged.
 
@@ -854,6 +855,23 @@ Packages stay under `1.0.0` no matter what commit types land. **Remove this sett
 - Non-component modules: `kebab-case.ts(x)`
 - Tests: `<source>.test.ts(x)` next to the source
 
+In `adapter-svelte`, keep the root barrel and public entry facades thin; organize
+implementation by domain: `experience`, `runtime`, `kit`, `rendering`,
+`diagnostics`, `hooks`, `registry` and `design`. Colocate module tests with their
+source and match its filename stem/case (`NodeRenderer.test.ts`,
+`NodeRenderer.ssr.test.ts` for `NodeRenderer.svelte`; `use-experience-plan.test.ts`
+for `use-experience-plan.svelte.ts`). Shared fixtures belong in `src/test/fixtures`; genuine cross-owner
+composition tests belong in `src/test/integration`. Preserve the browser/SSR compiler
+split. Exclude development tests and support from published package contents.
+
+Svelte owns one SDK per explicit activation lifetime, retained across rerenders and
+ordinary navigation. Its outer Preview boundary tears down old resources before
+starting a keyed activation, including while outgoing DOM outros remain. The inner
+runtime activates once; injected SDK changes only rebind subscriptions and leave
+construction/destruction to the caller. Kit init and its first root share one owner;
+failed init is sticky and disposal is terminal. Keep request adoption history at the
+separate stable request boundary when that later integration is implemented.
+
 ### Tests
 
 Add focused maintained unit/contract cases at the owning layer. Cover optional-page ordering,
@@ -953,6 +971,23 @@ Renaming the folder needs all three updated. Cross-reference: `project.json#sour
 ---
 
 ## Things known to be broken
+
+### Svelte adapter explicit typecheck (fixed)
+
+The browser/SSR test suites and package build passed while an explicit
+`svelte-check` reported unused renderer bindings and invalid test types. Keep
+the adapter's explicit check in validation: use the server renderer's inferred
+component type rather than casting it to `never`, and account for optional
+capture fields. Passing runtime tests alone does not validate these types.
+
+### Svelte managed activation ownership (fixed)
+
+An internal generic SDK replacement path conflated owned activation and injected
+binding lifetimes. Svelte now keeps each owned SDK stable for its activation and
+uses an explicit Preview boundary for teardown/new activation. Resource teardown
+releases the singleton before the next acquisition even with DOM outros; injected
+references rebind without destroying caller SDKs. Superseded prototype replacement
+tests are not a contract to retain; verify current lifetime effects and refusals.
 
 ### Malformed selector diagnostics before normalization (fixed)
 

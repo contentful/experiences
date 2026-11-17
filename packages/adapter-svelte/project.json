@@ -24,6 +24,15 @@
         "command": "vitest run && vitest run -c vitest.ssr.config.ts"
       }
     },
-    "pack": {}
+    "pack": {},
+    "verify-portability": {
+      "cache": false,
+      "dependsOn": ["pack"],
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx scripts/verify-svelte-portability.ts",
+        "cwd": "."
+      }
+    }
   }
 }
