@@ -463,8 +463,8 @@ Hydration rejection retains the live binding and exposes its error. Snapshot and
 handoff state never become startup `defaults`, which have separate persistence
 and consent semantics. `onStatesReady(states)` runs after commit, before this
 complete operation and passive child effects, and may return subscription cleanup.
-Its callback is captured for the binding; use a replacement owner/provider when
-changing application subscription setup.
+Its callback is captured for the binding; use an explicit new Provider key/remount
+when changing application subscription setup.
 
 For server-rendered content with browser-owned page events, set
 `pageMode="analytics"` on `ExperiencesRoot` or `ExperiencesProvider`. This optional
@@ -476,8 +476,11 @@ fetching, resolution or rendering. It configures React presentation, not Runtime
 policy.
 
 Inject an application-owned SDK through `<ExperiencesProvider sdk={sdk}>`.
-Without snapshot/handoff it is immediately available; replacement rebinds
-subscriptions and manual refs. The provider never destroys an injected SDK.
+Without snapshot/handoff it is immediately available. The Provider captures `sdk`
+on first mount and ignores later `sdk` prop changes. To bind a fresh instance,
+retire the old SDK and explicitly key/remount the Provider; the application owns
+injected SDK destruction. Handoff and page-payload props remain dynamic; owned
+roots continue applying locale updates.
 Independent React roots can share one explicit `/host` binding and each use an
 injected provider. Activate the host outside React render with
 `createRootSdkBinding({ config, onStatesReady })`, then unmount its
@@ -832,8 +835,8 @@ function ManualContent({ plan }: { plan: PortableRenderPlan }) {
 ```
 
 Mount `ManualContent` under the managed root or an injected provider. Snapshot-to-live
-activation and injected SDK replacement change the memoized callback, cleaning
-the old registration before attaching the current SDK. Direct application-owned
+activation updates its memoized callback. Explicit Provider remount cleans the old
+registration before the new mounted binding registers its SDK. Direct application-owned
 SDK registration remains supported. Neither path performs attribution
 selection or root collection. Web owns measurement, consent and delivery, and
 measures each manual element independently. The reference's single-root components

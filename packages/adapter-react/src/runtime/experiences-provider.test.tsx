@@ -39,8 +39,8 @@ vi.mock('@contentful/experiences-web', async (importOriginal) => {
 });
 
 // Ported ownership/activation expectations from OptimizationProvider.onStatesReady
-// at f76f1ff04df1b466c98fc6ce5db6b569f9212438. Experiences always retains a
-// presentation runtime, replaces injected SDKs, and consumes caller-supplied handoffs.
+// at 04971a80eaf658b74ace7865472085877d96c98d. Experiences always retains a
+// presentation runtime and consumes caller-supplied handoffs.
 const config: Config = {
   spaceId: 'space',
   environmentId: 'master',
@@ -784,34 +784,50 @@ describe('React runtime ownership and activation', () => {
   );
 
   it.each(['resolve', 'reject'] as const)(
-    'ignores old hydration %s after injected owner replacement',
+    'captures injected ownership until keyed remount and ignores detached hydration %s',
     async (outcome) => {
       const first = deferred(),
         second = deferred(),
         replacement = liveSdk();
       runtime.hydrateAndTrackCurrentPage.mockReturnValue(first.promise);
       replacement.hydrateAndTrackCurrentPage.mockReturnValue(second.promise);
+      replacement.spaceId = 'replacement-space';
       const cleanup = vi.fn();
+      const ready = vi.fn(() => cleanup),
+        nextReady = vi.fn();
       const suppliedHandoff = handoff();
-      render(
+      const tree = (sdk: LiveSdk, key = 'first', onStatesReady = nextReady) => (
         <ExperiencesProvider
-          sdk={inject(runtime)}
-          handoff={suppliedHandoff}
-          onStatesReady={() => cleanup}
+          key={key}
+          sdk={inject(sdk)}
+          handoff={key === 'first' ? suppliedHandoff : { ...suppliedHandoff, spaceId: sdk.spaceId }}
+          onStatesReady={onStatesReady}
         >
           <Probe />
         </ExperiencesProvider>
       );
-      render(
-        <ExperiencesProvider sdk={inject(replacement)} handoff={suppliedHandoff}>
-          <Probe />
-        </ExperiencesProvider>
-      );
+      render(tree(runtime, 'first', ready));
+      const firstIsCurrent = runtime.hydrateAndTrackCurrentPage.mock.calls[0]![1].isCurrent!;
+      render(tree(runtime));
+      render(tree(replacement));
+      expect(current()).toMatchObject({ sdk: runtime, isLive: true, isContentReady: false });
+      expect(ready).toHaveBeenCalledExactlyOnceWith(runtime.states);
+      expect(nextReady).not.toHaveBeenCalled();
+      expect(cleanup).not.toHaveBeenCalled();
+      expect(firstIsCurrent()).toBe(true);
+      expect(runtime.hydrateAndTrackCurrentPage).toHaveBeenCalledOnce();
+      expect(replacement.hydrateAndTrackCurrentPage).not.toHaveBeenCalled();
+
+      render(tree(replacement, 'next'));
       expect(cleanup).toHaveBeenCalledOnce();
+      expect(nextReady).toHaveBeenCalledExactlyOnceWith(replacement.states);
+      expect(firstIsCurrent()).toBe(false);
+      const captureCount = captures.length;
       await act(async () => {
         if (outcome === 'resolve') first.resolve();
         else first.reject(new Error('old failure'));
       });
+      expect(captures).toHaveLength(captureCount);
       expect(current()).toMatchObject({
         sdk: replacement,
         isLive: true,
@@ -823,6 +839,7 @@ describe('React runtime ownership and activation', () => {
       act(() => view.cleanup());
       expect(runtime.destroy).not.toHaveBeenCalled();
       expect(replacement.destroy).not.toHaveBeenCalled();
+      expect(construct).not.toHaveBeenCalled();
     }
   );
 

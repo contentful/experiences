@@ -1,7 +1,7 @@
 'use client';
 
 // Adapted from OptimizationProvider activation at
-// f76f1ff04df1b466c98fc6ce5db6b569f9212438 (MIT).
+// 04971a80eaf658b74ace7865472085877d96c98d (MIT).
 import {
   useEffect,
   useLayoutEffect,
@@ -59,7 +59,6 @@ type Target = {
   readonly snapshot: RuntimeContextValue['sdk'];
   readonly initial: RuntimeContextValue;
 };
-type ProviderState = RuntimeContextValue & { readonly target: Target };
 
 const useCommitEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 const toError = (error: unknown): Error =>
@@ -97,21 +96,15 @@ function assertHandoff(handoff: ExperiencesHandoff | undefined, owner: Activatio
 }
 
 function ActivationProvider(props: ActivationProps) {
-  const injectedSdk = 'sdk' in props ? props.sdk : undefined;
   // Structural managed configuration is captured for this mounted owner. Use a key
   // to replace it deliberately; mutable locale uses the existing SDK command.
-  const target = useMemo(() => createTarget(props), [injectedSdk]);
+  const [target] = useState(() => createTarget(props));
   // Validate later handoffs against the actual receiving owner, whose structural
   // configuration stays captured until replacement. No child reads unsafe state.
   assertHandoff(props.handoff, target.props);
-  const [state, setState] = useState<ProviderState>(() => ({ ...target.initial, target }));
-  const [localeFailure, setLocaleFailure] = useState<{
-    sdk: RuntimeContextValue['sdk'];
-    error: Error;
-  }>();
+  const [context, setState] = useState<RuntimeContextValue>(target.initial);
+  const [localeError, setLocaleError] = useState<Error>();
   const activeRef = useRef<RootSdkBinding | undefined>(undefined);
-  const { target: stateTarget, ...presentation } = state;
-  const context = stateTarget === target ? presentation : target.initial;
   const latestProps = useRef(props);
   // Retained page callbacks must not observe props from an abandoned render.
   useCommitEffect(() => {
@@ -160,7 +153,7 @@ function ActivationProvider(props: ActivationProps) {
   );
 
   function publishLive(sdk: ContentfulExperiences, isContentReady: boolean, error?: Error) {
-    setState({ target, sdk, isLive: true, isContentReady, error });
+    setState({ sdk, isLive: true, isContentReady, error });
   }
 
   useCommitEffect(() => {
@@ -192,7 +185,6 @@ function ActivationProvider(props: ActivationProps) {
       publishLive(binding.sdk, initial.handoff === undefined);
     } catch (error) {
       setState({
-        target,
         sdk: target.snapshot,
         error: toError(error),
         isLive: false,
@@ -252,10 +244,10 @@ function ActivationProvider(props: ActivationProps) {
     }
     // Locale recovery must not clear a still-applicable hydration error, and a
     // hydration result must not erase this command's failure.
-    setLocaleFailure(error ? { sdk, error } : undefined);
+    setLocaleError(error);
   }, [target, locale]);
 
-  const error = localeFailure?.sdk === context.sdk ? localeFailure.error : context.error;
+  const error = localeError ?? context.error;
   const value = useMemo<RuntimeContextValue>(() => ({ ...context, error }), [context, error]);
   return (
     <RuntimeContext.Provider value={value}>

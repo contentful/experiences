@@ -340,9 +340,10 @@ describe('standard attributed Experience rendering', () => {
 
 describe('provider-owned manual root registration', () => {
   it.each([false, true])(
-    'cleans context-based manual registration on injected replacement (initial snapshot=%s)',
+    'retains mounted manual registration until keyed remount (initial snapshot=%s)',
     async (withSnapshot) => {
       const view = createDomTestRoot();
+      // Tracking boundary doubles; these do not construct live Web SDK owners.
       const liveSdk = () =>
         Object.assign(createWebSnapshotRuntime({ data: {} }), {
           spaceId: 'space',
@@ -401,13 +402,16 @@ describe('provider-owned manual root registration', () => {
         );
         return <ExperienceRenderer experience={plan} trackViews={false} onNodeRoot={onNodeRoot} />;
       }
-      await act(async () =>
-        view.render(
-          <ExperiencesProvider sdk={inject(runtime)} snapshot={withSnapshot ? snapshot : undefined}>
-            <Content />
-          </ExperiencesProvider>
-        )
+      const tree = (sdk: ReturnType<typeof liveSdk>, key = 'first') => (
+        <ExperiencesProvider
+          key={key}
+          sdk={inject(sdk)}
+          snapshot={withSnapshot ? snapshot : undefined}
+        >
+          <Content />
+        </ExperiencesProvider>
       );
+      await act(async () => view.render(tree(runtime)));
       expect(initialElement).not.toBeNull();
       expect(view.container.querySelector('article')).toBe(initialElement);
       const element = initialElement!;
@@ -417,20 +421,21 @@ describe('provider-owned manual root registration', () => {
         data,
       });
       const next = liveSdk();
-      await act(async () =>
-        view.render(
-          <ExperiencesProvider sdk={inject(next)} snapshot={withSnapshot ? snapshot : undefined}>
-            <Content />
-          </ExperiencesProvider>
-        )
-      );
+      await act(async () => view.render(tree(next)));
       expect(view.container.querySelector('article')).toBe(element);
+      expect(runtime.tracking.clearElement).not.toHaveBeenCalled();
+      expect(runtime.tracking.enableElement).toHaveBeenCalledOnce();
+      expect(next.tracking.enableElement).not.toHaveBeenCalled();
+
+      await act(async () => view.render(tree(next, 'next')));
+      const nextElement = view.container.querySelector('article')!;
+      expect(nextElement).not.toBe(element);
       expect(runtime.tracking.clearElement).toHaveBeenCalledExactlyOnceWith('views', element);
-      expect(next.tracking.enableElement).toHaveBeenCalledExactlyOnceWith('views', element, {
+      expect(next.tracking.enableElement).toHaveBeenCalledExactlyOnceWith('views', nextElement, {
         data,
       });
       act(() => view.cleanup());
-      expect(next.tracking.clearElement).toHaveBeenCalledExactlyOnceWith('views', element);
+      expect(next.tracking.clearElement).toHaveBeenCalledExactlyOnceWith('views', nextElement);
       expect(runtime.destroy).not.toHaveBeenCalled();
       expect(next.destroy).not.toHaveBeenCalled();
     }
