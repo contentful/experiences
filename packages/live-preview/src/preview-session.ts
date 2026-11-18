@@ -1,3 +1,4 @@
+import { overrideInspectorResponse } from './inspector-poc/override-response.js';
 import { createDebugLogger, type ExperiencePayload } from '@contentful/experiences-sdk-core';
 import { isErrorPayload, isExperiencePayload, isRecord } from './experience-payload.js';
 import { createWebSocketConnection, type WebSocketCloseEvent } from './websocket.js';
@@ -110,7 +111,7 @@ export function subscribeToPreviewSession(
       return;
     }
 
-    onUpdate(message.payload);
+    onUpdate(overrideInspectorResponse(message.payload, options));
   });
 
   return () => {
