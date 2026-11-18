@@ -6,4 +6,5 @@ export type {
   Config,
   ExperiencesTrackingApi,
   HydrateAndTrackCurrentPageOptions,
+  PreparationApplicability,
 } from './sdk/contentful-experiences.js';

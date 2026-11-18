@@ -14,17 +14,30 @@ import type {
 
 export interface PageSequenceOptions {
   readonly routeKey: string;
+  readonly selection?: string;
   readonly initialPagePayload?: PageViewBuilderArgs;
   readonly buildPagePayload?: CurrentPageOptions['buildPayload'];
   readonly handoff?: ExperiencesHandoff;
 }
 
 /** Committed host route lifetime; admission, replay history and delivery stay Web-owned. */
+export interface PreparedPageInput {
+  readonly routeKey: string;
+  readonly handoff?: ExperiencesHandoff;
+  readonly preparation?: ReturnType<ContentfulExperiences['capturePreparation']>;
+  readonly initialPagePayload?: PageViewBuilderArgs;
+  readonly initialPageOwner?: 'server';
+  readonly eventFree?: boolean;
+  readonly redirect?: DestinationRedirectResult['redirect'];
+  readonly explicitEvents: boolean;
+  isCurrent(): boolean;
+}
 export interface PageSequence {
   readonly revision: object;
   readonly routeKey: string;
   isCurrent(): boolean;
   update(options: PageSequenceOptions): void;
+  adoptRequest(input: PreparedPageInput, alreadyAdopted?: boolean): Promise<void>;
   reset(): void;
   abandonPresentation(): void;
   fetchExperience(
@@ -41,13 +54,18 @@ type PageIntent = {
   readonly lifetime: () => boolean;
 } & (
   | { readonly kind: 'none' }
-  | { readonly kind: 'ordinary'; readonly sourceCurrent?: () => boolean }
+  | {
+      readonly kind: 'ordinary';
+      readonly sourceCurrent?: () => boolean;
+    }
   | { readonly kind: 'handoff'; readonly handoff: ExperiencesHandoff }
+  | { readonly kind: 'request'; readonly input: PreparedPageInput }
 );
 
 interface Visit {
   readonly sdk: ContentfulExperiences | undefined;
   readonly key: string;
+  readonly selection?: string;
   started: boolean;
   intent?: PageIntent;
 }
@@ -74,14 +92,43 @@ export function createPageSequence(
   const currentIntent = (candidate: Visit, intent: PageIntent) =>
     current(candidate) && candidate.intent === intent && intent.lifetime();
 
-  function attemptPage(candidate: Visit) {
+  async function attemptPage(candidate: Visit, initial = false) {
     const { sdk, intent } = candidate;
     if (!sdk || !intent || sdk.isPreview || !currentIntent(candidate, intent)) return;
     const isCurrent = () =>
       currentIntent(candidate, intent) &&
-      (intent.kind !== 'ordinary' || intent.sourceCurrent?.() !== false);
+      (intent.kind !== 'ordinary' || intent.sourceCurrent?.() !== false) &&
+      (intent.kind !== 'request' || !initial || intent.input.isCurrent());
     if (!isCurrent()) return;
-    if (intent.kind === 'handoff') {
+    if (intent.kind === 'request') {
+      const input = intent.input;
+      const payload =
+        input.initialPageOwner !== 'server' && !input.explicitEvents
+          ? input.initialPagePayload
+          : undefined;
+      const page =
+        input.handoff?.replay?.routeKey === candidate.key
+          ? input.handoff.replay.events.find((event) => event.type === 'page')
+          : undefined;
+      const retry =
+        payload ??
+        (page?.type === 'page'
+          ? { properties: page.properties, page: page.context.page }
+          : undefined);
+      if (initial && input.handoff)
+        await sdk
+          .hydrateAndTrackCurrentPage(input.handoff, {
+            routeKey: candidate.key,
+            isCurrent,
+            preparation: input.preparation,
+            ...(payload !== undefined ? { buildPayload: () => payload } : {}),
+          })
+          .catch(() => undefined);
+      else if (input.initialPageOwner !== 'server' && retry !== undefined)
+        await sdk
+          .trackCurrentPage({ routeKey: candidate.key, isCurrent, buildPayload: () => retry })
+          .catch(() => undefined);
+    } else if (intent.kind === 'handoff') {
       void sdk
         .hydrateAndTrackCurrentPage(intent.handoff, {
           routeKey: candidate.key,
@@ -91,7 +138,11 @@ export function createPageSequence(
         .catch(() => undefined);
     } else if (intent.kind === 'ordinary') {
       void sdk
-        .trackCurrentPage({ routeKey: candidate.key, buildPayload, isCurrent })
+        .trackCurrentPage({
+          routeKey: candidate.key,
+          buildPayload,
+          isCurrent,
+        })
         .catch(() => undefined);
     }
   }
@@ -110,7 +161,9 @@ export function createPageSequence(
       if (disposed) return;
       const sdk = getRuntime();
       const sdkChanged = sdk !== visit.sdk;
-      const changed = next.routeKey !== visit.key || sdkChanged;
+      const selection =
+        next.selection ?? (next.routeKey === visit.key ? visit.selection : undefined);
+      const changed = next.routeKey !== visit.key || sdkChanged || selection !== visit.selection;
       const previousHandoff = visit.intent?.kind === 'handoff' ? visit.intent.handoff : undefined;
       const handoff = next.handoff === resetHandoff ? undefined : next.handoff;
       options = next;
@@ -119,7 +172,7 @@ export function createPageSequence(
         const intent: PageIntent | undefined =
           lifetime &&
           (handoff ? { kind: 'handoff', lifetime, handoff } : { kind: 'none', lifetime });
-        if (changed) visit = { sdk, key: next.routeKey, started: false, intent };
+        if (changed) visit = { sdk, key: next.routeKey, selection, started: false, intent };
         else visit.intent = intent;
       }
       if (sdkChanged) {
@@ -138,6 +191,23 @@ export function createPageSequence(
       if (changed || handoff !== previousHandoff) {
         if (visit.intent?.kind === 'handoff') attemptPage(visit);
       }
+    },
+    async adoptRequest(input, alreadyAdopted = false) {
+      // Reads leave the committed visit's page intent intact; redirects still end it.
+      if ((input.eventFree || alreadyAdopted) && !input.redirect) {
+        visit.started = true;
+        return;
+      }
+      const candidate = visit;
+      const sdk = candidate.sdk;
+      // Kit may reuse a prepared source for this selection. Its complete wire result
+      // remains intact, while the committed visit keeps its existing intent.
+      if (candidate.started && !input.redirect) return;
+      candidate.intent = undefined;
+      candidate.started = true;
+      if (!sdk || sdk.isPreview || input.redirect || !input.isCurrent()) return;
+      candidate.intent = { kind: 'request', lifetime: sdk.captureLifetime(), input };
+      await attemptPage(candidate, true);
     },
     reset() {
       if (disposed) return;

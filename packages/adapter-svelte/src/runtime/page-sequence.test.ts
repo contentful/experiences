@@ -263,6 +263,95 @@ describe('committed route page sequencing', () => {
     }
   );
 
+  it('retains eligible prepared and browser page intent through reads and cached preparations without reviving blocked nonpage work', async () => {
+    const { sdk, route, send } = setup();
+    const track = sdk.eventBuilder.buildTrack({ event: 'prepared' });
+    const page = sdk.eventBuilder.buildPageView({ properties: { title: 'Prepared page' } });
+    const handoff: ExperiencesHandoff = {
+      spaceId: 'space',
+      environmentId: 'environment',
+      cache: { scope: 'private-request' },
+      profileId: 'visitor',
+      replay: { routeKey: '/eligible', events: [track, page] },
+    };
+    route.update({ routeKey: '/eligible', selection: 'primary' });
+    await route.adoptRequest({
+      routeKey: '/eligible',
+      handoff,
+      explicitEvents: true,
+      preparation: sdk.capturePreparation(),
+      isCurrent: () => true,
+    });
+    await route.adoptRequest({
+      routeKey: '/eligible',
+      eventFree: true,
+      explicitEvents: false,
+      isCurrent: () => true,
+    });
+    // Kit can reuse another prepared result at this same selection; it creates no new intent.
+    await route.adoptRequest({
+      routeKey: '/eligible',
+      handoff,
+      explicitEvents: true,
+      isCurrent: () => true,
+    });
+    expect(send).not.toHaveBeenCalled();
+    expect(sdk.states.eventStream.current).toBeUndefined();
+    sdk.consent({ events: true });
+    await sdk.flush();
+    const sent = () => send.mock.calls.flatMap(([request]) => request.events);
+    expect(sent().map((event) => event.type)).toEqual(['page']);
+    expect([track.messageId, page.messageId]).not.toContain(sent()[0]?.messageId);
+    expect(sent()[0]).toMatchObject({ properties: { title: 'Prepared page' } });
+    sdk.reset();
+    sdk.consent({ events: false });
+    await route.adoptRequest({
+      routeKey: '/eligible',
+      handoff,
+      explicitEvents: true,
+      isCurrent: () => true,
+    });
+    sdk.consent({ events: true });
+    await sdk.flush();
+    expect(sent().map((event) => event.type)).toEqual(['page']);
+    sdk.consent({ events: false });
+    route.update({ routeKey: '/browser' });
+    await route.adoptRequest({
+      routeKey: '/browser',
+      explicitEvents: false,
+      initialPagePayload: { properties: { title: 'Browser page' } },
+      handoff: {
+        spaceId: 'space',
+        environmentId: 'environment',
+        cache: { scope: 'private-request' },
+        profileId: 'visitor',
+      },
+      isCurrent: () => true,
+    });
+    await route.adoptRequest({
+      routeKey: '/browser',
+      eventFree: true,
+      explicitEvents: false,
+      isCurrent: () => true,
+    });
+    sdk.consent({ events: true });
+    await sdk.flush();
+    expect(sent().map((event) => event.type)).toEqual(['page', 'page']);
+    expect(sent()[1]).toMatchObject({ properties: { title: 'Browser page' } });
+    route.update({ routeKey: '/server' });
+    await route.adoptRequest({
+      routeKey: '/server',
+      initialPageOwner: 'server',
+      explicitEvents: false,
+      initialPagePayload: {},
+      isCurrent: () => true,
+    });
+    sdk.consent({ events: false });
+    sdk.consent({ events: true });
+    await sdk.flush();
+    expect(sent().map((event) => event.type)).toEqual(['page', 'page']);
+  });
+
   it.each(['source', 'route', 'reset', 'dispose'] as const)(
     'invalidates pending event admission after %s ends its authority',
     async (ending) => {

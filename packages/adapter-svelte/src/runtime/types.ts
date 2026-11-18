@@ -1,3 +1,4 @@
+import type { Presentation } from '../experience/presentation.svelte.js';
 import type { Snippet } from 'svelte';
 import type { PageSequenceOptions } from './page-sequence.svelte.js';
 import type {
@@ -9,7 +10,10 @@ import type { OnStatesReady, RuntimeOwner } from './owner-controller.svelte.js';
 
 export type { OnStatesReady } from './owner-controller.svelte.js';
 
-export interface RuntimePresentationProps extends Omit<PageSequenceOptions, 'routeKey'> {
+export interface RuntimePresentationProps extends Pick<
+  PageSequenceOptions,
+  'initialPagePayload' | 'buildPagePayload' | 'handoff'
+> {
   children?: Snippet;
   snapshot?: ExperiencesSnapshot;
   /**
@@ -33,5 +37,6 @@ export interface RuntimeRootProps extends Omit<
   'onStatesReady' | 'snapshot'
 > {
   owner: RuntimeOwner;
+  presentation?: Presentation<unknown>;
   registerTeardown?: (teardown: () => void) => () => void;
 }

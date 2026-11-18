@@ -1,12 +1,8 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import RuntimeRoot from '../runtime/RuntimeRoot.svelte';
-  import { createRuntimeOwner, type OwnerTarget } from '../runtime/owner-controller.svelte.js';
+  import RequestHost from './RequestHost.svelte';
   import type { KitClientBinding, KitExperiencesProviderProps } from './client-binding.js';
-
-  let { binding, sdk, onStatesReady, snapshot, routeKey, children }: KitExperiencesProviderProps & { binding: KitClientBinding } = $props();
-  const initialTarget: OwnerTarget = untrack(() => ({ sdk, onStatesReady }));
-  const owner = untrack(() => binding.getOwner(initialTarget, snapshot) ?? createRuntimeOwner(initialTarget, snapshot));
+  let { binding, sdk, onStatesReady, ...props }: KitExperiencesProviderProps & { binding: KitClientBinding } = $props();
+  const target = untrack(() => ({ sdk, onStatesReady }));
 </script>
-
-<RuntimeRoot {owner} {routeKey} {children} />
+<RequestHost {binding} {target} {...props} />

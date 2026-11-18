@@ -15,6 +15,26 @@ import {
 } from '../runtime/owner-controller.svelte.js';
 import KitRoot from './KitRoot.svelte';
 import KitProvider from './KitProvider.svelte';
+import ExperienceView from '../experience/Experience.svelte';
+import { getRuntimePresentation } from '../runtime/context.svelte.js';
+import {
+  usePresentation,
+  type PresentationNotifications,
+} from '../experience/presentation.svelte.js';
+import type { RequestResult } from './request-result.js';
+import type { PresentationProps } from '../experience/presentation-types.js';
+type RequestExperienceProps = Omit<PresentationProps<RequestResult>, 'config'> &
+  PresentationNotifications<RequestResult>;
+// This factory binds the shared view to the request result family; no selector is supplied.
+const RequestExperience = ExperienceView as unknown as Component<
+  RequestExperienceProps & { config: Config }
+>;
+function useManagedRequestExperience(getOptions?: () => PresentationNotifications<RequestResult>) {
+  return usePresentation(getRuntimePresentation<RequestResult>(), getOptions);
+}
+import { createClientLoader } from './client-loader.js';
+import { createRequestController, type RequestController } from './request-controller.svelte.js';
+import type { ManagedRequestSource } from './request-source.js';
 
 export type SvelteKitClientExperiencesOptions = (WebConfig | { sdk: ContentfulExperiences }) & {
   config: Config;
@@ -23,6 +43,7 @@ export type SvelteKitClientExperiencesOptions = (WebConfig | { sdk: ContentfulEx
 };
 
 export interface KitExperiencesRootProps {
+  source?: ManagedRequestSource;
   snapshot?: ExperiencesSnapshot;
   routeKey?: string;
   children?: Snippet;
@@ -37,6 +58,7 @@ export interface KitExperiencesProviderProps extends KitExperiencesRootProps {
 /** @internal Shared only by the bound components and the client startup hook. */
 export interface KitClientBinding {
   readonly target: OwnerTarget;
+  createController(redirect: (path: string) => void | Promise<unknown>): RequestController;
   selectOwnedOwner(
     target: OwnedOwnerTarget,
     snapshot?: ExperiencesSnapshot
@@ -48,6 +70,8 @@ export interface KitClientBinding {
 export function bindSvelteKitClientExperiences(options: SvelteKitClientExperiencesOptions) {
   const { config: _config, endpoint: _endpoint, onStatesReady, ...runtimeOptions } = options;
   let owner: RuntimeOwner | undefined;
+  let initializedBeforeLoad = false;
+  let controller: RequestController | undefined;
   let target: OwnerTarget =
     'sdk' in runtimeOptions
       ? { sdk: runtimeOptions.sdk, onStatesReady }
@@ -57,6 +81,11 @@ export function bindSvelteKitClientExperiences(options: SvelteKitClientExperienc
       ? resolvePreviewSessionId(new URLSearchParams(window.location.search))
       : undefined;
   const binding: KitClientBinding = {
+    createController(redirect) {
+      const next = createRequestController(redirect);
+      if (typeof window !== 'undefined') controller = next;
+      return next;
+    },
     get target() {
       return target;
     },
@@ -85,10 +114,31 @@ export function bindSvelteKitClientExperiences(options: SvelteKitClientExperienc
   const ExperiencesProvider: Component<KitExperiencesProviderProps> = (internals, props) =>
     KitProvider(internals, withBinding(props, binding));
 
+  const Experience: Component<RequestExperienceProps> = (internals, props) => {
+    return RequestExperience(
+      internals,
+      new Proxy(props as RequestExperienceProps & { config: Config }, {
+        get(target, key, receiver) {
+          return key === 'config' ? _config : Reflect.get(target, key, receiver);
+        },
+      })
+    );
+  };
+  const loadExperience = createClientLoader({
+    endpoint: _endpoint,
+    getOwner: () => binding.getOwner(),
+    getCommittedSource: () => controller?.source,
+    getCommittedSelection: () => controller?.selection,
+    initializedBeforeLoad: () => initializedBeforeLoad,
+  });
   return {
     request: {
+      loadExperience,
+      Experience,
+      useManagedExperience: useManagedRequestExperience,
       /** Kit's client init hook: recoverable owner failure is stored for presentation. */
       async init(): Promise<void> {
+        initializedBeforeLoad = typeof window !== 'undefined';
         const shared = binding.getOwner();
         // Activation records construction/setup failures; it starts no content operation.
         shared?.activate();

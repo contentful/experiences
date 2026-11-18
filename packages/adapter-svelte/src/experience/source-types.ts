@@ -1,3 +1,4 @@
+import type { PresentationSnapshot, PresentedExperience } from './presentation.svelte.js';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import type {
   DestinationRedirectResult,
@@ -23,18 +24,8 @@ export interface ManagedExperienceOperationResult {
   readonly redirect?: DestinationRedirectResult['redirect'];
 }
 
-export interface ManagedExperienceSnapshot {
-  readonly status: 'idle' | 'loading' | 'success' | 'error' | 'redirect';
-  readonly data: PortableRenderPlan | undefined;
-  readonly error: Error | undefined;
-  readonly redirect?: DestinationRedirectResult['redirect'];
-  readonly result?: ManagedExperienceOperationResult;
-}
-
-export interface ManagedExperience extends ManagedExperienceSnapshot {
-  readonly refresh: () => Promise<void>;
-  readonly retry: () => Promise<void>;
-}
+export type ManagedExperienceSnapshot = PresentationSnapshot<ManagedExperienceOperationResult>;
+export type ManagedExperience = PresentedExperience<ManagedExperienceOperationResult>;
 
 /** Raw selecting input; the primary source owns normalization and runtime applicability. */
 export interface SourceOptions {

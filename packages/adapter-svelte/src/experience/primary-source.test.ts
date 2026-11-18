@@ -2,9 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { resolveExperience, type PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import { ExperienceFetchError } from '@contentful/experiences-client';
 import type { ContentfulExperiences } from '@contentful/experiences-web';
+import { createPresentation } from './presentation.svelte.js';
 import { createPrimarySource } from './primary-source.svelte.js';
 import type { PageSequence } from '../runtime/page-sequence.svelte.js';
-import type { SourceOptions } from './source-types.js';
+import type { SourceOptions, ManagedExperienceOperationResult } from './source-types.js';
 import { componentNode, dt } from '../test/fixtures/render-plan.js';
 
 const plan = (experienceId = 'a'): PortableRenderPlan => ({
@@ -45,7 +46,9 @@ function setup(initialPlan?: PortableRenderPlan) {
       fetch(request, resolve)) as PageSequence['fetchExperience'],
     abandonPresentation: vi.fn(),
   } as unknown as PageSequence;
+  const presentation = createPresentation<ManagedExperienceOperationResult>(() => source.refresh());
   const source = createPrimarySource({
+    presentation,
     getSdk: () => currentSdk,
     getLocale: () => locale.current,
     route,
@@ -59,7 +62,19 @@ function setup(initialPlan?: PortableRenderPlan) {
   const setSdk = (next: ContentfulExperiences | undefined) => {
     currentSdk = next;
   };
-  return { source, select, options, fetch, preview, profile, locale, sdk, route, setSdk };
+  return {
+    presentation,
+    source,
+    select,
+    options,
+    fetch,
+    preview,
+    profile,
+    locale,
+    sdk,
+    route,
+    setSdk,
+  };
 }
 
 const settle = async () => {
@@ -154,16 +169,17 @@ describe('managed content source', () => {
     });
   });
 
-  it('does not retain visitor content across an actual profile identity change, while allowing successful adoption', async () => {
-    const { source, select, options, fetch, profile } = setup(plan());
+  it('retains exact completed content across profile changes and failed reads, then accepts recovery', async () => {
+    const { presentation, source, select, options, fetch, profile } = setup(plan());
     profile.current = { id: 'before' };
     select(options);
+    const displayed = source.current.data;
     fetch.mockImplementationOnce(async () => {
       profile.current = { id: 'after' };
       throw new TypeError('Failed to fetch');
     });
     await source.refresh();
-    expect(source.current.data).toBeUndefined();
+    expect(source.current.data).toBe(displayed);
     const adopted = plan('adopted');
     fetch.mockImplementationOnce(async () => {
       profile.current = { id: 'adopted' };
@@ -171,14 +187,15 @@ describe('managed content source', () => {
     });
     await source.retry();
     expect(source.current.data).toBe(adopted);
-    expect(source.isCurrentSnapshot(source.current)).toBe(true);
+    expect(presentation.isCurrentSnapshot(source.current)).toBe(true);
     source.dispose();
   });
 
   it.each(['selector', 'locale', 'route', 'session'] as const)(
     'clears inapplicable content and discards superseded %s completions',
     async (change) => {
-      const { source, select, options, fetch, sdk, locale, route, setSdk } = setup(plan());
+      const { presentation, source, select, options, fetch, sdk, locale, route, setSdk } =
+        setup(plan());
       select(options);
       let finish!: (value: PortableRenderPlan) => void;
       fetch.mockReturnValueOnce(
@@ -187,6 +204,7 @@ describe('managed content source', () => {
         })
       );
       const pending = source.refresh();
+      const rollback = presentation.begin(() => true);
       if (change === 'locale') {
         Object.defineProperty(sdk, 'locale', { value: 'de-DE' });
         locale.current = 'de-DE';
@@ -196,10 +214,16 @@ describe('managed content source', () => {
       fetch.mockResolvedValueOnce(plan('b'));
       select(change === 'selector' ? { ...options, request: { experienceId: 'b' } } : options);
       expect(source.current.data).toBeUndefined();
+      const successor = source.current;
+      rollback();
+      expect(source.current).toBe(successor);
       await settle();
       finish(plan('old'));
       await pending;
       expect(source.current.data?.experienceId).toBe('b');
+      const completed = source.current;
+      rollback();
+      expect(source.current).toBe(completed);
       source.dispose();
     }
   );
@@ -231,6 +255,18 @@ describe('managed content source', () => {
         finish = resolve;
       })
     );
+    const completed = source.current;
+    const pending = source.refresh();
+    callback({ error: new Error('Disconnected while refreshing') });
+    source.reset();
+    expect(source.current).toBe(completed);
+    finish(plan('cancelled'));
+    await pending;
+    fetch.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+    );
     const refreshing = source.refresh();
     const live = plan('live');
     callback({ data: live });
@@ -248,42 +284,42 @@ describe('managed content source', () => {
   });
 });
 
-it.each(['raw', 'adapter'] as const)(
-  'preserves completed presentation across %s reset without admitting old pending work',
-  async (reset) => {
-    const { source, select, options, fetch, sdk } = setup(plan());
-    let generation = 0;
-    sdk.captureLifetime = () => {
-      const captured = generation;
-      return () => captured === generation;
-    };
-    select(options);
-    const completed = source.current;
-    let finish!: (value: PortableRenderPlan) => void;
-    fetch.mockReturnValueOnce(
-      new Promise((resolve) => {
-        finish = resolve;
-      })
-    );
-    const pending = source.refresh();
-    generation++;
-    if (reset === 'adapter') source.reset();
-    finish(plan('old visitor'));
-    await pending;
-    expect(source.current).toBe(completed);
-    select({ ...options });
-    expect(fetch).toHaveBeenCalledTimes(1);
-    fetch.mockResolvedValueOnce(plan('fresh'));
-    await source.retry();
-    expect(source.current.data?.experienceId).toBe('fresh');
-    const published = source.current;
-    expect(source.isCurrentSnapshot(published)).toBe(true);
-    generation++;
-    expect(source.current).toBe(published);
-    expect(source.isCurrentSnapshot(published)).toBe(false);
-    source.dispose();
-  }
-);
+it('retains completed portable display on reset, refuses delayed content and recovers through event-free Retry', async () => {
+  const { presentation, source, select, options, fetch, sdk } = setup(plan());
+  let generation = 0;
+  sdk.captureLifetime = () => {
+    const captured = generation;
+    return () => captured === generation;
+  };
+  select(options);
+  const completed = source.current;
+  let finish!: (value: PortableRenderPlan) => void;
+  fetch.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve;
+    })
+  );
+  const pending = source.refresh();
+  generation++;
+  source.reset();
+  finish(plan('old visitor'));
+  await pending;
+  expect(source.current.result).toBe(completed.result);
+  expect(source.current.data).toBe(completed.data);
+  expect(source.current.status).toBe(completed.status);
+  expect(source.current).toBe(completed);
+  select({ ...options });
+  expect(fetch).toHaveBeenCalledTimes(1);
+  fetch.mockResolvedValueOnce(plan('fresh'));
+  await source.retry();
+  expect(source.current.data?.experienceId).toBe('fresh');
+  const published = source.current;
+  expect(presentation.isCurrentSnapshot(published)).toBe(true);
+  generation++;
+  expect(source.current).toBe(published);
+  expect(presentation.isCurrentSnapshot(published)).toBe(false);
+  source.dispose();
+});
 
 it('shares equivalent current selectors, diagnoses divergence and detaches after the last selector', () => {
   const { source, options, setSdk } = setup(plan());
@@ -309,17 +345,17 @@ it('shares equivalent current selectors, diagnoses divergence and detaches after
 });
 
 it('claims current redirect navigation once and rejects stale publication authority', async () => {
-  const { source, select, options, fetch } = setup();
+  const { presentation, source, select, options, fetch } = setup();
   fetch.mockResolvedValueOnce({ redirect: { path: '/next' } });
   select(options);
   await settle();
   const redirected = source.current;
-  expect(source.claimRedirect(redirected)).toBe(true);
-  expect(source.claimRedirect(redirected)).toBe(false);
+  expect(presentation.claimRedirect(redirected)).toBe(true);
+  expect(presentation.claimRedirect(redirected)).toBe(false);
   await source.retry();
   expect(source.current).toBe(redirected);
-  source.rejectRedirect(new Error('Invalid redirect'));
+  presentation.rejectRedirect(new Error('Invalid redirect'));
   expect(source.current.status).toBe('error');
-  expect(source.isCurrentSnapshot(redirected)).toBe(false);
+  expect(presentation.isCurrentSnapshot(redirected)).toBe(false);
   source.dispose();
 });

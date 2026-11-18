@@ -8,7 +8,7 @@
   import type { Config as WebConfig, ContentfulExperiences, ExperiencesSnapshot } from '@contentful/experiences-web';
   import type { OnStatesReady } from '../../runtime/types.js';
   import type { RuntimeProbeCapture } from './runtime-probe.js';
-  let { config, Root = ExperiencesRoot, Provider = ExperiencesProvider, sdk, routeKey, snapshot, onStatesReady, capture, initialize, visible = true, flagName = 'test', denyConsent = false, outro }: {
+  let { config, Root = ExperiencesRoot, Provider = ExperiencesProvider, sdk, routeKey, snapshot, onStatesReady, capture, nestedCapture, initialize, visible = true, flagName = 'test', denyConsent = false, outro }: {
     outro?: (node: Element) => TransitionConfig;
     config: WebConfig;
     Provider?: Component<ExperiencesProviderProps>;
@@ -18,6 +18,7 @@
     snapshot?: ExperiencesSnapshot;
     onStatesReady?: OnStatesReady;
     capture?: RuntimeProbeCapture;
+    nestedCapture?: RuntimeProbeCapture;
     initialize?: () => void;
     visible?: boolean;
     flagName?: string;
@@ -26,7 +27,7 @@
 </script>
 
 {#snippet probe()}{#if visible}<RuntimeProbe {capture} {initialize} {flagName} {denyConsent} />{/if}{/snippet}
-{#snippet content()}{#if outro}<div out:outro|global>{@render probe()}</div>{:else}{@render probe()}{/if}{/snippet}
+{#snippet content()}{#if nestedCapture && sdk}<Provider {sdk}><RuntimeProbe capture={nestedCapture} /></Provider>{/if}{#if outro}<div out:outro|global>{@render probe()}</div>{:else}{@render probe()}{/if}{/snippet}
 {#if sdk}
   <Provider {sdk} {routeKey} {snapshot} {onStatesReady} children={content} />
 {:else}

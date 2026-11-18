@@ -1096,6 +1096,19 @@ recommitting or starting page fallback. Calls joining current A share its owned 
 while any coalesced caller remains live. `HydrateAndTrackCurrentPageOptions.isCurrent?: () => boolean` guards operation liveness through SDK state application and admission;
 omitting it leaves caller liveness unrestricted. Caller cleanup does not cancel
 accepted SDK queue work.
+Speculative server-preparation integrations can opt in to browser applicability:
+call `const preparation = experiences.capturePreparation()` before preparation,
+use its readonly `inputs` (`profileId`, `locale`, and `consent`), and pass that same
+in-memory token as `preparation` to `hydrateAndTrackCurrentPage`. Its `isCurrent()`
+checks owner/reset, identity (including a configured provider), profile, flags,
+event consent, persistence consent and locale through asynchronous interception
+and admission. The operation recognizes
+its own synchronous identity/state adoption; unrelated subscriber changes still
+invalidate it. Already admitted delivery remains queue-owned. Tokens belong to
+one live owner and are not serialization data. Initial-document hydration captures
+local applicability at adoption while retaining its captured server inputs.
+Omitting `preparation` preserves the existing handoff contract.
+
 New visitor/action intent must carry fresh message IDs. Reset/destroy clear owner
 admission history; event-consent withdrawal purges permitted queued work without
 forgetting accepted replay identity or restoring accepted/blocked intent on grant.

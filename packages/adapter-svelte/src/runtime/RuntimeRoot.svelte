@@ -4,10 +4,10 @@
   import type { RuntimeRootProps } from './types.js';
 
   let {
-    owner, registerTeardown, children,
+    owner, registerTeardown, children, presentation,
     routeKey, initialPagePayload, buildPagePayload, handoff,
   }: RuntimeRootProps = $props();
-  const scope = setRuntimeScope(untrack(() => owner));
+  const scope = setRuntimeScope(untrack(() => owner), untrack(() => presentation));
   const routeOptions = () => ({
     routeKey: routeKey ?? (typeof window === 'undefined'
       ? '/'

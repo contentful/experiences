@@ -62,11 +62,26 @@ export interface CurrentPageOptions {
   readonly isCurrent?: () => boolean;
 }
 
+/** Browser inputs and applicability for one speculative server preparation. */
+export interface PreparationApplicability {
+  readonly inputs: {
+    readonly profileId?: string;
+    readonly locale?: string;
+    readonly consent: {
+      readonly events: boolean | undefined;
+      readonly persistence: boolean | undefined;
+    };
+  };
+  readonly isCurrent: () => boolean;
+}
+
 export interface HydrateAndTrackCurrentPageOptions extends Omit<
   CurrentPageOptions,
   'buildPayload'
 > {
   readonly buildPayload?: CurrentPageOptions['buildPayload'];
+  /** Opt in to the browser inputs captured before server preparation. */
+  readonly preparation?: PreparationApplicability;
   /** Framework operation lifetime; SDK lifetime and accepted queue work remain SDK-owned. */
   readonly isCurrent?: () => boolean;
 }

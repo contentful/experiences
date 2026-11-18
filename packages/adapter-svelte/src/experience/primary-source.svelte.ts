@@ -1,4 +1,5 @@
 import { untrack } from 'svelte';
+import type { Presentation } from './presentation.svelte.js';
 import {
   assertExperienceSelector,
   isNotFoundError,
@@ -45,11 +46,6 @@ export function sameSelection(left: SourceOptions, right: SourceOptions): boolea
   );
 }
 
-const idle = (): ManagedExperienceSnapshot => ({
-  status: 'idle',
-  data: undefined,
-  error: undefined,
-});
 const asError = (value: unknown): Error =>
   value instanceof Error ? value : new Error(String(value));
 
@@ -68,6 +64,7 @@ interface SourceEnvironment {
   getSdk(): ContentfulExperiences | undefined;
   getLocale(): string | undefined;
   route: PageSequence;
+  presentation: Presentation<ManagedExperienceOperationResult>;
 }
 interface Selection {
   options: SourceOptions;
@@ -77,19 +74,11 @@ interface Selection {
   revision: object;
   routeKey: string;
 }
-interface Publication {
-  snapshot: ManagedExperienceSnapshot;
-  isCurrent(): boolean;
-  redirectClaimed?: boolean;
-}
 export interface PrimarySource {
   readonly current: ManagedExperienceSnapshot;
   refresh(): Promise<void>;
   retry(): Promise<void>;
   attach(getOptions: () => SourceOptions | undefined): { update(): void; release(): void };
-  isCurrentSnapshot(snapshot: ManagedExperienceSnapshot): boolean;
-  claimRedirect(snapshot: ManagedExperienceSnapshot): boolean;
-  rejectRedirect(error: unknown): void;
   reset(): void;
   dispose(): void;
 }
@@ -99,8 +88,7 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
   const { route } = environment;
   const registrations = new Set<() => SourceOptions | undefined>();
   let selection: Selection | undefined;
-  let publication = $state.raw<Publication>({ snapshot: idle(), isCurrent: () => false });
-  let completed = untrack(() => publication);
+  const { presentation } = environment;
   let operation: object | undefined;
   let disposed = false;
   let binding: Subscription | undefined;
@@ -116,34 +104,17 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
     (value: Selection, lifetime = value.sdk?.captureLifetime() ?? (() => true)) =>
     () =>
       selected(value) && lifetime();
-  function publish(snapshot: ManagedExperienceSnapshot, isCurrent: () => boolean) {
-    publication = { snapshot, isCurrent };
-  }
   type Outcome = Omit<ManagedExperienceOperationResult, 'id' | 'routeKey' | 'request'>;
   function complete(
     outcome: Outcome | undefined,
-    data = outcome?.plan,
     isCurrent = authority(selection!),
-    emptyStatus: ManagedExperienceSnapshot['status'] = 'idle'
+    invalidatesData = false,
+    settled = true
   ) {
-    publish(
-      {
-        status: outcome?.redirect
-          ? 'redirect'
-          : outcome?.error
-            ? 'error'
-            : data
-              ? 'success'
-              : emptyStatus,
-        data,
-        error: outcome?.error,
-        redirect: outcome?.redirect,
-        result: outcome
-          ? { id: {}, routeKey: selection!.routeKey, request: selection!.request, ...outcome }
-          : undefined,
-      },
-      isCurrent
-    );
+    const result = outcome
+      ? { id: {}, routeKey: selection!.routeKey, request: selection!.request, ...outcome }
+      : undefined;
+    presentation.complete(result, { ...outcome, invalidatesData }, isCurrent, settled);
   }
   function stopBindings() {
     binding?.unsubscribe();
@@ -154,54 +125,45 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
     selection = undefined;
     operation = undefined;
     stopBindings();
-    publish(idle(), () => false);
-    completed = publication;
+    presentation.clear();
   }
   function bindPreview(value: Selection) {
     const sdk = value.sdk;
     if (
       !sdk ||
-      publication.snapshot.redirect ||
+      presentation.current.redirect ||
       (value.request.destinationId !== undefined && sdk.environmentId !== 'master')
     )
       return;
-    const experienceId = value.request.experienceId ?? publication.snapshot.data?.experienceId;
+    const experienceId = value.request.experienceId ?? presentation.current.data?.experienceId;
     if (!experienceId || experienceId === boundExperience) return;
     binding?.unsubscribe();
     boundExperience = experienceId;
     binding = sdk.subscribeToPreview(experienceId, value.options.resolve, (update) => {
-      if (!selected(value) || publication.snapshot.redirect || !route.isCurrent()) return;
+      if (!selected(value) || presentation.current.redirect || !route.isCurrent()) return;
       // Live content supersedes pending HTTP; an error-only update leaves it pending.
       if (update.data) operation = undefined;
-      const data = update.data ?? publication.snapshot.data;
       complete(
         { plan: update.data, error: update.error },
-        data,
         authority(value),
-        publication.snapshot.status
+        false,
+        update.data !== undefined
       );
-      if (update.data) completed = publication;
     });
   }
   async function fetch(isRefresh: boolean) {
     const value = selection;
     const sdk = value?.sdk;
-    if (!value || !sdk || publication.snapshot.redirect) return;
+    if (!value || !sdk || presentation.current.redirect) return;
     const attempt = {};
     operation = attempt;
     const lifetime = sdk.captureLifetime();
-    const profileId = sdk.states.profile.current?.id;
-    if (publication.snapshot.status !== 'loading') completed = publication;
-    const previous = completed;
+    const rollback = presentation.begin(authority(value, lifetime));
     const sourceCurrent = () =>
       selected(value) &&
       route.isCurrent() &&
       (value.options.request.locale !== undefined || sdk.locale === value.locale);
     const current = () => sourceCurrent() && operation === attempt;
-    publish(
-      { status: 'loading', data: publication.snapshot.data, error: undefined },
-      authority(value, lifetime)
-    );
     bindPreview(value);
     let outcome: Outcome;
     let failure: ReturnType<typeof authoritativeFailure>;
@@ -220,22 +182,18 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
     }
     if (!current()) return;
     if (!lifetime()) {
-      publication = previous;
+      rollback();
       return;
     }
-    let data = outcome.plan;
-    if (outcome.error) {
-      const retain = sdk.isPreview || failure === undefined;
-      if (retain && sdk.states.profile.current?.id === profileId) data = publication.snapshot.data;
-    }
+    const invalidatesData = !!outcome.error && !sdk.isPreview && failure !== undefined;
     if (outcome.redirect) {
       binding?.unsubscribe();
       binding = undefined;
       boundExperience = undefined;
       route.abandonPresentation();
     }
-    complete(outcome, data, authority(value, lifetime));
-    completed = publication;
+    complete(outcome, authority(value, lifetime), invalidatesData);
+
     bindPreview(value);
   }
   function apply(options: SourceOptions) {
@@ -278,24 +236,24 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
       const error = newSeed
         ? options.initialError
         : activatingSeed
-          ? publication.snapshot.error
+          ? presentation.current.error
           : undefined;
       const failure = authoritativeFailure(error, true);
       const candidate = newSeed
         ? options.initialPlan
         : activatingSeed
-          ? publication.snapshot.data
+          ? presentation.current.data
           : undefined;
       const data = sdk?.isPreview || failure === undefined ? candidate : undefined;
+      presentation.select(value);
       complete(
         data || error
           ? { plan: data, error, ...(failure === 404 ? { notFound: true } : {}) }
           : undefined,
-        data,
         authority(value)
       );
-      completed = publication;
-      if (sdk && publication.snapshot.status === 'idle') void fetch(false);
+
+      if (sdk && presentation.current.status === 'idle') void fetch(false);
       else bindPreview(value);
     });
   }
@@ -314,22 +272,10 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
   const refresh = () => fetch(true);
   return {
     get current() {
-      return publication.snapshot;
+      return presentation.current;
     },
     refresh,
     retry: refresh,
-    isCurrentSnapshot: (snapshot) => publication.snapshot === snapshot && publication.isCurrent(),
-    claimRedirect(snapshot) {
-      if (
-        publication.snapshot !== snapshot ||
-        !snapshot.redirect ||
-        !publication.isCurrent() ||
-        publication.redirectClaimed
-      )
-        return false;
-      publication.redirectClaimed = true;
-      return true;
-    },
     attach(getOptions) {
       if (disposed) throw new Error('Cannot attach to a disposed Experiences root.');
       update(getOptions);
@@ -343,19 +289,9 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
         },
       };
     },
-    rejectRedirect(value) {
-      if (!selection) return;
-      operation = undefined;
-      const error = asError(value);
-      complete({ error });
-      completed = publication;
-    },
     reset() {
       operation = undefined;
-      if (publication.snapshot.status === 'loading') publication = completed;
-      // Retention is allowed; old visitor work and notifications lose authority.
-      publication = { ...publication, isCurrent: () => false };
-      completed = publication;
+      presentation.reset();
     },
     dispose() {
       if (!disposed) {

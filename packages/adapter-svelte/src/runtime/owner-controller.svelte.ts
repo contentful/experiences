@@ -46,7 +46,7 @@ export function createRuntimeOwner(
   });
   const owned = 'config' in target;
   const sessionId =
-    owned && target.config.preview && typeof window !== 'undefined'
+    (owned ? target.config.preview : target.sdk.isPreview) && typeof window !== 'undefined'
       ? resolvePreviewSessionId(new URLSearchParams(window.location.search))
       : undefined;
   let release: (() => void) | undefined;

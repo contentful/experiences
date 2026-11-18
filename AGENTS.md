@@ -1010,6 +1010,25 @@ releases the singleton before the next acquisition even with DOM outros. Injecte
 SDKs are fixed per activation and never constructed or destroyed by the adapter. Superseded prototype replacement
 tests are not a contract to retain; verify current lifetime effects and refusals.
 
+### SvelteKit managed request lifecycle (fixed)
+
+The 2026-11-18 approved simplification retains a visit/read for the same URL and
+content selector, including parameters and locale, without automatic fresh page
+intent. Adopt the exact application-supplied source after commitment; explicit
+reads remain event-free. Expired state/event preparation alone neither blocks
+applicable content nor forces reevaluation; Web must refuse stale state/replay.
+Reset, SDK profile changes and ordinary failed reads preserve applicable completed
+data with its original provenance; the host controls concealment. Preserve logical
+selection/route/locale/session applicability, Preview isolation, authoritative
+missing/auth outcomes and superseded pending-work guards. Request history stays
+stable across Preview activations for SDK state/event/replay deduplication. It
+does not suppress otherwise applicable exact committed cached content after owner
+changes or back navigation; preserve the raw complete result and original provenance.
+The precommit navigation state machine, consumed-read promotion and separate Kit
+page owner are removed. Current owning-layer and native evidence verifies this
+revision; Phase4/G4 was accepted and completed on 2026-11-18. Earlier lifecycle
+fixes and test evidence remain revision-scoped.
+
 ### Malformed selector diagnostics before normalization (fixed)
 
 One internal Client assertion checks selector shape, nonempty strings and absolute

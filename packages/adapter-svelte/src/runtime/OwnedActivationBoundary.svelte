@@ -6,7 +6,7 @@
   import type { ExperiencesSnapshot } from '@contentful/experiences-web';
   import type { RuntimeRootProps } from './types.js';
 
-  let { target, snapshot, routeKey, initialPagePayload, buildPagePayload, handoff, children, selectOwner }: Omit<RuntimeRootProps, 'owner' | 'registerTeardown'> & { snapshot?: ExperiencesSnapshot } & {
+  let { target, snapshot, routeKey, initialPagePayload, buildPagePayload, handoff, children, selectOwner, presentation }: Omit<RuntimeRootProps, 'owner' | 'registerTeardown'> & { snapshot?: ExperiencesSnapshot } & {
     target: OwnedOwnerTarget;
     selectOwner?: (target: OwnedOwnerTarget, snapshot?: ExperiencesSnapshot) => RuntimeOwner | undefined;
   } = $props();
@@ -48,5 +48,5 @@
 </script>
 
 {#key owner}
-  <RuntimeRoot {owner} {registerTeardown} {routeKey} {initialPagePayload} {buildPagePayload} {handoff} {children} />
+  <RuntimeRoot {presentation} {owner} {registerTeardown} {routeKey} {initialPagePayload} {buildPagePayload} {handoff} {children} />
 {/key}

@@ -9,6 +9,8 @@ import type {
 import type { OwnerSnapshot, RuntimeOwner } from './owner-controller.svelte.js';
 
 import { createPrimarySource, type PrimarySource } from '../experience/primary-source.svelte.js';
+import { createPresentation, type Presentation } from '../experience/presentation.svelte.js';
+import type { ManagedExperienceOperationResult } from '../experience/source-types.js';
 import { createPageSequence, type PageSequence } from './page-sequence.svelte.js';
 
 const RUNTIME_KEY = Symbol('@contentful/experiences-svelte::runtime');
@@ -42,17 +44,26 @@ export type ExperiencesActions = Pick<
 export interface RuntimeScope {
   readonly owner: RuntimeOwner;
   readonly source: PrimarySource;
+  readonly presentation: Presentation<ManagedExperienceOperationResult>;
   readonly route: PageSequence;
   readonly runtime: WebExperiencesRuntime;
   readonly state: ExperiencesState;
   dispose(): void;
 }
 
-export function setRuntimeScope(owner: RuntimeOwner): RuntimeScope {
+export function setRuntimeScope(
+  owner: RuntimeOwner,
+  supplied?: Presentation<unknown>
+): RuntimeScope {
   const getSdk = () =>
     owner.current.status === 'ready' ? (owner.current.sdk as ContentfulExperiences) : undefined;
   const route = createPageSequence(getSdk);
-  const source = createPrimarySource({ getSdk, getLocale: () => state.locale, route });
+  let source: PrimarySource | undefined;
+  const presentation =
+    (supplied as Presentation<ManagedExperienceOperationResult> | undefined) ??
+    createPresentation<ManagedExperienceOperationResult>(
+      () => source?.refresh() ?? Promise.resolve()
+    );
   let active = true;
   const cleanups = new Set<() => void>();
   const cells = new Map<
@@ -152,7 +163,8 @@ export function setRuntimeScope(owner: RuntimeOwner): RuntimeScope {
         if (!methods.has(key))
           methods.set(key, () =>
             untrack(() => {
-              source.reset();
+              if (source) source.reset();
+              else presentation.reset();
               route.reset();
               owner.current.sdk.reset();
             })
@@ -181,7 +193,15 @@ export function setRuntimeScope(owner: RuntimeOwner): RuntimeScope {
 
   const scope: RuntimeScope = {
     owner,
-    source,
+    get source() {
+      return (source ??= createPrimarySource({
+        getSdk,
+        getLocale: () => state.locale,
+        route,
+        presentation,
+      }));
+    },
+    presentation,
     route,
     runtime,
     state,
@@ -189,7 +209,8 @@ export function setRuntimeScope(owner: RuntimeOwner): RuntimeScope {
       if (!active) return;
       active = false;
       try {
-        source.dispose();
+        if (source) source.dispose();
+        else presentation.reset();
         route.dispose();
         for (const cleanup of cleanups) cleanup();
         cells.clear();
@@ -225,4 +246,9 @@ export function getExperiencesState(): ExperiencesState {
 /** Receiver-bound actions always target the current owner. */
 export function getExperiencesActions(): ExperiencesActions {
   return getRuntimeScope().runtime;
+}
+
+/** Internal result-family boundary; acquisition supplies the original result type. */
+export function getRuntimePresentation<T>(): Presentation<T> {
+  return getRuntimeScope().presentation as unknown as Presentation<T>;
 }

@@ -128,6 +128,7 @@ export class ContentfulExperiences extends WebContentRuntime<
     try {
       this.allowedEventTypes = [...(allowedEventTypes ?? DEFAULT_ALLOWED_EVENT_TYPES)];
       this.onEventBlocked = onEventBlocked;
+      this.hasConfiguredIdentityProvider = getAnonymousId !== undefined;
       this.getAnonymousIdProvider =
         getAnonymousId ??
         (() => (persistenceConsentSignal.value === true ? LocalStore.anonymousId : undefined));

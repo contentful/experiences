@@ -1,5 +1,6 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vitest/config';
+import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
   plugins: [svelte({ hot: false })],
@@ -19,6 +20,9 @@ export default defineConfig({
     },
   },
   resolve: {
+    alias: {
+      '$app/navigation': fileURLToPath(new URL('./src/test/kit-navigation.ts', import.meta.url)),
+    },
     conditions: ['browser'],
   },
 });

@@ -6,10 +6,14 @@ import {
   type EventEmissionResult,
   type ExperiencesHandoff,
 } from '@contentful/experiences-runtime';
-import type { CurrentPageOptions, HydrateAndTrackCurrentPageOptions } from '../sdk/types.js';
+import type {
+  CurrentPageOptions,
+  HydrateAndTrackCurrentPageOptions,
+  PreparationApplicability,
+} from '../sdk/types.js';
 import { requireRouteKey } from './route-key.js';
 
-import { profile as profileSignal } from '../signals/index.js';
+import { batch, profile as profileSignal } from '../signals/index.js';
 import type { InteractionTracking } from '../tracking/interaction-tracking.js';
 import { AcceptedCurrentPageTracker } from './accepted-current-page-tracker.js';
 import { shouldApplyHandoffProfile } from './handoff-continuity.js';
@@ -54,9 +58,13 @@ export abstract class WebHandoffRuntime<
     {
       routeKey,
       buildPayload,
-      isCurrent = unguardedHandoffCaller,
+      isCurrent: callerIsCurrent = unguardedHandoffCaller,
+      preparation,
     }: HydrateAndTrackCurrentPageOptions
   ): Promise<EventEmissionResult> {
+    const isCurrent = () =>
+      callerIsCurrent() &&
+      (preparation === undefined || (this.ownsPreparation(preparation) && preparation.isCurrent()));
     if (this.destroyed) return { accepted: false };
     if (!isCurrent()) return { accepted: false };
     if (this.isPreview) return this.skipPreviewEvent('hydrateAndTrackCurrentPage', [routeKey]);
@@ -68,7 +76,13 @@ export abstract class WebHandoffRuntime<
           typeof event === 'object' && event !== null && 'type' in event && event.type === 'page'
       ) === true;
     const token = this.resetToken;
-    const initialization = this.getHandoffInitialization(handoff, parsed, routeKey, isCurrent);
+    const initialization = this.getHandoffInitialization(
+      handoff,
+      parsed,
+      routeKey,
+      isCurrent,
+      preparation
+    );
     if (initialization.delivery !== undefined) return await initialization.delivery;
     const consumed =
       typeof initialization.key === 'string' && this.consumedHandoffs.has(initialization.key);
@@ -81,7 +95,7 @@ export abstract class WebHandoffRuntime<
     // See Runtime README's XDA preflight and profile finalization contract.
     const identityReady = Promise.resolve().then(() =>
       !consumed && initialization.isCurrent()
-        ? this.adoptHandoffIdentity(parsed, initialization.isCurrent)
+        ? this.adoptHandoffIdentity(parsed, initialization.isCurrent, preparation)
         : undefined
     );
     initialization.identityReady = identityReady;
@@ -180,7 +194,8 @@ export abstract class WebHandoffRuntime<
         },
         initialization.isCurrent,
         () => shouldApplyHandoffProfile(handoff),
-        () => handoff.cache.scope === 'private-request'
+        () => handoff.cache.scope === 'private-request',
+        () => this.advancePreparation(initialization.preparation)
       );
     });
     initialization.hydration = hydration.catch((error: unknown) => {
@@ -194,11 +209,17 @@ export abstract class WebHandoffRuntime<
 
   protected adoptHandoffIdentity(
     handoff: HandoffEnvelope,
-    isCurrent: () => boolean
+    isCurrent: () => boolean,
+    preparation?: PreparationApplicability
   ): string | undefined {
-    const profileId = profileSignal.value?.id ?? this.getAnonymousIdProvider() ?? handoff.profileId;
+    const profileId = preparation
+      ? (preparation.inputs.profileId ?? handoff.profileId)
+      : (profileSignal.value?.id ?? this.getAnonymousIdProvider() ?? handoff.profileId);
     if (!isCurrent()) return undefined;
-    this.setAdoptedProfileId(profileId);
+    batch(() => {
+      this.setAdoptedProfileId(profileId);
+      this.advancePreparation(preparation);
+    });
     return profileId;
   }
 
@@ -248,7 +269,8 @@ export abstract class WebHandoffRuntime<
     input: ExperiencesHandoff,
     parsed: HandoffEnvelope,
     routeKey: string,
-    callerIsCurrent: () => boolean
+    callerIsCurrent: () => boolean,
+    preparation?: PreparationApplicability
   ): HandoffInitialization {
     const finalEvent = parsed.replay?.events.at(-1);
     const key =
@@ -259,13 +281,19 @@ export abstract class WebHandoffRuntime<
         ? finalEvent.messageId
         : input;
     const current = this.currentInitialization;
-    if (current?.routeKey === routeKey && current.key === key && current.isCurrent()) {
+    if (
+      current?.routeKey === routeKey &&
+      current.key === key &&
+      current.preparation === preparation &&
+      current.isCurrent()
+    ) {
       current.callers.add(callerIsCurrent);
       return current;
     }
 
     const token = this.resetToken;
     const initialization: HandoffInitialization = {
+      preparation,
       key,
       routeKey,
       callers: new Set([callerIsCurrent]),

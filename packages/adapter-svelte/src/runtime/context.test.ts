@@ -57,7 +57,14 @@ describe('runtime context', () => {
       return { unsubscribe };
     });
     const context = captureContext();
-    const view = render(RuntimeHarness, { config, sdk: injected, capture: context.capture });
+    const nestedContext = captureContext();
+    const view = render(RuntimeHarness, {
+      config,
+      sdk: injected,
+      capture: context.capture,
+      nestedCapture: nestedContext.capture,
+    });
+    expect(nestedContext.current.scope.presentation).not.toBe(context.current.scope.presentation);
     const siblingContext = captureContext();
     const sibling = render(RuntimeHarness, {
       config,
