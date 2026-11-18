@@ -145,8 +145,8 @@ application baseline. Event-consent changes do not cancel Preview content,
 including snapshot-only acquisition; owner reset, source/locale/session changes
 and destruction still guard delayed content. Legacy owning Preview hooks remain available for existing
 consumers. Static/supplied use is allowed inside managed roots without changing
-the active owner's Preview status; supplying a competing Preview client is refused. Kit server loading, native
-preparation and example migrations are separate integration work.
+the active owner's Preview status; supplying a competing Preview client is refused. Managed Kit loading, adoption and example migrations are separate integration work.
+Native server preparation is described below.
 
 ### Kit client foundation
 
@@ -183,8 +183,179 @@ path keeps binding/SSR neutral. Init and the bound root reuse the chosen instanc
 ownership mode cannot switch after startup. This provisions the same singleton
 SDK for that activation; the application owns its destruction. Web browser state
 uses shared module signals, so SDK instances are not independent state containers.
-A fresh owned activation after complete teardown remains supported. Native Kit
-loading/preparation remains separate future integration work.
+A fresh owned activation after complete teardown remains supported. Managed Kit loading and adoption remain separate future integration work.
+
+### Kit server preparation
+
+`bindSvelteKitServerExperiences` from `/kit/server` binds native `handleFetch`
+and `handlePreparation` handlers. Keep this binding in an application server-only
+module. Kit is an optional peer; portable root imports require neither Kit nor
+Node. The server entry is blocked from client bundles and rejects visitor
+preparation while Kit is building/prerendering.
+
+```ts
+// src/lib/server/experiences.ts
+import { bindSvelteKitServerExperiences } from '@contentful/experiences-svelte/kit/server';
+import { CONTENTFUL_DELIVERY_TOKEN } from '$env/static/private';
+import { experienceConfig } from '../experience-config';
+
+export const { request } = bindSvelteKitServerExperiences({
+  config: experienceConfig,
+  endpoint: '/_exo/primary',
+  spaceId: 'your-space',
+  environmentId: 'master',
+  delivery: { accessToken: CONTENTFUL_DELIVERY_TOKEN },
+  consent: {
+    server: (event) => ({
+      events: event.cookies.get('site-events-consent') === 'accepted',
+      persistence: event.cookies.get('site-persistence-consent') === 'accepted',
+    }),
+  },
+  request: {
+    mode: 'ssr', // 'hybrid' prepares an actual browser replay instead.
+    authorizeExperience: (_event, experience, { url }) =>
+      'destinationId' in experience &&
+      experience.destinationId === 'your-destination' &&
+      'path' in experience &&
+      experience.path === url.pathname &&
+      !('parameters' in experience) &&
+      !('extensions' in experience) &&
+      (experience.personalization === undefined ||
+        (experience.personalization.events?.length === 0 &&
+          Object.keys(experience.personalization).every((key) => key === 'events'))),
+    pagePayload: (_event, { url }) => ({
+      properties: { title: 'Storefront', path: url.pathname },
+    }),
+  },
+});
+```
+
+Authorize the complete selector, including parameters, extensions and explicit
+event intent, for your application. Candidate URL/context is supplied separately
+from the native event; a direct endpoint event's own URL names the endpoint.
+Server consent remains authoritative; browser input may narrow it. Identity
+cookies do not grant consent. Configure `cookie` consistently with the browser
+owner's path, domain, secure and same-site policy.
+
+```ts
+// src/hooks.server.ts — compose with any existing hooks.
+import { request } from '$lib/server/experiences';
+export const handleFetch = request.handleFetch;
+
+// src/routes/_exo/primary/+server.ts
+import { request } from '$lib/server/experiences';
+export const POST = request.handlePreparation;
+```
+
+For an SSR-only supplied-plan composition, a universal loader can use Kit's
+captured `event.fetch` directly. This low-level transport does not perform managed
+browser adoption or replay; keep explicit event intent empty until that workflow
+is available:
+
+```ts
+// src/routes/[...path]/+page.ts
+import type { PageLoad } from './$types';
+export const prerender = false;
+export const load: PageLoad = async (event) => {
+  const response = await event.fetch('/_exo/primary', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      operation: 'prepare', // 'read' performs an event-free content refresh.
+      routeKey: event.url.pathname + event.url.search,
+      experience: {
+        destinationId: 'your-destination',
+        path: event.url.pathname,
+        personalization: { events: [] },
+      },
+    }),
+  });
+  if (!response.ok) throw new Error('Experience preparation unavailable.');
+  return { result: await response.json() };
+};
+```
+
+Authorize that explicit empty event intent in your server policy. Render the
+returned `plan` through a supplied-plan renderer, with separate application
+presentation for `notFound`, `contentError` and redirect values. The full managed
+loader and browser consumption remain Phase 4 work.
+
+The handlers own one request-local Node facade per operation and destroy it after
+projection, including errors. Actual initial documents use the configured SSR or
+hybrid policy. Direct preparation and Kit data/subrequests remain noncommitting;
+`read` removes event intent. Incoming route URLs select configured Preview
+capability; Preview transfers no visitor state/replay and changes no identity
+cookie. Only ordinary initial SSR documents write or expire identity cookies,
+using the final request profile and persistence consent. Preparation responses
+and their containing document are private/no-store; coordinate the document
+header with other application loaders to avoid duplicate writers.
+
+Phase 3 provides server preparation and safe transport only. The universal
+`request.loadExperience` helper, managed Kit source, request-result adoption and
+navigation integration belong to Phase 4 and are not implemented. The existing
+example has not migrated to this workflow. Keep visitor loading out of prerender;
+static pages use separate public event-free fetching. Native missing-document
+status policy can observe the projected primary result through
+`request.onResult(event, result)` in the server configuration; apply HTTP status
+after `resolve(event)` only to the matching successful HTML document, retaining
+its body and headers. Do not throw speculative Kit errors from preparation. For example, add this
+callback to the server configuration's `request` object and compose this native
+handle with the fetch hook above:
+
+```ts
+// Inside request: { ... } in src/lib/server/experiences.ts
+onResult(event, result) {
+  if (event.route.id !== '/[...path]' || event.isDataRequest || event.isSubRequest ||
+      !['GET', 'HEAD'].includes(event.request.method)) return;
+  const routeKey = event.url.pathname + event.url.search;
+  if (result.routeKey === routeKey) {
+    event.locals.exoDocumentOutcome = { routeKey, notFound: result.notFound === true };
+  }
+},
+```
+
+```ts
+// src/app.d.ts — merge into the application's existing App.Locals.
+declare global {
+  namespace App {
+    interface Locals {
+      exoDocumentOutcome?: { routeKey: string; notFound: boolean };
+    }
+  }
+}
+export {};
+```
+
+```ts
+// src/hooks.server.ts — alongside handleFetch.
+import type { Handle } from '@sveltejs/kit';
+export const handle: Handle = async ({ event, resolve }) => {
+  const response = await resolve(event);
+  const outcome = event.locals.exoDocumentOutcome;
+  if (
+    event.route.id === '/[...path]' &&
+    !event.isDataRequest &&
+    !event.isSubRequest &&
+    ['GET', 'HEAD'].includes(event.request.method) &&
+    outcome?.routeKey === event.url.pathname + event.url.search &&
+    outcome.notFound &&
+    response.status === 200 &&
+    response.headers.get('content-type')?.startsWith('text/html')
+  ) {
+    return new Response(response.body, {
+      status: 404,
+      statusText: 'Not Found',
+      headers: response.headers,
+    });
+  }
+  return response;
+};
+```
+
+This preserves the captured result and application missing-page UI. It supplies
+an HTTP404 document response; it does not select Kit's native `+error.svelte` or
+change serialized `page.status`. Preview acquisition404 and empty success do not
+select the missing-content outcome.
 
 ### Authoring
 

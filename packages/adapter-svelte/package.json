@@ -1,7 +1,7 @@
 {
   "name": "@contentful/experiences-svelte",
   "version": "0.14.1",
-  "description": "Svelte adapter for Contentful Experiences — Server and Client renderers over a PortableRenderPlan",
+  "description": "Svelte adapter for Contentful Experiences \u2014 Server and Client renderers over a PortableRenderPlan",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -19,6 +19,12 @@
       "types": "./dist/kit/client.d.ts",
       "svelte": "./dist/kit/client.js",
       "default": "./dist/kit/client.js"
+    },
+    "./kit/server": {
+      "types": "./dist/kit/server.d.ts",
+      "browser": null,
+      "svelte": "./dist/kit/server.js",
+      "default": "./dist/kit/server.js"
     }
   },
   "files": [
@@ -46,6 +52,7 @@
     "@contentful/experiences-client": "0.11.0",
     "@contentful/experiences-design": "0.13.14",
     "@contentful/experiences-live-preview": "0.7.17",
+    "@contentful/experiences-node": "0.9.1",
     "@contentful/experiences-runtime": "0.4.1",
     "@contentful/experiences-sdk-core": "0.13.15",
     "@contentful/experiences-web": "0.10.1"
