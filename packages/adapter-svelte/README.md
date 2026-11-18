@@ -10,11 +10,181 @@ npm install @contentful/experiences-svelte
 
 This is the only rendering SDK package you install. It re-exports everything you need from `@contentful/experiences-sdk-core`, `@contentful/experiences-design`, and `@contentful/experiences-client`. The optional `@contentful/experiences-live-preview` package is also customer-facing and provides the framework-neutral live-preview client.
 
-The public API mirrors `@contentful/experiences-react` 1:1 in shape; only the rendering primitives change (Svelte 5 `Component`s, Snippets instead of `children: ReactNode`, and `getDesignValues()` instead of `useDesignValues()`).
+The authoring and supplied-rendering APIs follow `@contentful/experiences-react`; the rendering primitives change (Svelte 5 `Component`s, Snippets instead of `children: ReactNode`, and `getDesignValues()` instead of `useDesignValues()`).
 
 ---
 
 ## Public API
+
+### Managed browser integration
+
+Bind your registry once in a portable module:
+
+```ts
+import { createExperiences } from '@contentful/experiences-svelte';
+import { experienceConfig } from './experience-config';
+
+export const {
+  ExperiencesRoot,
+  ExperiencesProvider,
+  Experience,
+  ExperienceRenderer,
+  useManagedExperience,
+} = createExperiences({
+  config: experienceConfig,
+  onRedirect({ path }) {
+    // The host owns navigation and validation of its allowed redirect targets.
+    if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\')) return;
+    window.location.assign(path);
+  },
+});
+```
+
+```svelte
+<script lang="ts">
+  import { ExperiencesRoot, Experience } from './experiences';
+  // Supply an immutable snapshot from your host router after commitment.
+  let { route }: { route: { pathname: string; search: string; title: string } } = $props();
+  const routeKey = $derived(route.pathname + route.search);
+  const pagePayload = $derived({ properties: { title: route.title, path: route.pathname } });
+</script>
+
+<ExperiencesRoot spaceId="your-space" environmentId="master"
+  delivery={{ accessToken: 'browser-scoped-token' }}
+  {routeKey} initialPagePayload={pagePayload} buildPagePayload={() => pagePayload}>
+  {#snippet baseline()}<p>Browse our storefront.</p>{/snippet}
+  <Experience destinationId="your-destination" path={route.pathname}
+    loadingFallback={baseline} errorFallback={baseline} />
+</ExperiencesRoot>
+```
+
+Binding constructs no Web SDK. One stable root owns one browser activation;
+`ExperiencesProvider` instead captures one caller-owned `sdk` per activation and
+never constructs or destroys it; later `sdk` prop changes are ignored. An explicit
+key/remount can capture a fresh SDK after the caller retires the old instance.
+Use separate browser credentials or an authenticated proxy. The supplied-plan
+`ExperienceRenderer` removes only the registry prop from the existing renderer;
+it starts no content fetch or Preview subscription and needs no managed root.
+
+`Experience` selects by `experienceId`, `destinationId` + `path`, or
+`destinationId` + `nodeId`. By-ID calls retain `parameters` and `extensions`;
+Destination selectors reject either field when defined. `locale`,
+`personalization`, `metadata`, `debug` and `resolveOptions` retain their runtime
+meanings. Selectors are validated before seeds or normalization. `initialPlan`
+and `initialError` seed the operation without a startup content fetch, including
+successful empty content. Equivalent views share one root primary; a selectorless
+`Experience` observes that primary. Independent simultaneous selections require
+separate application composition; they do not create a multi-Experience loader.
+
+Call the bound `useManagedExperience(() => ({ experienceId }))` during component
+initialization to select reactively, or `useManagedExperience()` to observe the
+current primary. Read properties on its returned object to keep Svelte reactivity:
+`status`, `data`, `error`, `redirect`, `result`, `retry()` and `refresh()`.
+`result` describes the complete current local operation; `data` is the applicable
+displayed plan and may retain an earlier complete plan during an acquisition failure,
+including offline, timeout and unclassified transport errors. Retention requires
+that the source, visitor identity, route, locale and Preview session remain applicable; authoritative
+missing/auth outcomes select baseline. The latest result/error stays separate from
+that retained plan. `result?.notFound` marks an authoritative missing-content
+outcome; applications can render a recognizable “Page not found” message and
+return link in their snippet. Preview acquisition404 and successful empty plans
+do not set that flag.
+Retry and refresh are event-free reads. These portable operations are separate
+from future Kit request loading and its private result projection.
+
+Visitor reset preserves the completed displayed plan and its exact operation
+result. It clears visitor state and ends pending work and old page intent without
+fetching replacement content, replaying events or repeating resolution callbacks.
+A canceled refresh restores that completed presentation; a new explicit refresh
+can load replacement content without creating page intent. Applications requiring
+immediate concealment clear or unmount the presentation explicitly. Source, route,
+locale and Preview-session changes still apply their own content boundaries.
+
+Without usable content, `loadingFallback` or `errorFallback` renders the
+application baseline. Usable applicable content takes priority over these
+fallbacks. A `children` snippet receives the managed result and takes explicit
+control over presentation. The SDK renders no raw content error text by default.
+`onExperienceResolved(current)` and `onExperienceError(error, current)` run after
+presentation commits, including an error alongside retained content. Replacing a
+callback does not repeat a notification. `onRedirect(redirect, current)` may be
+overridden on a presentation; host navigation runs once for the primary outcome.
+A thrown redirect callback becomes a managed content error.
+
+The host supplies committed route props only: pending, canceled and preload-only
+navigation must leave them unchanged. `routeKey` starts with `/` and is compared
+verbatim. Ordinary routers should use pathname plus the original search string,
+without re-encoding its query or including ordinary fragments. Hash routers may
+choose a root-relative logical identity. With Preview enabled, a hash router must
+use the full committed `pathname + search + hash`, for example
+`/shell?preview_session_id=one#/products`, so session entry/change/exit changes the
+existing `routeKey`. The host must report that commitment; the SDK does not observe
+unreported URL mutations or require a Preview-specific component key/wrapper.
+Pass pathname alone for Destination lookup. Payload/callback-only updates do not
+start another page attempt. The root connects page intent, consent retry and an
+optional actual server handoff to existing Web policy; applications need no manual
+page send. Only replay matching the committed route suppresses XDA page injection;
+mere handoff presence does not. Web owns complete hydration/replay validation.
+Retained content never replays its previous handoff. Pair a complete server
+handoff with its returned plan/error as the presentation seed; the handoff itself
+carries state/events, not the content seed.
+Automatic consumption of the optional root handoff belongs to that committed
+route's owner lifetime. Reset ends that authority; replacing the prop on the same
+route does not restore it. Event-consent changes cancel event work through Web's
+own admission policy while leaving the owner/content lifetime intact. The still-
+current eligible page can retry after explicit denial→grant or withdrawal→grant;
+blocked nonpage intent is never restored. A fresh
+application-owned transfer can use Web's explicit complete-handoff operation;
+native Kit request identity and adoption are separate integration work.
+
+Configure optional `preview` capability on the root. A nonempty trimmed
+`preview_session_id` in the committed URL selects isolated Preview mode. The same
+managed presentation consumes runtime snapshots and matching updates; session
+entry, exit and replacement end the old owned activation before creating another.
+Snapshot/socket failures preserve applicable content from the same session or the
+application baseline. Event-consent changes do not cancel Preview content,
+including snapshot-only acquisition; owner reset, source/locale/session changes
+and destruction still guard delayed content. Legacy owning Preview hooks remain available for existing
+consumers. Static/supplied use is allowed inside managed roots without changing
+the active owner's Preview status; supplying a competing Preview client is refused. Kit server loading, native
+preparation and example migrations are separate integration work.
+
+### Kit client foundation
+
+`bindSvelteKitClientExperiences` from `/kit/client` binds `request.init`,
+`request.ExperiencesRoot` and `request.ExperiencesProvider`. With browser-safe Web
+configuration, it creates an owned SDK at activation. Alternatively, select an
+existing caller-owned SDK before init; no duplicate credentials are required:
+
+```ts
+// Browser-only startup, before mounting the client root.
+import { ContentfulExperiences } from '@contentful/experiences-web';
+import { bindSvelteKitClientExperiences } from '@contentful/experiences-svelte/kit/client';
+import { experienceConfig } from './experience-config';
+
+const sdk = new ContentfulExperiences({
+  spaceId: 'your-space',
+  environmentId: 'master',
+  delivery: { accessToken: 'browser-scoped-token' },
+});
+const { request } = bindSvelteKitClientExperiences({
+  config: experienceConfig,
+  endpoint: '/_exo/primary',
+  sdk,
+});
+await request.init();
+const { ExperiencesRoot } = request;
+// Mount this bound root; the application calls sdk.destroy() at its lifetime end.
+```
+
+For Kit early startup, export the chosen binding's `request.init` from
+`hooks.client.ts`. Construct an injected Web SDK only in browser code; do not
+import an SDK-constructing module during server rendering. The configured owned
+path keeps binding/SSR neutral. Init and the bound root reuse the chosen instance;
+ownership mode cannot switch after startup. This provisions the same singleton
+SDK for that activation; the application owns its destruction. Web browser state
+uses shared module signals, so SDK instances are not independent state containers.
+A fresh owned activation after complete teardown remains supported. Native Kit
+loading/preparation remains separate future integration work.
 
 ### Authoring
 

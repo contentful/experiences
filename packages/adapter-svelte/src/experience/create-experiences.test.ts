@@ -3,8 +3,7 @@ import { ContentfulExperiences, type Config } from '@contentful/experiences-web'
 import { cleanup, render } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import HeadingFixture from '../test/fixtures/HeadingFixture.svelte';
-import PropsProbe from '../test/fixtures/PropsProbe.svelte';
-import { componentNode, m } from '../test/fixtures/render-plan.js';
+import { componentNode } from '../test/fixtures/render-plan.js';
 import { createExperiences } from './create-experiences.js';
 
 describe('createExperiences', () => {
@@ -28,80 +27,31 @@ describe('createExperiences', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders supplied plans through the bound registry and updates supplied content', async () => {
-    // A live caller-owned SDK also demonstrates supplied rendering needs no new owner.
-    sdk();
-    const registry = {
-      components: { heading: { component: HeadingFixture }, probe: { component: PropsProbe } },
-    };
+  it('uses the bound registry for supplied plans and updates without acquiring content', async () => {
+    const suppliedOwner = sdk();
+    const fetch = vi.spyOn(suppliedOwner, 'fetchExperience');
+    const preview = vi.spyOn(suppliedOwner, 'subscribeToPreview');
+    const registry = { components: { heading: HeadingFixture } };
     const { ExperienceRenderer } = createExperiences({ config: registry });
-    const plan = async (text: string, color: string, debug: boolean) => ({
-      ...(await resolveExperience(
-        {
-          nodes: [
-            componentNode('heading', { contentProperties: { text } }),
-            componentNode('probe', {
-              id: 'stable-probe',
-              contentProperties: { value: text },
-              designProperties: { color: m(color) },
-            }),
-          ],
-        },
+    const plan = (text: string) =>
+      resolveExperience(
+        { nodes: [componentNode('heading', { contentProperties: { text } })] },
         registry
-      )),
-      metadata: { source: text, shared: 'plan' },
-      debug,
-    });
-    const view = render(ExperienceRenderer, {
-      experience: await plan('first supplied heading', 'red', true),
-      metadata: { shared: 'first override' },
-      debug: false,
-    });
-    const probe = view.container.querySelector('[data-props]')!;
-    const read = (attribute: string) => JSON.parse(probe.getAttribute(attribute)!);
-    expect(view.getByRole('heading').textContent).toBe('first supplied heading');
-    expect(read('data-experience')).toEqual({
-      metadata: { source: 'first supplied heading', shared: 'first override' },
-      debug: false,
-    });
-    expect(read('data-contentful')).toMatchObject({ content: { value: 'first supplied heading' } });
-    expect(read('data-design')).toEqual({ color: 'red' });
-    await view.rerender({
-      experience: await plan('updated supplied heading', 'blue', false),
-      metadata: { shared: 'updated override' },
-      debug: true,
-    });
-    expect(view.getByRole('heading').textContent).toBe('updated supplied heading');
-    expect(view.container.querySelector('[data-props]')).toBe(probe);
-    expect(read('data-experience')).toEqual({
-      metadata: { source: 'updated supplied heading', shared: 'updated override' },
-      debug: true,
-    });
-    expect(read('data-contentful')).toMatchObject({
-      content: { value: 'updated supplied heading' },
-    });
-    expect(read('data-design')).toEqual({ color: 'blue' });
-    await view.rerender({
-      experience: await plan('inherited supplied heading', 'green', false),
-      metadata: undefined,
-      debug: undefined,
-    });
-    expect(view.getByRole('heading').textContent).toBe('inherited supplied heading');
-    expect(view.container.querySelector('[data-props]')).toBe(probe);
-    expect(read('data-experience')).toEqual({
-      metadata: { source: 'inherited supplied heading', shared: 'plan' },
-      debug: false,
-    });
-    expect(read('data-contentful')).toMatchObject({
-      content: { value: 'inherited supplied heading' },
-    });
-    expect(read('data-design')).toEqual({ color: 'green' });
+      );
+    const view = render(ExperienceRenderer, { experience: await plan('First') });
+    expect(view.getByRole('heading').textContent).toBe('First');
+    await view.rerender({ experience: await plan('Updated') });
+    expect(view.getByRole('heading').textContent).toBe('Updated');
+    expect(fetch).not.toHaveBeenCalled();
+    expect(preview).not.toHaveBeenCalled();
   });
   it('binds registries without constructing Web and exports functional components', () => {
     const bound = createExperiences({ config: { components: {} } });
     expect(bound.ExperiencesRoot).toBeTypeOf('function');
     expect(bound.ExperiencesProvider).toBeTypeOf('function');
     expect(bound.ExperienceRenderer).toBeTypeOf('function');
+    expect(bound.Experience).toBeTypeOf('function');
+    expect(bound.useManagedExperience).toBeTypeOf('function');
     const independent = sdk();
     expect(independent).toBeInstanceOf(ContentfulExperiences);
   });

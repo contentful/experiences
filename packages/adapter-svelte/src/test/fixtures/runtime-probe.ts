@@ -1,5 +1,6 @@
 import type { WebExperiencesRuntime } from '@contentful/experiences-web';
 import type { ExperiencesActions, ExperiencesState } from '../../runtime/context.svelte.js';
+import type { RuntimeScope } from '../../runtime/context.svelte.js';
 import type { RuntimeOwner } from '../../runtime/owner-controller.svelte.js';
 
 export type RuntimeProbeCapture = (context: {
@@ -7,4 +8,5 @@ export type RuntimeProbeCapture = (context: {
   state: ExperiencesState;
   actions: ExperiencesActions;
   owner: RuntimeOwner;
+  scope: RuntimeScope;
 }) => void;

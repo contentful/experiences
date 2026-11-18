@@ -173,7 +173,7 @@ export abstract class WebContentRuntime<
       share: (load, final, revision) => {
         const resolve = mergePreviewResolveOptions(this.config, resolveOptions);
         const key =
-          options.personalization?.events !== undefined
+          currentPage?.isCurrent !== undefined || options.personalization?.events !== undefined
             ? undefined
             : getExperienceSourceKey(
                 {
@@ -269,7 +269,7 @@ export abstract class WebContentRuntime<
     assertPageCurrent();
     const load = async () => {
       const result = await request.send(final);
-      assertCurrent();
+      assertPageCurrent();
       if (
         !this.isPreview &&
         (this.profileRevision !== profileRevision || this.identityRevision !== identityRevision)
@@ -278,7 +278,7 @@ export abstract class WebContentRuntime<
       await this.adoptFetchedState(
         'personalization' in result ? result.personalization : undefined,
         () => {
-          assertCurrent();
+          assertPageCurrent();
           if (
             !this.isPreview &&
             (this.profileRevision !== profileRevision || this.identityRevision !== identityRevision)
@@ -287,7 +287,7 @@ export abstract class WebContentRuntime<
           return this.stateRevision === stateRevision;
         }
       );
-      assertCurrent();
+      assertPageCurrent();
       return result;
     };
     return request.share

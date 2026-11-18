@@ -282,6 +282,31 @@ describe.runIf(environment === 'browser')('Web SDK in a browser', () => {
     }).toEqual({ events: true, persistence: true });
   });
 
+  it.each([false, true])(
+    'captures owner authority across consent changes until reset or destruction (initial consent=%s)',
+    (consent) => {
+      const runtime = createRuntime({ defaults: { consent } });
+      const initial = runtime.captureLifetime();
+      expect(initial()).toBe(true);
+      runtime.consent({ persistence: false });
+      expect(initial()).toBe(true);
+      runtime.consent({ events: false });
+      expect(initial()).toBe(true);
+      runtime.consent({ events: true });
+      expect(initial()).toBe(true);
+      runtime.reset();
+      expect(initial()).toBe(false);
+      runtime.consent({ events: true });
+      expect(initial()).toBe(false);
+
+      const afterReset = runtime.captureLifetime();
+      expect(afterReset()).toBe(true);
+      runtime.destroy();
+      expect(afterReset()).toBe(false);
+      expect(runtime.captureLifetime()()).toBe(false);
+    }
+  );
+
   it('rejects selected content completing after consent withdrawal instead of returning it to a managed view', async () => {
     let finish!: (plan: unknown) => void;
     const transport = vi

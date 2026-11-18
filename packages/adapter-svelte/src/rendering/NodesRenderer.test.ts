@@ -1,4 +1,3 @@
-import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
 import { render } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
@@ -7,7 +6,7 @@ import ButtonFixture from '../test/fixtures/ButtonFixture.svelte';
 import ExperienceTemplateFixture from '../test/fixtures/ExperienceTemplateFixture.svelte';
 import HeadingFixture from '../test/fixtures/HeadingFixture.svelte';
 import PropsProbe from '../test/fixtures/PropsProbe.svelte';
-import WrappingContainerFixture from '../test/fixtures/WrappingContainerFixture.svelte';
+import ContainerFixture from '../test/fixtures/ContainerFixture.svelte';
 import { componentNode, sysWithExperienceTemplate } from '../test/fixtures/render-plan.js';
 import ClientExperienceRenderer from './ClientExperienceRenderer.svelte';
 import ServerExperienceRenderer from './ServerExperienceRenderer.svelte';
@@ -43,58 +42,45 @@ describe('supplied rendering', () => {
 });
 
 describe('NodesRenderer — slot children as an array', () => {
-  const childrenPayload = (): ExperiencePayload => ({
-    nodes: [
-      componentNode('contentful-container', {
-        id: 'c',
-        slots: {
-          children: [
-            componentNode('contentful-heading', {
-              id: 'a',
-              contentProperties: { text: 'one' },
-            }),
-            componentNode('contentful-heading', {
-              id: 'b',
-              contentProperties: { text: 'two' },
-            }),
-            componentNode('contentful-heading', {
-              id: 'd',
-              contentProperties: { text: 'three' },
-            }),
-          ],
-        },
-      }),
-    ],
-  });
-
   it('passes slot children as a Snippet[] a component can wrap individually', async () => {
     const cfg: Config = {
       components: {
-        'contentful-container': WrappingContainerFixture,
+        'contentful-container': ContainerFixture,
         'contentful-heading': HeadingFixture,
       },
     };
-    const plan = await resolveExperience(childrenPayload(), cfg);
+    const plan = await resolveExperience(
+      {
+        nodes: [
+          componentNode('contentful-container', {
+            slots: {
+              children: ['one', 'two'].map((text) =>
+                componentNode('contentful-heading', {
+                  contentProperties: { text },
+                })
+              ),
+            },
+          }),
+        ],
+      },
+      cfg
+    );
     const { container } = render(ServerExperienceRenderer, {
       props: { experience: plan, config: cfg },
     });
 
     // The component received a real array of the right length.
     expect(container.querySelector('[data-container]')?.getAttribute('data-array')).toBe('true');
-    expect(container.querySelector('[data-container]')?.getAttribute('data-count')).toBe('3');
+    expect(container.querySelector('[data-container]')?.getAttribute('data-count')).toBe('2');
 
     // Each child got its own wrapper — proves per-child rendering control.
     const wrappers = container.querySelectorAll('.wrap');
-    expect(wrappers.length).toBe(3);
-    expect(container.querySelector('[data-index="0"]')).not.toBeNull();
-    expect(container.querySelector('[data-index="2"]')).not.toBeNull();
-    expect(container.textContent).toContain('one');
-    expect(container.textContent).toContain('three');
+    expect(Array.from(wrappers).map((wrapper) => wrapper.textContent)).toEqual(['one', 'two']);
   });
 
   it('renders an empty container when the slot has no children', async () => {
     const cfg: Config = {
-      components: { 'contentful-container': WrappingContainerFixture },
+      components: { 'contentful-container': ContainerFixture },
     };
     const plan = await resolveExperience(
       { nodes: [componentNode('contentful-container', { id: 'c' })] },

@@ -1,7 +1,8 @@
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import { render } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
-import LivePreviewPlanProbe from '../test/fixtures/LivePreviewPlanProbe.svelte';
+import PlanProbe from '../test/fixtures/PlanProbe.svelte';
+import { useLivePreview } from './use-live-preview.svelte.js';
 import type { UseLivePreviewOptions } from './use-live-preview.svelte.js';
 
 const initialPlan: PortableRenderPlan = {
@@ -25,7 +26,9 @@ describe('useLivePreview', () => {
       resolveOptions: { config: { components: {} } },
     };
 
-    const view = render(LivePreviewPlanProbe, { props: { options } });
+    const view = render(PlanProbe<UseLivePreviewOptions>, {
+      props: { options, use: useLivePreview },
+    });
 
     expect(view.container.textContent).toBe('initial');
   });

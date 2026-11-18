@@ -253,6 +253,34 @@ describe('WebContentRuntime ordinary evaluation', () => {
     );
   });
 
+  it.each([0, 1])(
+    'keeps same-selector caller lifetimes independent when caller %s is superseded',
+    async (stale) => {
+      const sdk = new ContentRuntime(),
+        response = deferred<PortableRenderPlan>(),
+        current = [true, true];
+      const fetch = vi
+        .spyOn(Runtime.prototype, 'fetchExperience')
+        .mockReturnValue(response.promise);
+      const calls = current.map((_, index) =>
+        sdk.fetchExperience({ experienceId: 'experience' }, resolve, {
+          routeKey: '/page',
+          isCurrent: () => current[index] === true,
+        })
+      );
+      const outcomes = Promise.allSettled(calls);
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+      current[stale] = false;
+      response.resolve(plan);
+      const results = await outcomes;
+      expect(results[stale]).toMatchObject({
+        status: 'rejected',
+        reason: expect.objectContaining({ message: 'Experiences fetch was superseded' }),
+      });
+      expect(results[1 - stale]).toEqual({ status: 'fulfilled', value: plan });
+    }
+  );
+
   it('rejects stale lifetime and independent identity changes but permits its own intercepted state adoption', async () => {
     const sdk = new ContentRuntime({ defaults: { profile: completeProfile('visitor') } }),
       pending = deferred<PortableRenderPlan>();
@@ -356,8 +384,10 @@ describe('WebContentRuntime ordinary evaluation', () => {
     ['ordinary', true],
     ['preview', false],
     ['preview', true],
+    ['caller', false],
+    ['caller', true],
   ] as const)(
-    'retains content but rejects stale %s state (pending interception: %s)',
+    'preserves current state when %s work becomes stale (pending interception: %s)',
     async (source, interception) => {
       const configuration =
         source === 'preview'
@@ -377,7 +407,20 @@ describe('WebContentRuntime ordinary evaluation', () => {
       const stale = deferred<PortableRenderPlan>(),
         gate = deferred<void>(),
         intercepted = deferred<void>();
-      const staleData = { profile: completeProfile('visitor'), changes: [] };
+      const fresh = [
+        {
+          type: 'Variable' as const,
+          key: 'banner',
+          value: 'fresh',
+          meta: { experienceId: 'experiment', variantIndex: 1 },
+        },
+      ];
+      if (source === 'caller') changesSignal.value = fresh;
+      let current = true;
+      const staleData = {
+        profile: completeProfile(source === 'caller' ? 'stale' : 'visitor'),
+        changes: [],
+      };
       if (interception)
         sdk.interceptors.state.add(async (state) => {
           if (state.changes?.length === 0) {
@@ -390,29 +433,27 @@ describe('WebContentRuntime ordinary evaluation', () => {
         .spyOn(Runtime.prototype, 'fetchExperience')
         .mockReturnValueOnce(stale.promise);
       const load = (version: string) =>
-        sdk.fetchExperience({ experienceId: 'experience', parameters: { version } }, resolve);
+        sdk.fetchExperience(
+          { experienceId: 'experience', parameters: { version } },
+          resolve,
+          source === 'caller' ? { routeKey: '/old', isCurrent: () => current } : undefined
+        );
       const pending = load('stale');
       await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
       if (interception) {
         stale.resolve({ ...plan, personalization: staleData });
         await intercepted.promise;
       }
-      const fresh = [
-        {
-          type: 'Variable' as const,
-          key: 'banner',
-          value: 'fresh',
-          meta: { experienceId: 'experiment', variantIndex: 1 },
-        },
-      ];
       fetch.mockResolvedValue({
         ...plan,
         personalization: { profile: completeProfile('visitor'), changes: fresh },
       });
-      await load('fresh');
+      if (source === 'caller') current = false;
+      else await load('fresh');
       if (!interception) stale.resolve({ ...plan, personalization: staleData });
       gate.resolve();
-      await expect(pending).resolves.toMatchObject({ personalization: staleData });
+      if (source === 'caller') await expect(pending).rejects.toThrow('superseded');
+      else await expect(pending).resolves.toMatchObject({ personalization: staleData });
       expect(changesSignal.peek()).toEqual(fresh);
       expect(sdk.states.profile.current).toEqual(completeProfile('visitor'));
     }

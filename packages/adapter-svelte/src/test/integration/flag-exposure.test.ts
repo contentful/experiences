@@ -2,6 +2,7 @@ import { ContentfulExperiences, type Config } from '@contentful/experiences-web'
 import { cleanup, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { profile } from '../fixtures/runtime-profile.js';
 import RuntimeHarness from '../fixtures/RuntimeHarness.svelte';
 const config: Config = {
   spaceId: 'space',
@@ -27,27 +28,7 @@ describe('reactive flags and Web exposure', () => {
       allowedEventTypes: [],
       defaults: {
         consent: false,
-        profile: {
-          id: 'visitor',
-          stableId: 'visitor',
-          random: 0.5,
-          audiences: [],
-          traits: {},
-          location: {},
-          session: {
-            isReturningVisitor: false,
-            landingPage: {
-              path: '/',
-              query: {},
-              referrer: '',
-              search: '',
-              url: 'https://example.com/',
-            },
-            count: 1,
-            activeSessionLength: 0,
-            averageSessionLength: 0,
-          },
-        },
+        profile: profile('visitor'),
         changes: [
           {
             type: 'Variable',

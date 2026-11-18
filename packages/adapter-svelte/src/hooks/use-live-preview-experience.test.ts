@@ -1,23 +1,27 @@
 import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 import { type Config } from '@contentful/experiences-web';
 import { cleanup, render } from '@testing-library/svelte';
-import { tick } from 'svelte';
+import { flushSync, tick } from 'svelte';
+import { fromStore, writable } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import LivePreviewExperienceProbe from '../test/fixtures/LivePreviewExperienceProbe.svelte';
+import { componentNode } from '../test/fixtures/render-plan.js';
 import RuntimeHarness from '../test/fixtures/RuntimeHarness.svelte';
-import type { UseLivePreviewExperienceOptions } from './use-live-preview-experience.svelte.js';
+import {
+  useLivePreviewExperience,
+  type UseLivePreviewExperienceOptions,
+} from './use-live-preview-experience.svelte.js';
+import { useLivePreview } from './use-live-preview.svelte.js';
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = [];
 
-  readonly url: string;
   readonly close = vi.fn();
   onopen: ((event: { type: string }) => void) | null = null;
   onclose: ((event: { code: number; reason: string }) => void) | null = null;
   onmessage: ((event: { data: unknown }) => void) | null = null;
 
-  constructor(url: string) {
-    this.url = url;
+  constructor() {
     FakeWebSocket.instances.push(this);
   }
 
@@ -35,21 +39,8 @@ class FakeWebSocket {
 }
 
 const payload = (title: string): ExperiencePayload => ({
-  nodes: [
-    {
-      component: {
-        sys: {
-          type: 'ResourceLink',
-          linkType: 'Contentful:Component',
-          urn: 'crn:contentful:::experience:components/hero',
-        },
-      },
-      contentProperties: { title },
-      designProperties: {},
-      slots: {},
-    },
-  ],
   sys: { type: 'Experience' },
+  nodes: [componentNode('hero', { contentProperties: { title } })],
 });
 
 const previewSessionOptions = {
@@ -79,74 +70,22 @@ describe('useLivePreviewExperience', () => {
     vi.unstubAllGlobals();
   });
 
-  it('returns initial raw data and updates from the Preview Session', async () => {
-    const initialPayload = payload('initial');
+  it('forwards live content and status, retains content during reconnect and exposes terminal failure', async () => {
+    vi.useFakeTimers();
+    const postMessage = vi.spyOn(window.parent, 'postMessage').mockImplementation(() => undefined);
     const view = render(LivePreviewExperienceProbe, {
-      props: { options: options({ initialPayload }) },
+      props: { options: options({ initialPayload: payload('initial') }) },
     });
     expect(view.container.textContent).toBe('initial');
     expect(FakeWebSocket.instances).toHaveLength(1);
-
-    FakeWebSocket.instances[0]?.emitMessage(
+    expect(postMessage).not.toHaveBeenCalled();
+    FakeWebSocket.instances[0]!.emitOpen();
+    FakeWebSocket.instances[0]!.emitMessage(
       JSON.stringify({ type: 'next', data: payload('updated') })
     );
-    await vi.waitFor(() => expect(view.container.textContent).toBe('updated'));
-  });
-
-  it('does not connect when a session credential is missing', () => {
-    const postMessage = vi.spyOn(window.parent, 'postMessage').mockImplementation(() => undefined);
-    const view = render(LivePreviewExperienceProbe, {
-      props: {
-        options: options({
-          initialPayload: payload('initial'),
-          previewSessionOptions: { ...previewSessionOptions, sessionId: undefined },
-        }),
-      },
-    });
-
-    expect(view.container.textContent).toBe('initial');
-    expect(FakeWebSocket.instances).toHaveLength(0);
+    await tick();
+    expect(view.container.textContent).toBe('updated');
     expect(postMessage).toHaveBeenCalledWith(
-      {
-        source: 'experiences/live-preview',
-        type: 'status',
-        status: 'static',
-      },
-      '*'
-    );
-  });
-
-  it('sends live status after the session socket opens', async () => {
-    const postMessage = vi.spyOn(window.parent, 'postMessage').mockImplementation(() => undefined);
-    render(LivePreviewExperienceProbe, { props: { options: options() } });
-
-    expect(postMessage).not.toHaveBeenCalled();
-
-    FakeWebSocket.instances[0]?.emitOpen();
-    await vi.waitFor(() =>
-      expect(postMessage).toHaveBeenCalledWith(
-        {
-          source: 'experiences/live-preview',
-          type: 'status',
-          status: 'live',
-        },
-        '*'
-      )
-    );
-  });
-
-  it('does not send static status while the session socket reconnects', async () => {
-    vi.useFakeTimers();
-    const postMessage = vi.spyOn(window.parent, 'postMessage').mockImplementation(() => undefined);
-    render(LivePreviewExperienceProbe, { props: { options: options() } });
-
-    FakeWebSocket.instances[0]?.emitOpen();
-    FakeWebSocket.instances[0]?.emitClose({ code: 1006, reason: 'network' });
-    vi.advanceTimersByTime(100);
-    FakeWebSocket.instances[1]?.emitOpen();
-
-    expect(postMessage).toHaveBeenCalledTimes(1);
-    expect(postMessage).toHaveBeenLastCalledWith(
       {
         source: 'experiences/live-preview',
         type: 'status',
@@ -154,40 +93,45 @@ describe('useLivePreviewExperience', () => {
       },
       '*'
     );
-  });
-
-  it('exposes a connection error after retries are exhausted', async () => {
-    vi.useFakeTimers();
-    const view = render(LivePreviewExperienceProbe, { props: { options: options() } });
-
-    for (let retry = 0; retry < 3; retry += 1) {
-      FakeWebSocket.instances.at(-1)?.emitClose({ code: 1006, reason: 'network' });
+    FakeWebSocket.instances[0]!.emitClose({ code: 1006, reason: 'network' });
+    vi.runOnlyPendingTimers();
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    FakeWebSocket.instances[1]!.emitOpen();
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    expect(view.container.textContent).toBe('updated');
+    for (let retry = 0; retry < 4; retry += 1) {
+      FakeWebSocket.instances.at(-1)!.emitClose({ code: 1006, reason: 'network' });
       vi.runOnlyPendingTimers();
     }
-    FakeWebSocket.instances.at(-1)?.emitClose({ code: 1006, reason: 'network' });
     await tick();
-
     expect(view.container.querySelector('output')?.dataset.error).toBe(
       'LivePreviewConnectionError'
     );
+    expect(view.container.textContent).toBe('updated');
+    view.unmount();
   });
 
-  it('sends static status without Preview Session options', () => {
-    const postMessage = vi.spyOn(window.parent, 'postMessage').mockImplementation(() => undefined);
-    render(LivePreviewExperienceProbe, {
-      props: { options: { initialPayload: payload('initial') } },
-    });
-
-    expect(FakeWebSocket.instances).toHaveLength(0);
-    expect(postMessage).toHaveBeenCalledWith(
-      {
-        source: 'experiences/live-preview',
-        type: 'status',
-        status: 'static',
-      },
-      '*'
-    );
-  });
+  it.each([undefined, { ...previewSessionOptions, sessionId: undefined }])(
+    'keeps initial content and reports static without complete session options (%s)',
+    (previewSessionOptions) => {
+      const postMessage = vi
+        .spyOn(window.parent, 'postMessage')
+        .mockImplementation(() => undefined);
+      const view = render(LivePreviewExperienceProbe, {
+        props: { options: { initialPayload: payload('initial'), previewSessionOptions } },
+      });
+      expect(view.container.textContent).toBe('initial');
+      expect(FakeWebSocket.instances).toHaveLength(0);
+      expect(postMessage).toHaveBeenCalledWith(
+        {
+          source: 'experiences/live-preview',
+          type: 'status',
+          status: 'static',
+        },
+        '*'
+      );
+    }
+  );
 });
 
 describe('useLivePreviewExperience in managed context', () => {
@@ -204,9 +148,53 @@ describe('useLivePreviewExperience in managed context', () => {
     vi.restoreAllMocks();
   });
 
-  it('rejects the legacy Preview owner inside managed context', () => {
-    expect(() => render(RuntimeHarness, { config, legacy: true })).toThrow(
-      'Legacy Preview hooks cannot own'
-    );
-  });
+  it.each([undefined, { ...previewSessionOptions, sessionId: undefined }])(
+    'preserves supplied payload and plan without publishing legacy status (%s)',
+    (previewSessionOptions) => {
+      const postMessage = vi
+        .spyOn(window.parent, 'postMessage')
+        .mockImplementation(() => undefined);
+      const initialPayload = payload('supplied');
+      const initialPlan = { nodes: [], metadata: {}, debug: false, diagnostics: [] };
+      let supplied: ReturnType<typeof useLivePreviewExperience> | undefined;
+      let plan: ReturnType<typeof useLivePreview> | undefined;
+      const view = render(RuntimeHarness, {
+        config,
+        initialize() {
+          supplied = useLivePreviewExperience(() => ({ initialPayload, previewSessionOptions }));
+          plan = useLivePreview(() => ({
+            previewSessionOptions,
+            initialPlan,
+            resolveOptions: { config: { components: {} } },
+          }));
+        },
+      });
+      expect(supplied?.data).toEqual(initialPayload);
+      expect(supplied?.error).toBeUndefined();
+      expect(plan?.data).toEqual(initialPlan);
+      expect(plan?.error).toBeUndefined();
+      expect(postMessage).not.toHaveBeenCalled();
+      view.unmount();
+    }
+  );
+
+  it.each([false, true])(
+    'refuses competing Preview client creation (configured later: %s)',
+    (later) => {
+      const configured = writable(later ? undefined : previewSessionOptions);
+      const current = fromStore(configured);
+      const initialize = () =>
+        useLivePreviewExperience(() => ({ previewSessionOptions: current.current }));
+      if (later) {
+        render(RuntimeHarness, { config, initialize });
+        expect(() => flushSync(() => configured.set(previewSessionOptions))).toThrow(
+          'Legacy Preview hooks cannot own'
+        );
+      } else {
+        expect(() => render(RuntimeHarness, { config, initialize })).toThrow(
+          'Legacy Preview hooks cannot own'
+        );
+      }
+    }
+  );
 });

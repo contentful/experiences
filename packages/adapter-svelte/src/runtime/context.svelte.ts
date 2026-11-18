@@ -1,7 +1,15 @@
 import { getContext, onDestroy, setContext, untrack } from 'svelte';
 import { createSubscriber } from 'svelte/reactivity';
-import type { Observable, States, WebExperiencesRuntime } from '@contentful/experiences-web';
+import type {
+  ContentfulExperiences,
+  Observable,
+  States,
+  WebExperiencesRuntime,
+} from '@contentful/experiences-web';
 import type { OwnerSnapshot, RuntimeOwner } from './owner-controller.svelte.js';
+
+import { createPrimarySource, type PrimarySource } from '../experience/primary-source.svelte.js';
+import { createPageSequence, type PageSequence } from './page-sequence.svelte.js';
 
 const RUNTIME_KEY = Symbol('@contentful/experiences-svelte::runtime');
 type StateKey = Exclude<keyof States, 'flag'>;
@@ -30,28 +38,35 @@ export type ExperiencesActions = Pick<
   | 'tracking'
 >;
 
-/** One Svelte context per activation, forwarding injected SDK identity changes. */
+/** One Svelte context per activation, from its initial snapshot through disposal. */
 export interface RuntimeScope {
   readonly owner: RuntimeOwner;
+  readonly source: PrimarySource;
+  readonly route: PageSequence;
   readonly runtime: WebExperiencesRuntime;
   readonly state: ExperiencesState;
   dispose(): void;
 }
 
 export function setRuntimeScope(owner: RuntimeOwner): RuntimeScope {
+  const getSdk = () =>
+    owner.current.status === 'ready' ? (owner.current.sdk as ContentfulExperiences) : undefined;
+  const route = createPageSequence(getSdk);
+  const source = createPrimarySource({ getSdk, getLocale: () => state.locale, route });
   let active = true;
   const cleanups = new Set<() => void>();
-  const cells = new WeakMap<
-    WebExperiencesRuntime,
-    Map<StateKey | `flag:${string}`, () => unknown>
+  const cells = new Map<
+    StateKey | `flag:${string}`,
+    {
+      sdk: WebExperiencesRuntime;
+      read(): unknown;
+    }
   >();
 
   function read<T>(key: StateKey | `flag:${string}`, select: (states: States) => Observable<T>): T {
     const sdk = owner.current.sdk;
-    let cache = cells.get(sdk);
-    if (!cache) cells.set(sdk, (cache = new Map()));
-    let cell = cache.get(key);
-    if (!cell) {
+    let cell = cells.get(key);
+    if (cell?.sdk !== sdk) {
       const observable = untrack(() => select(sdk.states));
       let value: T;
       let connected = false;
@@ -77,13 +92,16 @@ export function setRuntimeScope(owner: RuntimeOwner): RuntimeScope {
         else stop();
         return stop;
       });
-      cell = () => {
-        subscribe();
-        return connected ? value : untrack(() => observable.current);
+      cell = {
+        sdk,
+        read() {
+          subscribe();
+          return connected ? value : untrack(() => observable.current);
+        },
       };
-      cache.set(key, cell);
+      cells.set(key, cell);
     }
-    return cell() as T;
+    return cell.read() as T;
   }
 
   const state = new Proxy(
@@ -112,11 +130,7 @@ export function setRuntimeScope(owner: RuntimeOwner): RuntimeScope {
   const methods = new Map<PropertyKey, unknown>();
   const dispose = () =>
     untrack(() => {
-      try {
-        scope.dispose();
-      } finally {
-        owner.dispose();
-      }
+      scope.dispose();
     });
   const tracking = new Proxy({} as WebExperiencesRuntime['tracking'], {
     get(_target, key) {
@@ -134,6 +148,17 @@ export function setRuntimeScope(owner: RuntimeOwner): RuntimeScope {
     get(_target, key) {
       if (key === 'tracking') return tracking;
       if (key === 'destroy') return dispose;
+      if (key === 'reset') {
+        if (!methods.has(key))
+          methods.set(key, () =>
+            untrack(() => {
+              source.reset();
+              route.reset();
+              owner.current.sdk.reset();
+            })
+          );
+        return methods.get(key);
+      }
       if (key === 'locale') return state.locale;
       const value = untrack(() => {
         const sdk = owner.current.sdk;
@@ -156,12 +181,21 @@ export function setRuntimeScope(owner: RuntimeOwner): RuntimeScope {
 
   const scope: RuntimeScope = {
     owner,
+    source,
+    route,
     runtime,
     state,
     dispose() {
       if (!active) return;
       active = false;
-      for (const cleanup of cleanups) cleanup();
+      try {
+        source.dispose();
+        route.dispose();
+        for (const cleanup of cleanups) cleanup();
+        cells.clear();
+      } finally {
+        owner.dispose();
+      }
     },
   };
   setContext(RUNTIME_KEY, scope);

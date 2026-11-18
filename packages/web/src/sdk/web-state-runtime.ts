@@ -165,6 +165,15 @@ export abstract class WebStateRuntime<
     return this.getAnonymousIdProvider() ?? profileSignal.value?.id ?? this.adoptedProfileId.value;
   }
 
+  /**
+   * Capture owner authority; reset or destruction permanently invalidates the
+   * returned guard. Event consent remains the event admission path's responsibility.
+   */
+  captureLifetime(): () => boolean {
+    const generation = this.contentLifetime;
+    return () => !this.destroyed && this.contentLifetime === generation;
+  }
+
   protected isCurrent(token: object): boolean {
     return !this.destroyed && this.resetToken === token;
   }

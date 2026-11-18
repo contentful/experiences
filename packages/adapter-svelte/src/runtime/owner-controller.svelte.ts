@@ -5,6 +5,7 @@ import {
   type ExperiencesSnapshot,
   type WebExperiencesRuntime,
 } from '@contentful/experiences-web';
+import { resolvePreviewSessionId } from '@contentful/experiences-runtime';
 
 export type OnStatesReady = (states: WebExperiencesRuntime['states']) => void | (() => void);
 
@@ -23,8 +24,9 @@ export interface OwnerSnapshot {
 
 export interface RuntimeOwner {
   readonly current: OwnerSnapshot;
-  activate(target: OwnerTarget): OwnerSnapshot;
-  rebindInjected(target: InjectedOwnerTarget): OwnerSnapshot;
+  readonly owned: boolean;
+  readonly sessionId: string | undefined;
+  activate(): OwnerSnapshot;
   dispose(): void;
 }
 
@@ -33,18 +35,25 @@ function asError(value: unknown): Error {
 }
 
 /** One native reactive owner per explicit activation; construction is browser-only. */
-export function createRuntimeOwner(snapshot?: ExperiencesSnapshot): RuntimeOwner {
+export function createRuntimeOwner(
+  target: OwnerTarget,
+  snapshot?: ExperiencesSnapshot
+): RuntimeOwner {
   let current = $state.raw<OwnerSnapshot>({
     sdk: createWebSnapshotRuntime(snapshot),
     status: 'idle',
     error: undefined,
   });
-  let attemptedTarget: OwnerTarget | undefined;
+  const owned = 'config' in target;
+  const sessionId =
+    owned && target.config.preview && typeof window !== 'undefined'
+      ? resolvePreviewSessionId(new URLSearchParams(window.location.search))
+      : undefined;
   let release: (() => void) | undefined;
   let busy = false;
   const disposed = () => current.status === 'disposed';
 
-  function start(target: OwnerTarget): OwnerSnapshot {
+  function start(): OwnerSnapshot {
     let sdk: ContentfulExperiences | undefined;
     let cleanup: void | (() => void);
     let closed = false;
@@ -59,7 +68,7 @@ export function createRuntimeOwner(snapshot?: ExperiencesSnapshot): RuntimeOwner
     };
     busy = true;
     try {
-      sdk = 'sdk' in target ? target.sdk : new ContentfulExperiences(target.config);
+      sdk = 'config' in target ? new ContentfulExperiences(target.config) : target.sdk;
       if (!disposed()) cleanup = target.onStatesReady?.(sdk.states);
       if (disposed()) {
         close();
@@ -88,31 +97,11 @@ export function createRuntimeOwner(snapshot?: ExperiencesSnapshot): RuntimeOwner
     get current() {
       return current;
     },
-    activate(target) {
-      if (typeof window === 'undefined' || busy || attemptedTarget || disposed()) return current;
-      attemptedTarget = target;
-      return start(target);
-    },
-    rebindInjected(target) {
-      if (disposed() || busy) return current;
-      if (!attemptedTarget || !('sdk' in attemptedTarget)) {
-        throw new TypeError('Only an injected runtime owner can rebind an SDK.');
-      }
-      if (attemptedTarget.sdk === target.sdk) return current;
-      attemptedTarget = target;
-      const previous = release;
-      release = undefined;
-      current = { sdk: createWebSnapshotRuntime(), status: 'idle', error: undefined };
-      busy = true;
-      try {
-        previous?.();
-      } catch (error) {
-        if (!disposed()) current = { ...current, status: 'error', error: asError(error) };
-        return current;
-      } finally {
-        busy = false;
-      }
-      return disposed() ? current : start(target);
+    owned,
+    sessionId,
+    activate() {
+      if (typeof window === 'undefined' || busy || current.status !== 'idle') return current;
+      return start();
     },
     dispose() {
       if (disposed()) return;

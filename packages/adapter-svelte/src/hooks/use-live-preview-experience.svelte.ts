@@ -20,11 +20,7 @@ export interface UseLivePreviewExperienceResult {
 export function useLivePreviewExperience(
   getOptions: () => UseLivePreviewExperienceOptions
 ): UseLivePreviewExperienceResult {
-  if (hasRuntimeScope()) {
-    throw new Error(
-      'Legacy Preview hooks cannot own a connection inside an ExperiencesRoot or ExperiencesProvider. Use the managed runtime Preview capability.'
-    );
-  }
+  const managed = hasRuntimeScope();
   const initialPayload = getOptions().initialPayload;
   let result = $state<LivePreviewResult>({
     data: initialPayload,
@@ -34,11 +30,21 @@ export function useLivePreviewExperience(
   $effect(() => {
     const { previewSessionOptions } = getOptions();
     result = { data: initialPayload, error: undefined };
+    if (managed) {
+      if (
+        previewSessionOptions?.sessionId !== undefined &&
+        previewSessionOptions?.previewToken !== undefined
+      ) {
+        throw new Error(
+          'Legacy Preview hooks cannot own a connection inside an ExperiencesRoot or ExperiencesProvider. Use the managed runtime Preview capability.'
+        );
+      }
+      return;
+    }
     if (previewSessionOptions === undefined) {
       sendPreviewStatus('static');
       return;
     }
-
     const client = createLivePreviewClient(previewSessionOptions, initialPayload);
     const unsubscribeStatus = client.subscribeStatus(sendPreviewStatus);
 

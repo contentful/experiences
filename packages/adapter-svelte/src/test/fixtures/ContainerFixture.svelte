@@ -7,8 +7,8 @@
   const design = $derived(getDesignValues());
 </script>
 
-<div data-padding={design.cfPadding as string}>
-  {#each children ?? [] as child}
-    {@render child()}
+<div data-container data-padding={design.cfPadding as string} data-array={Array.isArray(children)} data-count={children?.length ?? 0}>
+  {#each children ?? [] as child, i}
+    <div class="wrap" data-index={i}>{@render child()}</div>
   {/each}
 </div>

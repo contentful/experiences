@@ -448,6 +448,13 @@ consent and offline capacity admission, before transport; capacity refusal
 publishes no event. Attempts never stream on retries or transport completion. Prepared admission emits each accepted
 event once and batch refusal emits none. Blocked publication follows `onEventBlocked`. Reset clears
 profile, changes, request outcome, and event streams while retaining consent and locale.
+Profile, changes, consent, locale and event observables use module-scoped signals,
+not isolated browser state per SDK instance. Construction initializes those shared
+values; Preview state, interceptors, queues and revision/lifetime guards remain
+instance-local. The one-live-instance lock and owned teardown before a fresh
+activation remain distinct safeguards. An inert SSR
+snapshot is not another live owner. Do not add an in-place SDK replacement path
+on the assumption that each SDK carries independent copies of this browser state.
 Web startup values use `defaults: ConfigDefaults` (`profile`, `changes`, `consent`, and
 `persistenceConsent`). Constructor locale and `setLocale()` use the copied
 Optimization `normalizeExplicitLocale`/`normalizeLocale` rules; both helpers are
@@ -532,6 +539,13 @@ Retained differences:
   Optimization reference's public mutable extension surface. No current supported
   consumer requires that new member; guarded bridge/handoff ingestion and flag
   reads/observables suffice and keep flag state SDK-owned.
+- Live Web exposes `captureLifetime()` over its existing content lifetime so
+  adapters can reject delayed visitor work after reset or destruction. Consent
+  changes retain that lifetime; individual event attempts and queues keep their
+  separate consent admission and withdrawal guards. This is an additive integration
+  capability, not an Optimization baseline API. It adds no lifecycle state or
+  notification channel and does not retract completed renderer content; source and presentation ownership remain
+  separate from pending runtime authority.
 - Automatic flag exposure quietly skips preview and missing profiles. Consent
   refusals follow Optimization through normal blocked-event reporting. Active
   subscriptions retry when changes, profile, or consent changes, including
@@ -867,8 +881,15 @@ split. Exclude development tests and support from published package contents.
 Svelte owns one SDK per explicit activation lifetime, retained across rerenders and
 ordinary navigation. Its outer Preview boundary tears down old resources before
 starting a keyed activation, including while outgoing DOM outros remain. The inner
-runtime activates once; injected SDK changes only rebind subscriptions and leave
-construction/destruction to the caller. Kit init and its first root share one owner;
+runtime activates once. Portable hosts report Preview URL session entry/change/
+exit through the existing committed `routeKey`; with Preview enabled, hash routers
+use full `pathname + search + hash` so outer query changes reach the boundary.
+There is no extra SDK URL observer or Preview-specific component key requirement.
+The runtime captures its injected SDK for that activation; no
+in-place injected SDK rebinding is supported. Construction/destruction of an
+injected SDK stays with the caller. React and Svelte Providers capture the injected
+SDK on first mount and ignore later `sdk` prop changes; a new key/remount captures
+a fresh binding after the caller retires the old SDK. Kit init and its first root share one owner;
 failed init is sticky and disposal is terminal. Keep request adoption history at the
 separate stable request boundary when that later integration is implemented.
 
@@ -985,8 +1006,8 @@ capture fields. Passing runtime tests alone does not validate these types.
 An internal generic SDK replacement path conflated owned activation and injected
 binding lifetimes. Svelte now keeps each owned SDK stable for its activation and
 uses an explicit Preview boundary for teardown/new activation. Resource teardown
-releases the singleton before the next acquisition even with DOM outros; injected
-references rebind without destroying caller SDKs. Superseded prototype replacement
+releases the singleton before the next acquisition even with DOM outros. Injected
+SDKs are fixed per activation and never constructed or destroyed by the adapter. Superseded prototype replacement
 tests are not a contract to retain; verify current lifetime effects and refusals.
 
 ### Malformed selector diagnostics before normalization (fixed)
@@ -1075,6 +1096,15 @@ route identity and liveness; same-route consent retry waits for preparation, not
 HTTP. Only a final admitted committing page claims the route. Blocked pages remain
 eligible, and reset/destroy invalidate pending attempts. Admission is not a service
 commitment receipt.
+
+### Web content caller lifetime after transport (fixed)
+
+Web fetches previously checked a supplied current-page caller's lifetime before
+transport but could still adopt its response after that caller was superseded.
+Keep the same caller check after transport, through asynchronous state interception
+and before returning content. Already admitted event attempts remain queue-owned.
+The Web content owner tests cover stale responses and intercepted state without
+overwriting the current profile or flags.
 
 ---
 

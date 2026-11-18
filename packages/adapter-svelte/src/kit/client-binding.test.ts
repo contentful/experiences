@@ -1,8 +1,8 @@
 import { ContentfulExperiences, createWebSnapshotRuntime } from '@contentful/experiences-web';
-import { render } from '@testing-library/svelte';
+import { cleanup, render } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import * as owners from '../runtime/owner-controller.svelte.js';
-import KitStartupFixture from '../test/fixtures/KitStartupFixture.svelte';
+import RuntimeHarness from '../test/fixtures/RuntimeHarness.svelte';
+import type { RuntimeProbeCapture } from '../test/fixtures/runtime-probe.js';
 import { bindSvelteKitClientExperiences } from './client-binding.js';
 
 const browserConfig = {
@@ -10,162 +10,163 @@ const browserConfig = {
   environmentId: 'environment',
   delivery: { accessToken: 'browser-token' },
 };
-
+function bind(options = {}) {
+  return bindSvelteKitClientExperiences({
+    config: { components: {} },
+    endpoint: '/_exo/primary',
+    ...browserConfig,
+    ...options,
+  }).request;
+}
+function captureContext() {
+  let current: Parameters<RuntimeProbeCapture>[0];
+  return {
+    capture: (next: typeof current) => {
+      current = next;
+    },
+    get current() {
+      return current!;
+    },
+  };
+}
 afterEach(() => {
+  cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   globalThis.localStorage.clear();
   window.history.replaceState({}, '', '/');
 });
 
-describe('Kit client startup foundation', () => {
-  it('binds without constructing, initializes once and reuses the owner in the mounted root', async () => {
-    const create = vi.spyOn(owners, 'createRuntimeOwner');
+describe('Kit client startup', () => {
+  it('defers construction, initializes once and shares startup with the mounted root', async () => {
     const ready = vi.fn();
-    const { request } = bindSvelteKitClientExperiences({
-      config: { components: {} },
-      endpoint: '/_exo/primary',
-      ...browserConfig,
-      onStatesReady: ready,
-    });
-    expect(create).not.toHaveBeenCalled();
-    await request.init();
-    await request.init();
-    expect(create).toHaveBeenCalledOnce();
-    expect(ready).toHaveBeenCalledOnce();
-    const owner = create.mock.results[0]!.value as owners.RuntimeOwner;
-    const sdk = owner.current.sdk;
-    const view = render(KitStartupFixture, { Root: request.ExperiencesRoot });
-    expect(view.getByText('Application baseline')).toBeTruthy();
-    await view.rerender({ Root: request.ExperiencesRoot, routeKey: '/next?query=1' });
-    expect(owner.current.sdk).toBe(sdk);
-    expect(ready).toHaveBeenCalledOnce();
-    view.unmount();
-    expect(owner.current.status).toBe('disposed');
-    // Root cleanup released the actual Web singleton.
+    const request = bind({ onStatesReady: ready });
+    // Binding itself leaves the Web singleton available.
     new ContentfulExperiences(browserConfig).destroy();
-  });
-
-  it('retains a failed startup for the root without another construction', async () => {
-    const create = vi.spyOn(owners, 'createRuntimeOwner');
-    const failure = new Error('application setup failed');
-    const setup = vi.fn(() => {
-      throw failure;
-    });
-    const { request } = bindSvelteKitClientExperiences({
-      config: { components: {} },
-      endpoint: '/_exo/primary',
-      ...browserConfig,
-      onStatesReady: setup,
-    });
-    await expect(request.init()).resolves.toBeUndefined();
-    const owner = create.mock.results[0]!.value as owners.RuntimeOwner;
-    const view = render(KitStartupFixture, { Root: request.ExperiencesRoot });
-    expect(view.getByText('Application baseline')).toBeTruthy();
     await request.init();
-    expect(create).toHaveBeenCalledOnce();
-    expect(setup).toHaveBeenCalledOnce();
-    expect(owner.current.error).toBe(failure);
+    await request.init();
+    expect(ready).toHaveBeenCalledOnce();
+    const context = captureContext();
+    const view = render(RuntimeHarness, {
+      config: browserConfig,
+      Root: request.ExperiencesRoot,
+      capture: context.capture,
+    });
+    const sdk = context.current.owner.current.sdk;
+    expect(view.container.textContent).toContain('ready|');
+    await view.rerender({ routeKey: '/next?query=1' });
+    expect(context.current.owner.current.sdk).toBe(sdk);
+    expect(ready).toHaveBeenCalledOnce();
     view.unmount();
-  });
-
-  it('does not retain a browser owner when init is evaluated without a browser', async () => {
-    vi.stubGlobal('window', undefined);
-    const create = vi.spyOn(owners, 'createRuntimeOwner');
-    const { request } = bindSvelteKitClientExperiences({
-      config: { components: {} },
-      endpoint: '/_exo/primary',
-      ...browserConfig,
-    });
+    expect(context.current.state.status).toBe('disposed');
+    expect(() => render(request.ExperiencesProvider, { sdk: {} as ContentfulExperiences })).toThrow(
+      /ownership mode cannot change/
+    );
+    new ContentfulExperiences(browserConfig).destroy();
     await request.init();
-    expect(create).not.toHaveBeenCalled();
+    const next = render(RuntimeHarness, { config: browserConfig, Root: request.ExperiencesRoot });
+    expect(next.container.textContent).toContain('ready|');
+    expect(ready).toHaveBeenCalledTimes(2);
   });
 
-  it('keeps injected SDK destruction caller-owned', async () => {
+  it('presents a sticky construction failure without retrying at mount or later init', async () => {
+    const existing = new ContentfulExperiences(browserConfig);
+    const setup = vi.fn();
+    const request = bind({ onStatesReady: setup });
+    await expect(request.init()).resolves.toBeUndefined();
+    existing.destroy();
+    const view = render(RuntimeHarness, { config: browserConfig, Root: request.ExperiencesRoot });
+    expect(view.container.textContent).toContain('error|');
+    expect(view.container.textContent).toContain('already initialized');
+    expect(view.getByText('supplied content')).toBeTruthy();
+    await request.init();
+    expect(setup).not.toHaveBeenCalled();
+  });
+
+  it('leaves browser initialization available after server evaluation', async () => {
+    const ready = vi.fn();
+    const request = bind({ onStatesReady: ready });
+    const browser = window;
+    vi.stubGlobal('window', undefined);
+    await request.init();
+    expect(ready).not.toHaveBeenCalled();
+    vi.stubGlobal('window', browser);
+    const view = render(RuntimeHarness, { config: browserConfig, Root: request.ExperiencesRoot });
+    expect(view.container.textContent).toContain('ready|');
+    expect(ready).toHaveBeenCalledOnce();
+  });
+
+  it('captures the preselected caller SDK until teardown and accepts a fresh binding after caller destruction', async () => {
     const sdk = new ContentfulExperiences(browserConfig);
     const destroy = vi.spyOn(sdk, 'destroy');
+    const release = vi.fn();
+    const ready = vi.fn(() => release);
     const { request } = bindSvelteKitClientExperiences({
       config: { components: {} },
       endpoint: '/_exo/primary',
-      ...browserConfig,
-    });
-    const view = render(request.ExperiencesProvider, { sdk });
-    await request.init();
-    view.unmount();
-    expect(destroy).not.toHaveBeenCalled();
-    sdk.destroy();
-  });
-
-  it('rejects a conflicting injected provider after owned early initialization', async () => {
-    const create = vi.spyOn(owners, 'createRuntimeOwner');
-    const { request } = bindSvelteKitClientExperiences({
-      config: { components: {} },
-      endpoint: '/_exo/primary',
-      ...browserConfig,
-    });
-    await request.init();
-    const owner = create.mock.results[0]!.value as owners.RuntimeOwner;
-    const sdk = owner.current.sdk!;
-    // A structurally supplied different SDK must never abandon the early owner.
-    expect(() => render(request.ExperiencesProvider, { sdk: {} as ContentfulExperiences })).toThrow(
-      /different injected SDK/
-    );
-    expect(owner.current.sdk).toBe(sdk);
-    owner.dispose();
-  });
-
-  it('selects fresh Preview activations after init and committed session changes', async () => {
-    const create = vi.spyOn(owners, 'createRuntimeOwner');
-    const ready = vi.fn();
-    const { request } = bindSvelteKitClientExperiences({
-      config: { components: {} },
-      endpoint: '/_exo/primary',
-      ...browserConfig,
-      preview: { accessToken: 'preview' },
+      sdk,
       onStatesReady: ready,
     });
     await request.init();
-    const early = create.mock.results[0]!.value as owners.RuntimeOwner;
-    window.history.replaceState({}, '', '/?preview_session_id=first');
-    const view = render(KitStartupFixture, { Root: request.ExperiencesRoot });
-    expect(early.current.status).toBe('disposed');
-    const first = create.mock.results[1]!.value as owners.RuntimeOwner;
-    expect((first.current.sdk as ContentfulExperiences).isPreview).toBe(true);
     await request.init();
-    expect(create).toHaveBeenCalledTimes(2);
-    window.history.replaceState({}, '', '/?preview_session_id=second');
-    await view.rerender({ routeKey: '/?preview_session_id=second' });
-    const second = create.mock.results[2]!.value as owners.RuntimeOwner;
-    expect(first.current.status).toBe('disposed');
-    expect(second.current.status).toBe('ready');
-    await request.init();
-    expect(create).toHaveBeenCalledTimes(3);
-    expect(ready).toHaveBeenCalledTimes(3);
+    expect(ready).toHaveBeenCalledOnce();
+    const context = captureContext();
+    const view = render(RuntimeHarness, {
+      config: browserConfig,
+      sdk,
+      Provider: request.ExperiencesProvider,
+      capture: context.capture,
+    });
+    expect(context.current.owner.current.sdk).toBe(sdk);
+    await view.rerender({ sdk: createWebSnapshotRuntime() as ContentfulExperiences });
+    expect(context.current.owner.current.sdk).toBe(sdk);
+    window.history.replaceState({}, '', '/?preview_session_id=caller-owned');
+    await view.rerender({ routeKey: '/?preview_session_id=caller-owned' });
+    expect(context.current.owner.current.sdk).toBe(sdk);
+    expect(ready).toHaveBeenCalledOnce();
     view.unmount();
+    expect(release).toHaveBeenCalledOnce();
+    expect(destroy).not.toHaveBeenCalled();
+    sdk.destroy();
+    const nextSdk = new ContentfulExperiences(browserConfig);
+    try {
+      const nextRequest = bind({ sdk: nextSdk });
+      await nextRequest.init();
+      const next = render(RuntimeHarness, {
+        config: browserConfig,
+        sdk: nextSdk,
+        Provider: nextRequest.ExperiencesProvider,
+        capture: context.capture,
+      });
+      expect(context.current.state.ready).toBe(true);
+      expect(context.current.owner.current.sdk).toBe(nextSdk);
+      next.unmount();
+    } finally {
+      nextSdk.destroy();
+    }
   });
 
-  it('keeps the current injected SDK after a rebind and later init', async () => {
-    const create = vi.spyOn(owners, 'createRuntimeOwner');
-    const first = Object.assign(createWebSnapshotRuntime(), {
-      destroy: vi.fn(),
-    }) as unknown as ContentfulExperiences;
-    const second = Object.assign(createWebSnapshotRuntime(), {
-      destroy: vi.fn(),
-    }) as unknown as ContentfulExperiences;
-    const { request } = bindSvelteKitClientExperiences({
-      config: { components: {} },
-      endpoint: '/_exo/primary',
-      ...browserConfig,
-    });
-    const view = render(request.ExperiencesProvider, { sdk: first });
-    const owner = create.mock.results[0]!.value as owners.RuntimeOwner;
-    await view.rerender({ sdk: second });
-    expect(owner.current.sdk).toBe(second);
+  it('replaces early and mounted Preview activations when the committed URL session changes', async () => {
+    const ready = vi.fn();
+    const request = bind({ preview: { accessToken: 'preview' }, onStatesReady: ready });
     await request.init();
-    expect(owner.current.sdk).toBe(second);
-    expect(create).toHaveBeenCalledOnce();
-    view.unmount();
-    expect(first.destroy).not.toHaveBeenCalled();
-    expect(second.destroy).not.toHaveBeenCalled();
+    const context = captureContext();
+    window.history.replaceState({}, '', '/?preview_session_id=first');
+    const view = render(RuntimeHarness, {
+      config: browserConfig,
+      Root: request.ExperiencesRoot,
+      capture: context.capture,
+    });
+    const first = context.current.owner.current.sdk;
+    if (!(first instanceof ContentfulExperiences)) throw new Error('Expected live Preview SDK');
+    expect(first.isPreview).toBe(true);
+    await request.init();
+    expect(ready).toHaveBeenCalledTimes(2);
+    window.history.replaceState({}, '', '/?preview_session_id=second');
+    await view.rerender({ routeKey: '/?preview_session_id=second' });
+    expect(context.current.state.ready).toBe(true);
+    expect(context.current.owner.current.sdk).not.toBe(first);
+    await request.init();
+    expect(ready).toHaveBeenCalledTimes(3);
   });
 });

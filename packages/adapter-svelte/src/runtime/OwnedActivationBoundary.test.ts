@@ -93,33 +93,7 @@ describe('OwnedActivationBoundary', () => {
     sdk();
   });
 
-  it('starts a distinct activation only when a committed route observes a Preview session change', async () => {
-    const context = captureContext();
-    const setup = vi.fn();
-    const view = render(RuntimeHarness, {
-      config: { ...config, preview: { accessToken: 'preview-test' } },
-      onStatesReady: setup,
-      capture: context.capture,
-      routeKey: '/',
-    });
-    const firstOwner = context.current.owner;
-    const destroy = vi.spyOn(ContentfulExperiences.prototype, 'destroy');
-    window.history.replaceState({}, '', '/other?preview_session_id=one');
-    await view.rerender({ routeKey: '/other?preview_session_id=one' });
-    expect(setup).toHaveBeenCalledTimes(2);
-    expect(destroy).toHaveBeenCalledTimes(1);
-    expect(firstOwner.current.status).toBe('disposed');
-    expect(context.current.owner).not.toBe(firstOwner);
-    window.history.replaceState({}, '', '/third?preview_session_id=one');
-    await view.rerender({ routeKey: '/third?preview_session_id=one' });
-    expect(setup).toHaveBeenCalledTimes(2);
-    window.history.replaceState({}, '', '/fourth');
-    await view.rerender({ routeKey: '/fourth' });
-    expect(setup).toHaveBeenCalledTimes(3);
-    expect(destroy).toHaveBeenCalledTimes(2);
-  });
-
-  it('ends activation resources before the next Preview session while outgoing DOM remains', async () => {
+  it('ends activation resources on committed hash-router Preview changes while outgoing DOM remains', async () => {
     const context = captureContext();
     const order: string[] = [];
     const animations: { onfinish?: () => void; cancel(): void }[] = [];
@@ -138,10 +112,11 @@ describe('OwnedActivationBoundary', () => {
       order.push('destroy');
       originalDestroy.call(this);
     });
+    window.history.replaceState({}, '', '/app#/landing');
     const view = render(RuntimeHarness, {
       config: { ...config, preview: { accessToken: 'preview-test' } },
       capture: context.capture,
-      routeKey: '/',
+      routeKey: '/app#/landing',
       outro: () => ({ duration: 1000 }),
       onStatesReady: () => {
         order.push('ready');
@@ -150,13 +125,28 @@ describe('OwnedActivationBoundary', () => {
         };
       },
     });
-    for (const session of ['one', 'two', 'three']) {
+    for (const session of ['one', 'two', undefined]) {
       const oldOwner = context.current.owner;
-      window.history.replaceState({}, '', `/?preview_session_id=${session}`);
-      await view.rerender({ routeKey: `/?preview_session_id=${session}` });
+      const logicalRoute = window.location.hash;
+      window.history.replaceState(
+        {},
+        '',
+        `/app${session ? `?preview_session_id=${session}` : ''}${logicalRoute}`
+      );
+      const routeKey = window.location.pathname + window.location.search + window.location.hash;
+      await view.rerender({ routeKey });
+      expect(window.location.hash).toBe(logicalRoute);
       expect(oldOwner.current.status).toBe('disposed');
       expect(context.current.state.ready).toBe(true);
       expect(context.current.owner).not.toBe(oldOwner);
+      expect(context.current.owner.sessionId).toBe(session);
+      expect(context.current.scope.route.routeKey).toBe(routeKey);
+      const active = context.current.owner;
+      const nextRoute = `/app${session ? `?preview_session_id=${session}` : ''}#/same-session-${session ?? 'ordinary'}`;
+      window.history.replaceState({}, '', nextRoute);
+      await view.rerender({ routeKey: nextRoute });
+      expect(context.current.owner).toBe(active);
+      expect(context.current.scope.route.routeKey).toBe(nextRoute);
     }
     expect(view.container.querySelectorAll('[data-runtime]').length).toBeGreaterThan(1);
     expect(order).toEqual([

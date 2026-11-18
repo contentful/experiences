@@ -4,7 +4,7 @@ import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import type { Config } from '../registry/types.js';
 import ButtonFixture from '../test/fixtures/ButtonFixture.svelte';
-import WrappingContainerFixture from '../test/fixtures/WrappingContainerFixture.svelte';
+import ContainerFixture from '../test/fixtures/ContainerFixture.svelte';
 import ExperienceTemplateFixture from '../test/fixtures/ExperienceTemplateFixture.svelte';
 import { componentNode, experienceTemplateNode } from '../test/fixtures/render-plan.js';
 import ServerExperienceRenderer from './ServerExperienceRenderer.svelte';
@@ -19,7 +19,7 @@ const button = (label: string) =>
 
 const config: Config = {
   components: {
-    'contentful-container': WrappingContainerFixture,
+    'contentful-container': ContainerFixture,
     'contentful-button': ButtonFixture,
   },
   experienceTemplates: { page: ExperienceTemplateFixture },

@@ -1,37 +1,37 @@
 import type { Snippet } from 'svelte';
+import type { PageSequenceOptions } from './page-sequence.svelte.js';
 import type {
   Config as WebConfig,
   ContentfulExperiences,
   ExperiencesSnapshot,
 } from '@contentful/experiences-web';
-import type {
-  InjectedOwnerTarget,
-  OnStatesReady,
-  OwnerTarget,
-  RuntimeOwner,
-} from './owner-controller.svelte.js';
+import type { OnStatesReady, RuntimeOwner } from './owner-controller.svelte.js';
 
 export type { OnStatesReady } from './owner-controller.svelte.js';
 
-export interface RuntimePresentationProps {
+export interface RuntimePresentationProps extends Omit<PageSequenceOptions, 'routeKey'> {
   children?: Snippet;
   snapshot?: ExperiencesSnapshot;
-  /** Opaque, committed host route identity. No navigation observer is installed. */
+  /**
+   * Opaque, committed host route identity. With owned Preview, update it on session
+   * entry, change and exit; hash routers include pathname + search + hash.
+   * No navigation observer is installed.
+   */
   routeKey?: string;
   onStatesReady?: OnStatesReady;
 }
 
 export type ExperiencesRootProps = WebConfig & RuntimePresentationProps;
 export interface ExperiencesProviderProps extends RuntimePresentationProps {
+  /** Caller-owned SDK captured during initialization for this activation. */
   sdk: ContentfulExperiences;
 }
 
 /** Internal shared-owner seam for portable and Kit bindings. */
-export interface RuntimeRootProps {
-  target: OwnerTarget;
-  owner?: RuntimeOwner;
-  snapshot?: ExperiencesSnapshot;
-  children?: Snippet;
-  rebindInjected?: (target: InjectedOwnerTarget) => void;
+export interface RuntimeRootProps extends Omit<
+  RuntimePresentationProps,
+  'onStatesReady' | 'snapshot'
+> {
+  owner: RuntimeOwner;
   registerTeardown?: (teardown: () => void) => () => void;
 }

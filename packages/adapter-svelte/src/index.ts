@@ -19,6 +19,20 @@ export type {
   CreateExperiencesResult,
   BoundExperienceRendererProps,
 } from './experience/create-experiences.js';
+export { default as Experience } from './experience/Experience.svelte';
+export { useManagedExperience } from './experience/use-managed-experience.svelte.js';
+export type {
+  ExperienceProps,
+  BoundExperienceProps,
+  ExperienceNotifications,
+  UseManagedExperienceOptions,
+} from './experience/presentation-types.js';
+export type {
+  ManagedExperience,
+  ManagedExperienceOptions,
+  ManagedExperienceSnapshot,
+  ManagedExperienceOperationResult,
+} from './experience/source-types.js';
 export { default as ExperiencesRoot } from './runtime/ExperiencesRoot.svelte';
 export { default as ExperiencesProvider } from './runtime/ExperiencesProvider.svelte';
 export {

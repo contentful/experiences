@@ -1,37 +1,47 @@
 import { render } from 'svelte/server';
+import { createWebSnapshotRuntime, type ContentfulExperiences } from '@contentful/experiences-web';
 import { describe, expect, it, vi } from 'vitest';
-import * as owners from '../runtime/owner-controller.svelte.js';
-import KitStartupFixture from '../test/fixtures/KitStartupFixture.svelte';
+import RuntimeHarness from '../test/fixtures/RuntimeHarness.svelte';
 import { bindSvelteKitClientExperiences } from './client-binding.js';
 
 describe('Kit client binding during SSR', () => {
-  it('creates independent inert component scopes and renders baseline without Web activation', async () => {
-    const create = vi.spyOn(owners, 'createRuntimeOwner');
-    try {
+  it.each(['owned', 'injected'] as const)(
+    'renders each supplied inert snapshot with %s configuration without initializing Web',
+    async (mode) => {
       const ready = vi.fn();
-      const { request } = bindSvelteKitClientExperiences({
-        config: { components: {} },
-        endpoint: '/_exo/primary',
+      const browserConfig = {
         spaceId: 'space',
         environmentId: 'environment',
         delivery: { accessToken: 'browser-token' },
+      };
+      const { request } = bindSvelteKitClientExperiences({
+        config: { components: {} },
+        endpoint: '/_exo/primary',
+        ...(mode === 'owned'
+          ? browserConfig
+          : { sdk: createWebSnapshotRuntime({ locale: 'es-ES' }) as ContentfulExperiences }),
         onStatesReady: ready,
       });
       await request.init();
-      expect(create).not.toHaveBeenCalled();
-      const first = render(KitStartupFixture, { props: { Root: request.ExperiencesRoot } });
-      const second = render(KitStartupFixture, { props: { Root: request.ExperiencesRoot } });
-      expect(first.body).toContain('Application baseline');
-      expect(second.body).toContain('Application baseline');
-      expect(create).toHaveBeenCalledTimes(2);
-      const firstOwner = create.mock.results[0]!.value as owners.RuntimeOwner;
-      const secondOwner = create.mock.results[1]!.value as owners.RuntimeOwner;
-      expect(firstOwner).not.toBe(secondOwner);
-      expect(firstOwner.current.status).toBe('disposed');
-      expect(secondOwner.current.status).toBe('disposed');
+      const first = render(RuntimeHarness, {
+        props: {
+          config: browserConfig,
+          Root: request.ExperiencesRoot,
+          snapshot: { locale: 'fr-FR' },
+        },
+      });
+      const second = render(RuntimeHarness, {
+        props: {
+          config: browserConfig,
+          Root: request.ExperiencesRoot,
+          snapshot: { locale: 'de-DE' },
+        },
+      });
+      expect(first.body).toContain('idle|fr-FR|neutral');
+      expect(second.body).toContain('idle|de-DE|neutral');
+      expect(first.body).toContain('supplied content');
+      expect(second.body).toContain('supplied content');
       expect(ready).not.toHaveBeenCalled();
-    } finally {
-      create.mockRestore();
     }
-  });
+  );
 });

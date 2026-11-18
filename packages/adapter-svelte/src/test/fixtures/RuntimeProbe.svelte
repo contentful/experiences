@@ -2,15 +2,15 @@
   import { untrack } from 'svelte';
   import { getExperiences, getExperiencesActions, getExperiencesState, getRuntimeScope } from '../../runtime/context.svelte.js';
   import type { RuntimeProbeCapture } from './runtime-probe.js';
-  import { useLivePreviewExperience } from '../../hooks/use-live-preview-experience.svelte.js';
-  let { capture, legacy = false, flagName = 'test', denyConsent = false }: { capture?: RuntimeProbeCapture; legacy?: boolean; flagName?: string; denyConsent?: boolean } = $props();
+  let { capture, initialize, flagName = 'test', denyConsent = false }: { capture?: RuntimeProbeCapture; initialize?: () => void; flagName?: string; denyConsent?: boolean } = $props();
   const runtime = getExperiences();
   const state = getExperiencesState();
   const actions = getExperiencesActions();
   const denied = $derived(denyConsent);
-  if (untrack(() => legacy)) useLivePreviewExperience(() => ({}));
+  untrack(() => initialize?.());
   const owner = getRuntimeScope().owner;
-  untrack(() => capture?.({ runtime, state, actions, owner }));
+  const scope = getRuntimeScope();
+  untrack(() => capture?.({ runtime, state, actions, owner, scope }));
   $effect(() => { if (state.ready && denied) actions.consent({ events: false }); });
 </script>
 

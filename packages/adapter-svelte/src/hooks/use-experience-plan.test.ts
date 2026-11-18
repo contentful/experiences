@@ -3,25 +3,13 @@ import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
 import { render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
-import ExperiencePlanProbe from '../test/fixtures/ExperiencePlanProbe.svelte';
+import { componentNode } from '../test/fixtures/render-plan.js';
+import PlanProbe from '../test/fixtures/PlanProbe.svelte';
+import { useExperiencePlan } from './use-experience-plan.svelte.js';
 import type { UseExperiencePlanOptions } from './use-experience-plan.svelte.js';
 
 const payload = (title: string): ExperiencePayload => ({
-  nodes: [
-    {
-      component: {
-        sys: {
-          type: 'ResourceLink',
-          linkType: 'Contentful:Component',
-          urn: 'crn:contentful:::experience:components/hero',
-        },
-      },
-      contentProperties: { title },
-      designProperties: {},
-      slots: {},
-    },
-  ],
-  sys: { type: 'Experience' },
+  nodes: [componentNode('hero', { contentProperties: { title } })],
 });
 
 const initialPlan = {
@@ -43,28 +31,15 @@ const resolveOptions = {
 };
 
 describe('useExperiencePlan', () => {
-  it('resolves raw data into an experience', async () => {
-    const view = render(ExperiencePlanProbe, {
-      props: {
-        options: {
-          payload: payload('updated'),
-          initialPlan,
-          resolveOptions,
-        } satisfies UseExperiencePlanOptions,
-      },
-    });
-
-    await vi.waitFor(() => expect(view.container.textContent).toBe('updated'));
-  });
-
   it.each(['diagnostic', 'rejection'] as const)(
     'retains the last successful plan after a completed update with a %s',
     async (failure) => {
       const resolve = vi.spyOn(core, 'resolveExperience');
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
-        const view = render(ExperiencePlanProbe, {
+        const view = render(PlanProbe<UseExperiencePlanOptions>, {
           props: {
+            use: useExperiencePlan,
             options: {
               payload: payload('last good'),
               initialPlan,

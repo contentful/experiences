@@ -2,12 +2,12 @@ import {
   ContentfulExperiences,
   createWebSnapshotRuntime,
   type Config,
-  type Observable,
 } from '@contentful/experiences-web';
 import { cleanup, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import RuntimeHarness from '../test/fixtures/RuntimeHarness.svelte';
+import { profile } from '../test/fixtures/runtime-profile.js';
 import type { RuntimeProbeCapture } from '../test/fixtures/runtime-probe.js';
 
 describe('runtime context', () => {
@@ -45,6 +45,17 @@ describe('runtime context', () => {
   it('adapts live values and bound actions without requiring caller-owned SDK destruction', async () => {
     const injected = sdk();
     const destroy = vi.spyOn(injected, 'destroy');
+    const locale = injected.states.locale;
+    const subscribe = locale.subscribe.bind(locale);
+    const lateCallbacks: Parameters<typeof locale.subscribe>[0][] = [];
+    const unsubscribes: ReturnType<typeof vi.fn>[] = [];
+    vi.spyOn(locale, 'subscribe').mockImplementation((next) => {
+      lateCallbacks.push(next);
+      const subscription = subscribe(next);
+      const unsubscribe = vi.fn(() => subscription.unsubscribe());
+      unsubscribes.push(unsubscribe);
+      return { unsubscribe };
+    });
     const context = captureContext();
     const view = render(RuntimeHarness, { config, sdk: injected, capture: context.capture });
     const siblingContext = captureContext();
@@ -56,6 +67,8 @@ describe('runtime context', () => {
     const { actions, state, runtime } = context.current;
     const siblingActions = siblingContext.current.actions;
     expect(siblingContext.current.state.ready).toBe(true);
+    await view.rerender({ sdk: createWebSnapshotRuntime() as ContentfulExperiences });
+    expect(context.current.owner.current.sdk).toBe(injected);
     expect(state.ready).toBe(true);
     expect(runtime.locale).toBe('en-US');
     actions.setLocale('de-DE');
@@ -93,53 +106,21 @@ describe('runtime context', () => {
     expect(sibling.container.textContent).toContain('ready|es-ES|neutral|true');
     expect(flush).toHaveBeenCalledTimes(2);
     sibling.unmount();
+    expect(unsubscribes.length).toBeGreaterThan(0);
+    for (const unsubscribe of unsubscribes) expect(unsubscribe).toHaveBeenCalledOnce();
+    for (const next of lateCallbacks) next('stale after unmount');
+    await tick();
+    expect(state.locale).toBeUndefined();
+    expect(siblingContext.current.state.locale).toBeUndefined();
     expect(destroy).not.toHaveBeenCalled();
     injected.destroy();
     expect(destroy).toHaveBeenCalledOnce();
   });
 
-  it('forwards captured actions and state to a replacement injected SDK and unsubscribes old streams', async () => {
-    // Lightweight SDK-shaped injected objects let us model late observable callbacks
-    // that violate unsubscribe, independently from Web's own lifecycle guards.
-    const callbacks: ((value: string | undefined) => void)[] = [];
-    const unsubscribe = vi.fn();
-    const first = Object.assign(createWebSnapshotRuntime({ locale: 'first' }), {
-      destroy: vi.fn(),
-    }) as unknown as ContentfulExperiences;
-    first.states.locale = {
-      current: 'first',
-      subscribe(next) {
-        callbacks.push(next);
-        next('first');
-        return { unsubscribe };
-      },
-      subscribeOnce: vi.fn(),
-    } as Observable<string | undefined>;
-    const second = Object.assign(createWebSnapshotRuntime({ locale: 'second' }), {
-      destroy: vi.fn(),
-      setLocale: vi.fn(),
-    }) as unknown as ContentfulExperiences;
-    const context = captureContext();
-    const view = render(RuntimeHarness, { config, sdk: first, capture: context.capture });
-    const { actions, state } = context.current;
-    await view.rerender({ sdk: second });
-    expect(state.locale).toBe('second');
-    actions.setLocale('fr-FR');
-    expect(second.setLocale).toHaveBeenCalledWith('fr-FR');
-    callbacks[0]!('stale');
-    await tick();
-    expect(state.locale).toBe('second');
-    expect(unsubscribe).toHaveBeenCalledOnce();
-    view.unmount();
-    callbacks[0]!('unmounted');
-    expect(state.locale).toBeUndefined();
-    expect(first.destroy).not.toHaveBeenCalled();
-    expect(second.destroy).not.toHaveBeenCalled();
-  });
-
   it('subscribes flags only while a reactive consumer reads that key', async () => {
     const injected = Object.assign(createWebSnapshotRuntime(), {
       destroy: vi.fn(),
+      captureLifetime: () => () => true,
     }) as unknown as ContentfulExperiences;
     const listeners = new Map<string, Set<(value: string) => void>>();
     const values = new Map<string, string>([
@@ -205,8 +186,11 @@ describe('runtime context', () => {
         sdk: injected,
         capture: context.capture,
         onStatesReady: () => appCleanup,
+        snapshot: { data: { profile: profile('server-visitor') } },
       });
+      context.current.actions.reset();
       context.current.runtime.destroy();
+      expect(context.current.state.profile).toBeUndefined();
       expect(context.current.state.status).toBe('disposed');
       expect(context.current.state.ready).toBe(false);
       expect(appCleanup).toHaveBeenCalledOnce();
@@ -216,4 +200,27 @@ describe('runtime context', () => {
       expect(destroy).toHaveBeenCalledTimes(ownership === 'owned' ? 1 : 0);
     }
   );
+
+  it('finishes reentrant setup teardown and releases ownership even when application cleanup throws', () => {
+    const context = captureContext();
+    const failure = new Error('application cleanup');
+    const cleanup = vi.fn(() => {
+      throw failure;
+    });
+    const view = render(RuntimeHarness, {
+      config,
+      capture: context.capture,
+      onStatesReady() {
+        context.current.runtime.destroy();
+        return cleanup;
+      },
+    });
+    expect(view.container.textContent).toContain('disposed|');
+    expect(context.current.state.profile).toBeUndefined();
+    expect(cleanup).toHaveBeenCalledOnce();
+    // Setup's late returned cleanup still runs, and its failure cannot retain the singleton.
+    sdk().destroy();
+    view.unmount();
+    expect(cleanup).toHaveBeenCalledOnce();
+  });
 });
