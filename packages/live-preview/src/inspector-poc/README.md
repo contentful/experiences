@@ -257,11 +257,7 @@ Flinkly target, the hosted branch URL is:
 https://app.flinkly.com/spaces/<SPACE_ID>/environments/<ENVIRONMENT_ID>/components/<ROOT_COMPONENT_ID>?ui_version=max%2Fexo-inspector-ghost-nodes&ui_enable_flags=feature-exo-10-2026-live-preview-inspector-poc
 ```
 
-If the hosted UI build is unavailable, check out PR #35352 in `user_interface`,
-install dependencies, and run `npm run dev-staging` for Flinkly. Follow that
-repository's local authorization instructions and open the chosen component on
-port 3001 with the inspector flag. For other domains, use the matching UI backend
-configuration. Open the editor on the same machine as the example app. It supplies
+Open the hosted editor on the same machine as the example app. It supplies
 `preview_session_id`; opening the example route alone shows the waiting state.
 
 ## Verify and diagnose
