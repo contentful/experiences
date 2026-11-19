@@ -15,6 +15,9 @@ Delivery transport belongs to Client and event construction belongs to Runtime,
 keeping this package usable in any runtime without pulling in a delivery client
 or framework.
 
+The plan's optional `experienceId` retains the actual nonempty `payload.sys.id`;
+a missing ID is never inferred from the requested selector.
+
 ## Delivery diagnostics
 
 `resolveExperience` projects recognized `payload.errors` into the optional
@@ -36,11 +39,16 @@ public bootstrap/handoff payloads and logs. The whitelist is not a privacy filte
 ## Personalization changes
 
 `plan.personalization` is optional and emitted only when a nonempty profile id
-is returned. When present, it contains required `profileId: string` and optional
+is returned. When present, it contains required `profile: ExperienceProfile` and optional
 raw XDA `changes: unknown[]`, including an explicit empty array. Core neither validates
 flag records nor selects values or emits exposures. Use the adapter-exported
 `resolveFlagChange(name, plan.personalization?.changes)` or an explicit SDK
-`getFlag` read; see the [custom flag guide](../../README.md#custom-flags).
+`getFlag` read. Web also adopts returned XDA changes into browser flag state
+through its existing state-interceptor path; supplied arrays replace that
+snapshot, including `[]` to clear it. Omission retains flags unless profile
+identity changes. This snapshot interpretation follows Personalization API/Optimization and
+remains an assumption pending live-backend verification; Core preserves the raw
+response. See the [custom flag guide](../../README.md#custom-flags).
 
 ## Why a separate package?
 

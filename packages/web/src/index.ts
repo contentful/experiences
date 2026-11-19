@@ -1,5 +1,6 @@
-export { getPageProperties, getUserAgent } from './browser-event-context.js';
-export { ContentfulExperiences } from './contentful-experiences.js';
+export { getPageProperties, getUserAgent } from './browser/event-context.js';
+export { getPreviewSessionBinding } from './preview-session-binding.js';
+export { ContentfulExperiences } from './sdk/contentful-experiences.js';
 export type {
   EventContextProviders,
   CurrentPageOptions,
@@ -7,7 +8,7 @@ export type {
   Config,
   ExperiencesTrackingApi,
   HydrateAndTrackCurrentPageOptions,
-} from './contentful-experiences.js';
+} from './sdk/contentful-experiences.js';
 export type { TrackedEntityKind, TrackingAttribution } from './tracking/attribution.js';
 export type { ElementViewObserverOptions as ViewTrackingOptions } from './tracking/view/element-view-observer-support.js';
 export { EXPERIENCES_WEB_SDK_NAME, EXPERIENCES_WEB_SDK_VERSION } from './sdk-info.js';
@@ -17,16 +18,20 @@ export {
   DELIVERY_HOST,
   ExperienceFetchError,
   NotFoundError,
+  isNotFoundError,
+  isPreviewSessionFetchError,
   PREVIEW_HOST,
 } from '@contentful/experiences-client';
 export type {
   DestinationRedirectResult,
+  DestinationSitemapResult,
+  FetchDestinationSitemapPaginationOptions,
+  SitemapPathItem,
   ExperienceRequestExtensions,
   ExperienceParameters,
   ExperienceParameterValue,
   ExperienceParameterRecord,
   ExperienceParameterOrder,
-  PersonalizationOptions,
 } from '@contentful/experiences-client';
 export {
   ANONYMOUS_ID_COOKIE,
@@ -55,16 +60,26 @@ export type {
   HoverBuilderArgs,
   IdentifyBuilderArgs,
   PageViewBuilderArgs,
-  RuntimeEventMethods,
+  EventMethods,
   OptimizationConfig,
   DeliveryClientOptions,
   FetchByDestinationNodeOptions,
   FetchByDestinationPathOptions,
+  FetchDestinationSitemapOptions,
   FetchExperienceOptions,
   FetchPersonalizationOptions,
+  FetchByIdExperienceOptions,
+  PersonalizationOptions,
   FetchResolveOptions,
   ResolveDefaults,
   ResolveOptions,
+  PreviewConfig,
+  PreviewSessionOptions,
+  PreviewSessionBinding,
+  PreviewClient,
+  PreviewClientOptions,
+  PreviewClientFactory,
+  PreviewStatus,
   TrackBuilderArgs,
   UniversalEventBuilderArgs,
   ViewBuilderArgs,
@@ -76,7 +91,7 @@ export type {
   ResolverConfig,
 } from '@contentful/experiences-sdk-core';
 
-export type { States } from './states.js';
+export type { States, PreviewState, PreviewUpdate } from './state/states.js';
 export {
   batch,
   effect,
@@ -91,7 +106,7 @@ export {
   type SnapshotFn,
   type Subscription,
 } from './signals/index.js';
-export { normalizeLocale, normalizeExplicitLocale } from './locale.js';
+export { normalizeLocale, normalizeExplicitLocale } from './browser/locale.js';
 export {
   InterceptorManager,
   type Interceptor,
@@ -102,7 +117,7 @@ export {
   mergePersonalizationState,
   type PersonalizationState,
   type LifecycleInterceptors,
-} from './interceptors.js';
+} from './state/interceptors.js';
 export {
   resolveStatefulDefaults,
   type StatefulDefaults,
@@ -110,7 +125,7 @@ export {
   type PersistedDefaultValue,
   type PersistedStatefulDefaults,
   type ResolvedStatefulDefaults,
-} from './stateful-defaults.js';
+} from './browser/stateful-defaults.js';
 export {
   createSnapshotRuntime,
   type ExperiencesRuntime,
@@ -133,6 +148,6 @@ export type {
   EntryViewInteractionElementOptions,
   EntryHoverInteractionElementOptions,
   EntryViewInteractionStartOptions,
-} from './interaction-tracking.js';
+} from './tracking/interaction-tracking.js';
 
 export { createWebSnapshotRuntime, type WebExperiencesRuntime } from './runtime.js';

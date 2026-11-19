@@ -3,8 +3,11 @@ import { ContentfulViewDelivery } from '@contentful/experience-delivery';
 import type { ExperienceEvent as PersonalizationEvent } from '@contentful/optimization-api-client/api-schemas';
 import { serializePersonalization } from './personalization.js';
 import { createDebugLogger, resolveExperience } from '@contentful/experiences-sdk-core';
-import type { PortableRenderPlan, ResolverConfig } from '@contentful/experiences-sdk-core';
-import { assertDestinationPreviewSupported } from './destination-guards.js';
+import type {
+  ExperiencePayload,
+  PortableRenderPlan,
+  ResolverConfig,
+} from '@contentful/experiences-sdk-core';
 import { resolveDeliveryClient, type ClientOptions } from './client-resolution.js';
 import { ExperienceFetchError } from './errors.js';
 import { parameterQuery, type ExperienceParameters } from './experience-parameters.js';
@@ -38,6 +41,9 @@ export type ByIdExperienceOptions = {
   spaceId: string;
   environmentId: string;
   experienceId: string;
+  destinationId?: never;
+  nodeId?: never;
+  path?: never;
   locale?: string;
   /** Values for declared Experience parameters. Refetch with new values to swap content. */
   parameters?: ExperienceParameters;
@@ -54,8 +60,7 @@ export type ByIdExperienceOptions = {
 
 /**
  * Resolve an Experience by the Destination Node instead of `experienceId`.
- * The destinations delivery endpoints are space-scoped only: no `environmentId`,
- * and the generated delivery client sends no `locale`, unlike the by-id path.
+ * The destinations delivery endpoints are space-scoped only: no `environmentId`.
  * Supplying `personalization` switches the request from the cacheable GET to
  * the POST that carries it.
  */
@@ -63,6 +68,11 @@ export type ByDestinationNodeIdExperienceOptions = {
   spaceId: string;
   destinationId: string;
   nodeId: string;
+  experienceId?: never;
+  path?: never;
+  environmentId?: never;
+  parameters?: never;
+  locale?: string;
   /** Profile and events used by XDA to personalize the resolved Experience. */
   personalization?: PersonalizationOptions;
 };
@@ -70,20 +80,58 @@ export type ByDestinationNodeIdExperienceOptions = {
 /**
  * Resolve an Experience by the absolute path wired up to a
  * Destination Node, instead of a node id directly. Same scoping as
- * `ByDestinationNodeIdExperienceOptions` — no `environmentId`, and no `locale`
- * from the generated client.
+ * `ByDestinationNodeIdExperienceOptions` — no `environmentId`.
  */
 export type ByDestinationPathExperienceOptions = {
   spaceId: string;
   destinationId: string;
   /** Absolute path to resolve. Must start with `/`. */
   path: string;
+  experienceId?: never;
+  nodeId?: never;
+  environmentId?: never;
+  parameters?: never;
+  locale?: string;
   /** Profile and events used by XDA to personalize the resolved Experience. */
   personalization?: PersonalizationOptions;
 };
 
 export type ExperienceOptions =
   ByIdExperienceOptions | ByDestinationNodeIdExperienceOptions | ByDestinationPathExperienceOptions;
+
+/** @internal Validate selector shape before client construction or content dispatch. */
+export function assertExperienceSelector(value: unknown): void {
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError('Experience selector must be an object.');
+  }
+
+  const selector = value as Record<string, unknown>;
+  const byId = selector.experienceId !== undefined;
+  const byDestination = selector.destinationId !== undefined;
+  const byPath = selector.path !== undefined;
+  const byNode = selector.nodeId !== undefined;
+  if (byId === byDestination || (byId ? byPath || byNode : byPath === byNode)) {
+    throw new TypeError(
+      'Specify experienceId or destinationId with exactly one of path or nodeId.'
+    );
+  }
+  for (const field of ['experienceId', 'destinationId', 'path', 'nodeId']) {
+    if (selector[field] === undefined) continue;
+    if (typeof selector[field] !== 'string' || selector[field].length === 0) {
+      throw new TypeError(`${field} must be a nonempty string.`);
+    }
+  }
+  if (byPath && !(selector.path as string).startsWith('/')) {
+    throw new TypeError('path must start with /.');
+  }
+  if (byDestination) {
+    for (const field of ['parameters', 'extensions']) {
+      if (selector[field] !== undefined) {
+        throw new TypeError(`${field} is only supported with experienceId.`);
+      }
+    }
+  }
+}
 
 /**
  * A Destination resolution that the app must act on as control flow — honor
@@ -137,22 +185,16 @@ export async function fetchExperience(
   experienceOptions: ExperienceOptions,
   clientOptions: ClientOptions,
   resolveOptions: ResolveOptions
+): Promise<PortableRenderPlan | DestinationRedirectResult>;
+// eslint-disable-next-line no-redeclare -- see above
+export async function fetchExperience(
+  experienceOptions: ExperienceOptions,
+  clientOptions: ClientOptions,
+  resolveOptions: ResolveOptions
 ): Promise<PortableRenderPlan | DestinationRedirectResult> {
+  assertExperienceSelector(experienceOptions);
   const { config, metadata, debug } = resolveOptions;
   const log = createDebugLogger(debug, 'client');
-
-  if (!('client' in clientOptions) && 'destinationId' in experienceOptions) {
-    const { spaceId, destinationId } = experienceOptions;
-    const locator =
-      'nodeId' in experienceOptions
-        ? { nodeId: experienceOptions.nodeId }
-        : { path: experienceOptions.path };
-    assertDestinationPreviewSupported(clientOptions.preview, {
-      spaceId,
-      destinationId,
-      ...locator,
-    });
-  }
 
   const client = resolveDeliveryClient(
     clientOptions,
@@ -161,63 +203,87 @@ export async function fetchExperience(
       environmentId:
         'environmentId' in experienceOptions ? experienceOptions.environmentId : undefined,
     },
-    log,
-    'fetchExperience'
+    log
   );
 
-  if ('nodeId' in experienceOptions) {
-    const { spaceId, destinationId, nodeId, personalization } = experienceOptions;
-    // Serialize before the request so invalid input is a TypeError, as on the by-id path.
+  const payload = await fetchExperiencePayload(experienceOptions, client, debug);
+  if ('redirect' in payload) return payload;
+  return resolveExperience(payload, config, { metadata, debug });
+}
+
+/** @internal Fetch a hydrated payload or redirect before renderer resolution. */
+export async function fetchExperiencePayload(
+  experienceOptions: ByIdExperienceOptions,
+  client: ContentfulViewDeliveryClient,
+  debug?: boolean
+): Promise<ExperiencePayload>;
+// eslint-disable-next-line no-redeclare -- overload signatures
+export async function fetchExperiencePayload(
+  experienceOptions: ExperienceOptions,
+  client: ContentfulViewDeliveryClient,
+  debug?: boolean
+): Promise<ExperiencePayload | DestinationRedirectResult>;
+// eslint-disable-next-line no-redeclare -- overload signatures
+export async function fetchExperiencePayload(
+  experienceOptions: ExperienceOptions,
+  client: ContentfulViewDeliveryClient,
+  debug?: boolean
+): Promise<ExperiencePayload | DestinationRedirectResult> {
+  assertExperienceSelector(experienceOptions);
+  const log = createDebugLogger(debug, 'client');
+  if (experienceOptions.nodeId !== undefined) {
+    const { spaceId, destinationId, nodeId, locale, personalization } = experienceOptions;
     const extensions = destinationExtensions(personalization);
     return fetchByDestination(
       { spaceId, destinationId, locator: nodeId },
       () =>
         extensions === undefined
-          ? client.destination.resolveByNodeId(destinationId, nodeId)
+          ? locale === undefined
+            ? client.destination.resolveByNodeId(destinationId, nodeId)
+            : client.destination.resolveByNodeId(destinationId, nodeId, { locale })
           : client.destination.resolveByNodeIdWithOverrides(destinationId, nodeId, {
+              ...(locale === undefined ? {} : { locale }),
               extensions,
             }),
-      log,
-      { config, metadata, debug }
+      log
     );
   }
 
-  if ('path' in experienceOptions) {
-    const { spaceId, destinationId, path, personalization } = experienceOptions;
+  if (experienceOptions.path !== undefined) {
+    const { spaceId, destinationId, path, locale, personalization } = experienceOptions;
     const extensions = destinationExtensions(personalization);
     return fetchByDestination(
       { spaceId, destinationId, locator: path },
       () =>
         extensions === undefined
-          ? client.destination.resolveByPath(destinationId, { path })
+          ? client.destination.resolveByPath(destinationId, {
+              path,
+              ...(locale === undefined ? {} : { locale }),
+            })
           : client.destination.resolveByPathWithOverrides(destinationId, {
               path,
+              ...(locale === undefined ? {} : { locale }),
               extensions,
             }),
-      log,
-      { config, metadata, debug }
+      log
     );
   }
 
   const { spaceId, environmentId, experienceId, locale, personalization, extensions } =
     experienceOptions;
-
   log.log('fetching experience', {
     spaceId,
     environmentId,
     experienceId,
     locale,
-    // avoiding log any personalization sensitive data
+    // Avoid logging sensitive personalization data.
     personalization: personalization !== undefined,
     extensions,
   });
-
   const response = await fetchByExperienceId(client, experienceOptions);
-
   const payload = toExperiencePayload(response);
   log.lazy('received raw payload', () => payload);
-
-  return resolveExperience(payload, config, { metadata, debug });
+  return payload;
 }
 
 async function fetchByExperienceId(
@@ -228,7 +294,7 @@ async function fetchByExperienceId(
     options;
   const requestExtensions: DeliveryExperienceRequestExtensions = { ...extensions };
   if (personalization !== undefined) {
-    requestExtensions.personalization = serializePersonalization(personalization);
+    requestExtensions.personalization = requestPersonalization(personalization);
   }
 
   try {
@@ -240,13 +306,7 @@ async function fetchByExperienceId(
     // Await inside the try so rejected requests are normalized below.
     const queryParams = parameterQuery(parameters);
     if (hasRequestExtensions(requestExtensions) || queryParams === undefined) {
-      // dev.10's POST serializer passes through extra body keys. Its generated
-      // request type omits parameters, so retain our typed extension locally.
-      // TODO: Remove this intersection once contentful-experience-delivery.js
-      // generates parameters on GetWithOverridesExperienceRequest and we upgrade.
-      const request: ContentfulViewDelivery.GetWithOverridesExperienceRequest & {
-        parameters?: ExperienceParameters;
-      } = {
+      const request: ContentfulViewDelivery.GetWithOverridesExperienceRequest = {
         locale,
         extensions: requestExtensions,
         ...(parameters === undefined ? {} : { parameters }),
@@ -288,16 +348,9 @@ async function fetchByExperienceId(
 async function fetchByDestination(
   identity: { spaceId: string; destinationId: string; locator: string },
   resolve: () => Promise<ContentfulViewDelivery.DestinationExperienceResolutionResponse>,
-  log: ReturnType<typeof createDebugLogger>,
-  resolveOptions: {
-    config: ResolverConfig;
-    metadata: Record<string, unknown> | undefined;
-    debug: boolean | undefined;
-  }
-): Promise<PortableRenderPlan | DestinationRedirectResult> {
+  log: ReturnType<typeof createDebugLogger>
+): Promise<ExperiencePayload | DestinationRedirectResult> {
   const { spaceId, destinationId, locator } = identity;
-  const { config, metadata, debug } = resolveOptions;
-
   log.log('resolving destination experience', { spaceId, destinationId, locator });
 
   let response: ContentfulViewDelivery.DestinationExperienceResolutionResponse;
@@ -333,10 +386,15 @@ async function fetchByDestination(
   const payload = toExperiencePayloadFromDestination(firstExperience.experience);
   log.lazy('received raw payload', () => payload);
 
-  return resolveExperience(payload, config, {
-    metadata,
-    debug,
-  });
+  return payload;
+}
+
+function requestPersonalization(personalization: PersonalizationOptions): PersonalizationOptions {
+  const serialized = serializePersonalization(personalization);
+  return {
+    ...serialized,
+    preflight: serialized.preflight === undefined ? false : serialized.preflight,
+  };
 }
 
 function destinationExtensions(
@@ -344,7 +402,7 @@ function destinationExtensions(
 ): ContentfulViewDelivery.DestinationExperiencesExtensions | undefined {
   if (personalization === undefined) return undefined;
   return {
-    personalization: serializePersonalization(personalization),
+    personalization: requestPersonalization(personalization),
   };
 }
 

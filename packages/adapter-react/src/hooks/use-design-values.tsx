@@ -1,0 +1,18 @@
+'use client';
+
+import { useResolvedDesign } from '../rendering/context.js';
+
+/**
+ * Read the current node's token-resolved design values. Returns `{}` when
+ * there's no design in scope.
+ *
+ * Pass a type argument to shape the bag, like `useState<T>()`:
+ *
+ *   const design = useDesignValues<{ as?: 'h1' | 'h2' }>();
+ *
+ * `T` is a convenience assertion, not validated at runtime — treat keys as
+ * possibly `undefined`.
+ */
+export function useDesignValues<T extends object = Record<string, unknown>>(): T {
+  return (useResolvedDesign() ?? {}) as T;
+}

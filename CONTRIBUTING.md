@@ -187,6 +187,29 @@ state in the browser, and supports Web SDK navigation and interactions. Run
 `npx nx run implementation-node-sdk-web-sdk:dev`. Its README distinguishes consumer
 integration from demo UI and optional browser-attempt diagnostics.
 
+The [standalone React reference implementation](./implementations/react-sdk/README.md)
+uses the packed React and Web SDKs for managed content, runtime-backed preview and
+automatic/manual presentations under one SDK root. Run
+`npx nx run implementation-react-sdk:setup`, then
+`npx nx run implementation-react-sdk:dev`. Its README covers local configuration,
+consent, navigation/visitor intent, tracking and scoped validation commands.
+
+The [standalone Next.js reference](./implementations/nextjs-sdk/README.md)
+uses the packed Next/Node/React SDKs for automatic single-Experience App/Pages
+presentation, diagnostic Home/Page Two comparisons and optional Preview Sessions. Run
+`npx nx run implementation-nextjs-sdk:setup`, then
+`npx nx run implementation-nextjs-sdk:dev`. Its README describes preserved server
+startup, browser navigation, server-only updates and supported response boundaries.
+
+All five references activate Live Preview only with `LIVE_PREVIEW_ENABLED=true`
+and a nonempty URL `preview_session_id`. The local `.env` session ID is retained
+only for copying into the URL; code never reads it. Missing/empty parameters or
+a disabled flag keep ordinary event handling, including when a session parameter
+remains in the URL. Each deployment supplies Preview configuration conditionally;
+Web and Next infer sessions from the browser/request URL, while bare Node passes
+the incoming session in request-local `preview`. Consumers do not set a separate
+preview mode flag. Their `.env.example` preview flag/session fields are blank.
+
 Root PM2 shortcuts match Optimization: `npm run pm2:list`, `npm run pm2:logs`,
 `npm run pm2:stop:all`, and `npm run pm2:delete:all`. The `all` commands affect
 every process in the selected PM2 home. Use the implementation's scoped stop

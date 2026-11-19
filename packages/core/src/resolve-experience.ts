@@ -472,6 +472,10 @@ export async function resolveExperience(
     metadata: experience.metadata,
     debug: experience.debug,
   };
+  const experienceId = isPlainPayload ? payload.sys?.id : undefined;
+  if (typeof experienceId === 'string' && experienceId.trim().length > 0) {
+    plan.experienceId = experienceId;
+  }
   const deliveryDiagnostics = normalizeDeliveryDiagnostics(
     isPlainPayload ? payload.errors : undefined
   );
@@ -484,11 +488,11 @@ export async function resolveExperience(
     if (attribution) plan.attribution = attribution;
   }
   const personalization = isPlainPayload ? payload.extensions?.personalization : undefined;
-  const profileId = personalization?.profile?.id;
+  const profile = personalization?.profile;
   const changes = personalization?.changes;
-  if (profileId) {
+  if (profile?.id) {
     plan.personalization = {
-      profileId,
+      profile,
       ...(Array.isArray(changes) ? { changes } : {}),
     };
   }

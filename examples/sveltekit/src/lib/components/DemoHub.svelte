@@ -73,9 +73,6 @@
       <code>?personalization=true</code>, <code>?debug=true</code>, <code>?locale=de-DE</code>
     </li>
     <li>
-      <code>?preview=true</code>: read from the Preview API (needs <code>CPA_TOKEN</code>)
-    </li>
-    <li>
       <code>?preview_session_id=&lt;id&gt;</code>: live preview. The Contentful app supplies the id
       (needs <code>CPA_TOKEN</code>)
     </li>

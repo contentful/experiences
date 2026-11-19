@@ -12,8 +12,12 @@
 {/if}
 {@render children()}
 
+{#key page.url.searchParams.get('preview_session_id')?.trim() || undefined}
 <ConsentPanel
   spaceId={data.consent.spaceId}
   environmentId={data.consent.environmentId}
   accessToken={data.consent.accessToken}
+  previewToken={data.consent.previewToken}
 />
+
+{/key}

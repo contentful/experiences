@@ -1,10 +1,17 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
+import { describe, it, expect, expectTypeOf, vi, beforeEach } from 'vitest';
 import {
   ContentfulViewDeliveryClient,
   ContentfulViewDelivery,
 } from '@contentful/experience-delivery';
-import { DestinationPreviewNotSupportedError, ExperienceFetchError } from './errors.js';
-import { fetchExperience, type PersonalizationOptions } from './fetch-experience.js';
+import { ExperienceFetchError } from './errors.js';
+import {
+  fetchExperience,
+  fetchExperiencePayload,
+  type PersonalizationOptions,
+  type ExperienceOptions,
+  type DestinationRedirectResult,
+} from './fetch-experience.js';
 
 const {
   mockGet,
@@ -130,7 +137,14 @@ const personalization = {
       timestamp: '2026-10-09T00:00:00.000Z',
       originalTimestamp: '2026-10-09T00:00:00.000Z',
       sentAt: '2026-10-09T00:00:00.000Z',
-      properties: { path: '/', query: {}, referrer: '', search: '', url: '/', title: 'Home' },
+      properties: {
+        path: '/',
+        query: { utm: ['a', 'b'], q: 'x y' },
+        referrer: '',
+        search: '',
+        url: '/',
+        title: 'Home',
+      },
     },
   ],
 } satisfies PersonalizationOptions;
@@ -194,98 +208,14 @@ describe('fetchExperience', () => {
       expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
       expect(mockGet).toHaveBeenCalledWith('exp-1', { locale: undefined });
     });
-
-    it('ignores the preview flag when a pre-made client is provided', async () => {
-      const client = new ContentfulViewDeliveryClient({
-        token: 'token-123',
-        spaceId: 'space-1',
-        environmentId: 'master',
-      });
-      vi.mocked(ContentfulViewDeliveryClient).mockClear();
-
-      await fetchExperience(experienceOptions, { client, preview: true }, resolveOptions);
-
-      expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
-    });
   });
 
-  describe('preview toggle', () => {
-    it('uses accessToken and default host when preview is unset', async () => {
-      await fetchExperience(
-        experienceOptions,
-        { accessToken: 'delivery-token', previewToken: 'preview-token' },
-        resolveOptions
-      );
+  describe('delivery configuration', () => {
+    it('uses accessToken and default host', async () => {
+      await fetchExperience(experienceOptions, { accessToken: 'delivery-token' }, resolveOptions);
 
       expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith(
         expect.objectContaining({ token: 'delivery-token', baseUrl: undefined })
-      );
-    });
-
-    it('uses accessToken and default host when preview is explicitly false', async () => {
-      await fetchExperience(
-        experienceOptions,
-        {
-          accessToken: 'delivery-token',
-          previewToken: 'preview-token',
-          preview: false,
-        },
-        resolveOptions
-      );
-
-      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith(
-        expect.objectContaining({ token: 'delivery-token', baseUrl: undefined })
-      );
-    });
-
-    it('uses previewToken and the preview host when preview is true', async () => {
-      await fetchExperience(
-        experienceOptions,
-        {
-          accessToken: 'delivery-token',
-          previewToken: 'preview-token',
-          preview: true,
-        },
-        resolveOptions
-      );
-
-      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith(
-        expect.objectContaining({
-          token: 'preview-token',
-          baseUrl: 'https://preview.xdn.contentful.com',
-        })
-      );
-    });
-
-    it('throws when preview is true but previewToken is missing', async () => {
-      await expect(
-        fetchExperience(
-          experienceOptions,
-          { accessToken: 'delivery-token', preview: true },
-          resolveOptions
-        )
-      ).rejects.toThrow(
-        'fetchExperience() called with preview: true but no previewToken was provided'
-      );
-    });
-
-    it('uses an explicit custom host with the preview token when preview is true', async () => {
-      await fetchExperience(
-        experienceOptions,
-        {
-          accessToken: 'delivery-token',
-          previewToken: 'preview-token',
-          preview: true,
-          host: 'https://preview-staging.example.com',
-        },
-        resolveOptions
-      );
-
-      expect(ContentfulViewDeliveryClient).toHaveBeenCalledWith(
-        expect.objectContaining({
-          token: 'preview-token',
-          baseUrl: 'https://preview-staging.example.com',
-        })
       );
     });
 
@@ -554,10 +484,9 @@ describe('fetchExperience — personalization', () => {
     expect(mockGet).not.toHaveBeenCalled();
     expect(mockGetWithOverrides).toHaveBeenCalledWith('exp-1', {
       locale: 'en-US',
-      extensions: { personalization: expected },
+      extensions: { personalization: { ...expected, preflight: false } },
     });
   });
-
   it('forwards personalization and source-map extensions together', async () => {
     await fetchExperience(
       { ...experienceOptions, personalization, extensions: { sourceMap: {} } },
@@ -568,7 +497,7 @@ describe('fetchExperience — personalization', () => {
     expect(mockGetWithOverrides).toHaveBeenCalledWith('exp-1', {
       locale: undefined,
       extensions: {
-        personalization,
+        personalization: { ...personalization, preflight: false },
         sourceMap: {},
       },
     });
@@ -593,6 +522,7 @@ describe('fetchExperience — destinationId + nodeId', () => {
     await fetchExperience(destinationOptions, { accessToken: 'token-123' }, resolveOptions);
 
     expect(mockResolveByNodeId).toHaveBeenCalledWith('dest-1', 'node-1');
+    expect(mockResolveByNodeIdWithOverrides).not.toHaveBeenCalled();
   });
 
   it('resolves the first hydrated experience through resolveExperience and returns the plan', async () => {
@@ -670,54 +600,26 @@ describe('fetchExperience — destinationId + nodeId', () => {
     expect((rejection as ExperienceFetchError).message).toContain('zero Experiences');
   });
 
-  it('throws DestinationPreviewNotSupportedError when preview is true for a nodeId-shaped fetch, before any network call', async () => {
-    const rejection: unknown = await fetchExperience(
-      destinationOptions,
-      { accessToken: 'delivery-token', previewToken: 'preview-token', preview: true },
-      resolveOptions
-    ).catch((e) => e);
-
-    expect(rejection).toBeInstanceOf(DestinationPreviewNotSupportedError);
-    const error = rejection as DestinationPreviewNotSupportedError;
-    expect(error.spaceId).toBe('space-1');
-    expect(error.destinationId).toBe('dest-1');
-    expect(error.nodeId).toBe('node-1');
-    expect(mockResolveByNodeId).not.toHaveBeenCalled();
-    expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
-  });
-
-  it('does not guard preview + destination-shaped options when a pre-made client is provided', async () => {
-    const client = new ContentfulViewDeliveryClient({
-      token: 'preview-token',
-      spaceId: 'space-1',
-      environmentId: 'master',
-    });
-    vi.mocked(ContentfulViewDeliveryClient).mockClear();
-
-    await fetchExperience(destinationOptions, { client, preview: true }, resolveOptions);
-
-    expect(mockResolveByNodeId).toHaveBeenCalledWith('dest-1', 'node-1');
-  });
-
   it('rejects extensions on destination-shaped options at compile time', () => {
-    // @ts-expect-error — extensions is not a member of ByDestinationNodeIdExperienceOptions,
-    // and TS cannot fall back to ByIdExperienceOptions here because destinationOptions'
-    // required destinationId/nodeId aren't part of that member either — a real compile error.
-    void fetchExperience(
-      { ...destinationOptions, extensions: { sourceMap: {} } },
-      { accessToken: 'token-123' },
-      resolveOptions
-    );
+    const invalidCall = () =>
+      fetchExperience(
+        // @ts-expect-error — destination selectors do not support extensions.
+        { ...destinationOptions, extensions: { sourceMap: {} } },
+        { accessToken: 'token-123' },
+        resolveOptions
+      );
+    expectTypeOf(invalidCall).toBeFunction();
   });
 
   it('rejects mixing experienceId with destinationId at compile time', () => {
-    // @ts-expect-error — experienceId and destinationId/nodeId belong to different
-    // members of the ExperienceOptions union; no combination of extra keys satisfies both.
-    void fetchExperience(
-      { ...destinationOptions, experienceId: 'exp-1' },
-      { accessToken: 'token-123' },
-      resolveOptions
-    );
+    const invalidCall = () =>
+      fetchExperience(
+        // @ts-expect-error — Experience and Destination selectors are exclusive.
+        { ...destinationOptions, experienceId: 'exp-1' },
+        { accessToken: 'token-123' },
+        resolveOptions
+      );
+    expectTypeOf(invalidCall).toBeFunction();
   });
 });
 
@@ -739,6 +641,7 @@ describe('fetchExperience — destinationId + path', () => {
     await fetchExperience(destinationOptions, { accessToken: 'token-123' }, resolveOptions);
 
     expect(mockResolveByPath).toHaveBeenCalledWith('dest-1', { path: '/products' });
+    expect(mockResolveByPathWithOverrides).not.toHaveBeenCalled();
   });
 
   it('resolves the first hydrated experience through resolveExperience and returns the plan', async () => {
@@ -816,41 +719,26 @@ describe('fetchExperience — destinationId + path', () => {
     expect((rejection as ExperienceFetchError).message).toContain('zero Experiences');
   });
 
-  it('throws DestinationPreviewNotSupportedError when preview is true for a path-shaped fetch, before any network call', async () => {
-    const rejection: unknown = await fetchExperience(
-      destinationOptions,
-      { accessToken: 'delivery-token', previewToken: 'preview-token', preview: true },
-      resolveOptions
-    ).catch((e) => e);
-
-    expect(rejection).toBeInstanceOf(DestinationPreviewNotSupportedError);
-    const error = rejection as DestinationPreviewNotSupportedError;
-    expect(error.spaceId).toBe('space-1');
-    expect(error.destinationId).toBe('dest-1');
-    expect(error.path).toBe('/products');
-    expect(mockResolveByPath).not.toHaveBeenCalled();
-    expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
-  });
-
   it('rejects extensions on destination-shaped options at compile time', () => {
-    // @ts-expect-error — extensions is not a member of ByDestinationPathExperienceOptions,
-    // and TS cannot fall back to ByIdExperienceOptions here because destinationOptions'
-    // required destinationId/path aren't part of that member either — a real compile error.
-    void fetchExperience(
-      { ...destinationOptions, extensions: { sourceMap: {} } },
-      { accessToken: 'token-123' },
-      resolveOptions
-    );
+    const invalidCall = () =>
+      fetchExperience(
+        // @ts-expect-error — destination selectors do not support extensions.
+        { ...destinationOptions, extensions: { sourceMap: {} } },
+        { accessToken: 'token-123' },
+        resolveOptions
+      );
+    expectTypeOf(invalidCall).toBeFunction();
   });
 
   it('rejects mixing experienceId with destinationId at compile time', () => {
-    // @ts-expect-error — experienceId and destinationId/path belong to different
-    // members of the ExperienceOptions union; no combination of extra keys satisfies both.
-    void fetchExperience(
-      { ...destinationOptions, experienceId: 'exp-1' },
-      { accessToken: 'token-123' },
-      resolveOptions
-    );
+    const invalidCall = () =>
+      fetchExperience(
+        // @ts-expect-error — Experience and Destination selectors are exclusive.
+        { ...destinationOptions, experienceId: 'exp-1' },
+        { accessToken: 'token-123' },
+        resolveOptions
+      );
+    expectTypeOf(invalidCall).toBeFunction();
   });
 });
 
@@ -882,7 +770,9 @@ describe('fetchExperience — destination personalization', () => {
     profileId: 'profile-1',
     events: [pageEvent],
   };
-  const expectedExtensions = { personalization: destinationPersonalization };
+  const expectedExtensions = {
+    personalization: { ...destinationPersonalization, preflight: false },
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -890,13 +780,6 @@ describe('fetchExperience — destination personalization', () => {
     mockResolveByNodeIdWithOverrides.mockResolvedValue(destinationResponse);
     mockResolveByPath.mockResolvedValue(destinationResponse);
     mockResolveByPathWithOverrides.mockResolvedValue(destinationResponse);
-  });
-
-  it('keeps the cacheable GET for node id when personalization is not set', async () => {
-    await fetchExperience(nodeOptions, { accessToken: 'token-123' }, resolveOptions);
-
-    expect(mockResolveByNodeId).toHaveBeenCalledWith('dest-1', 'node-1');
-    expect(mockResolveByNodeIdWithOverrides).not.toHaveBeenCalled();
   });
 
   it('routes node id to resolveByNodeIdWithOverrides with the personalization extension', async () => {
@@ -912,13 +795,6 @@ describe('fetchExperience — destination personalization', () => {
     });
   });
 
-  it('sends only path when personalization is not set on a path fetch', async () => {
-    await fetchExperience(pathOptions, { accessToken: 'token-123' }, resolveOptions);
-
-    expect(mockResolveByPath).toHaveBeenCalledWith('dest-1', { path: '/products' });
-    expect(mockResolveByPathWithOverrides).not.toHaveBeenCalled();
-  });
-
   it('passes the personalization extension to resolveByPathWithOverrides', async () => {
     await fetchExperience(
       { ...pathOptions, personalization: destinationPersonalization },
@@ -930,20 +806,6 @@ describe('fetchExperience — destination personalization', () => {
     expect(mockResolveByPathWithOverrides).toHaveBeenCalledWith('dest-1', {
       path: '/products',
       extensions: expectedExtensions,
-    });
-  });
-
-  it('forwards a profile id on its own, with no events', async () => {
-    await fetchExperience(
-      { ...pathOptions, personalization: { profileId: 'profile-1' } },
-      { accessToken: 'token-123' },
-      resolveOptions
-    );
-
-    expect(mockResolveByPath).not.toHaveBeenCalled();
-    expect(mockResolveByPathWithOverrides).toHaveBeenCalledWith('dest-1', {
-      path: '/products',
-      extensions: { personalization: { profileId: 'profile-1' } },
     });
   });
 
@@ -973,16 +835,139 @@ describe('fetchExperience — destination personalization', () => {
 
     expect(result).toEqual({ redirect: { path: '/new-path' } });
   });
+});
 
-  it('still rejects preview for a personalized Destination fetch', async () => {
-    const rejection: unknown = await fetchExperience(
-      { ...pathOptions, personalization: { profileId: 'profile-1' } },
-      { accessToken: 'token-123', previewToken: 'preview-1', preview: true },
-      resolveOptions
-    ).catch((error) => error);
+describe('Experience selector validation', () => {
+  beforeEach(() => vi.clearAllMocks());
 
-    expect(rejection).toBeInstanceOf(DestinationPreviewNotSupportedError);
+  const invalidSelectors = [
+    null,
+    undefined,
+    'private-selector-value',
+    {},
+    { experienceId: '' },
+    { experienceId: 42 },
+    { destinationId: 'destination' },
+    { path: '/private-selector-value' },
+    { destinationId: 'destination', path: '/', nodeId: 'node' },
+    { experienceId: 'private-selector-value', destinationId: 'destination', path: '/' },
+    { experienceId: 'private-selector-value', path: '/' },
+    { destinationId: '', path: '/' },
+    { destinationId: 'destination', nodeId: null },
+    { destinationId: 'destination', path: 42 },
+    { destinationId: 'destination', path: 'private-selector-value' },
+    ...[{ path: '/' }, { nodeId: 'node' }].flatMap((selector) =>
+      ['parameters', 'extensions'].flatMap((field) =>
+        [{}, null, false, 'private-selector-value', { secret: 'private-selector-value' }].map(
+          (value) => ({ destinationId: 'destination', ...selector, [field]: value })
+        )
+      )
+    ),
+  ];
+
+  it.each(invalidSelectors.map((selector, index) => ({ selector, index })))(
+    'rejects invalid selector $index before constructing or dispatching Delivery',
+    async ({ selector }) => {
+      const result = fetchExperience(
+        selector as ExperienceOptions,
+        { accessToken: 'token' },
+        resolveOptions
+      );
+      await expect(result).rejects.toBeInstanceOf(TypeError);
+      await expect(result).rejects.not.toThrow('private-selector-value');
+      for (const field of ['parameters', 'extensions']) {
+        if (selector && typeof selector === 'object' && field in selector) {
+          await expect(result).rejects.toThrow(`${field} is only supported with experienceId.`);
+        }
+      }
+      expect(ContentfulViewDeliveryClient).not.toHaveBeenCalled();
+      for (const method of [
+        mockGet,
+        mockGetWithOverrides,
+        mockResolveByNodeId,
+        mockResolveByNodeIdWithOverrides,
+        mockResolveByPath,
+        mockResolveByPathWithOverrides,
+      ]) {
+        expect(method).not.toHaveBeenCalled();
+      }
+    }
+  );
+
+  it('validates the shared payload boundary before logging or dispatch', async () => {
+    const { createDebugLogger } = await import('@contentful/experiences-sdk-core');
+    const client = new ContentfulViewDeliveryClient({
+      token: 'token',
+      spaceId: 'space-1',
+      environmentId: 'master',
+    });
+    await expect(
+      fetchExperiencePayload(
+        { ...experienceOptions, path: '/' } as unknown as ExperienceOptions,
+        client,
+        true
+      )
+    ).rejects.toBeInstanceOf(TypeError);
+    expect(createDebugLogger).not.toHaveBeenCalled();
+    expect(mockGet).not.toHaveBeenCalled();
     expect(mockResolveByPath).not.toHaveBeenCalled();
-    expect(mockResolveByPathWithOverrides).not.toHaveBeenCalled();
   });
+
+  it('preserves selector values and ignores unrelated properties', async () => {
+    const input = Object.freeze({
+      spaceId: experienceOptions.spaceId,
+      experienceId: undefined,
+      destinationId: ' destination ',
+      nodeId: ' node ',
+      path: undefined,
+      locale: 'en-US',
+      parameters: undefined,
+      extensions: undefined,
+      ignored: { value: true },
+    });
+    const before = { ...input, ignored: { ...input.ignored } };
+    await expect(
+      fetchExperience(input, { accessToken: 'token' }, resolveOptions)
+    ).resolves.toBeDefined();
+    expect(input).toEqual(before);
+    expect(mockResolveByNodeId).toHaveBeenCalledWith(' destination ', ' node ', {
+      locale: 'en-US',
+      parameters: undefined,
+      extensions: undefined,
+    });
+  });
+});
+
+describe('fetchExperiencePayload — selector routing', () => {
+  it('returns destination content or redirect without resolution or a second by-ID fetch', async () => {
+    vi.clearAllMocks();
+    const { resolveExperience } = await import('@contentful/experiences-sdk-core');
+    const client = new ContentfulViewDeliveryClient({
+      token: 'token',
+      spaceId: 'space-1',
+      environmentId: 'master',
+    });
+    mockResolveByPath.mockResolvedValueOnce({
+      experiences: [{ path: '/products', experience: mockDestinationExperience }],
+    });
+    const selector = { spaceId: 'space-1', destinationId: 'dest-1', path: '/products' };
+    expect(await fetchExperiencePayload(selector, client)).toBe(mockDestinationExperience);
+    mockResolveByPath.mockResolvedValueOnce({ redirect: { path: '/canonical' } });
+    expect(await fetchExperiencePayload(selector, client)).toEqual({
+      redirect: { path: '/canonical' },
+    });
+    expect(mockResolveByPath).toHaveBeenCalledTimes(2);
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(resolveExperience).not.toHaveBeenCalled();
+  });
+});
+
+it('accepts selector unions while preserving the by-ID return type', () => {
+  const fromSelector = (selector: ExperienceOptions) =>
+    fetchExperience(selector, { accessToken: 'token' }, resolveOptions);
+  const byId = () => fetchExperience(experienceOptions, { accessToken: 'token' }, resolveOptions);
+  expectTypeOf(fromSelector).returns.toEqualTypeOf<
+    Promise<PortableRenderPlan | DestinationRedirectResult>
+  >();
+  expectTypeOf(byId).returns.toEqualTypeOf<Promise<PortableRenderPlan>>();
 });

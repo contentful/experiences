@@ -7,8 +7,15 @@ import {
 import { documentToHtmlString } from '@contentful/rich-text-html-renderer';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import { readFileSync } from 'node:fs';
 import process from 'node:process';
 import { fileURLToPath, URL } from 'node:url';
+import { parseEnv } from 'node:util';
+
+// Read the local flag on each launch; PM2 can retain an older inherited value.
+const previewEnabled =
+  parseEnv(readFileSync(new URL('../.env', import.meta.url), 'utf8')).LIVE_PREVIEW_ENABLED ===
+  'true';
 
 function required(name: string): string {
   const value = process.env[name]?.trim();
@@ -37,6 +44,14 @@ const sdk = new ContentfulExperiences({
   spaceId: required('SPACE_ID'),
   environmentId: required('ENVIRONMENT_ID'),
   delivery: { accessToken: required('CDA_TOKEN') },
+  ...(previewEnabled
+    ? {
+        preview: {
+          accessToken: required('PREVIEW_TOKEN'),
+          host: process.env.PREVIEW_HOST?.trim() || undefined,
+        },
+      }
+    : {}),
   locale,
 });
 
@@ -66,35 +81,59 @@ app.get('/', async (req, res) => {
     page,
     userAgent: req.get('user-agent') ?? 'node-js-server',
   };
+  const sessionId = url.searchParams.get('preview_session_id')?.trim();
+  const preview =
+    previewEnabled && sessionId
+      ? {
+          sessionId,
+          resourceResolution: process.env.LIVE_PREVIEW_RESOURCE_RESOLUTION?.trim() || undefined,
+        }
+      : undefined;
   const request = sdk.forRequest({
     consent: true,
     locale,
     eventContext,
-    isPreview: Boolean(url.searchParams.get('preview_session_id')?.trim()),
+    preview,
   });
-  // XDA can time out when identify creates a profile in the initial content fetch.
-  // Once that is fixed, include page in the first fetch instead of sending it here.
-  await request.page({ properties: page });
-  const identifyEvent = userId
-    ? sdk.eventBuilder.buildIdentify({ ...eventContext, userId, traits: { identified: true } })
-    : undefined;
-  const resolveOptions = { config: { components: {}, experienceTemplates: {} } };
-
-  const experiences: { id: string; plan: PortableRenderPlan }[] = [];
-  for (const experienceId of experienceIds) {
-    const plan = await request.fetchExperience(
-      {
+  try {
+    const identifyRequested = !request.isPreview && Boolean(userId);
+    let events = request.isPreview
+      ? undefined
+      : [
+          ...(identifyRequested && userId
+            ? [{ type: 'identify' as const, userId, traits: { identified: true } }]
+            : []),
+          { type: 'page' as const, properties: page },
+        ];
+    const resolveOptions = { config: { components: {}, experienceTemplates: {} } };
+    const plans = new Map<string, PortableRenderPlan>();
+    // Evaluate initial intent once; later IDs are best-effort rendering comparisons.
+    let profileId = request.profile?.id;
+    let contentError: unknown;
+    for (const experienceId of new Set(experienceIds)) {
+      const options = {
         experienceId,
-        // XDA currently returns baseline for profile-only fetches. Include identify
-        // until that is fixed; later fetches can then use the established profile alone.
-        ...(identifyEvent ? { personalization: { events: [identifyEvent] } } : {}),
-      },
-      resolveOptions
-    );
-    experiences.push({ id: experienceId, plan });
-  }
+        ...(!request.isPreview
+          ? { personalization: { ...(events ? { events } : {}), profileId } }
+          : {}),
+      };
+      events = undefined;
+      try {
+        const plan = await request.fetchExperience(options, resolveOptions);
+        profileId = plan.personalization?.profile.id ?? profileId;
+        plans.set(experienceId, plan);
+      } catch (error) {
+        if (request.isPreview) throw error;
+        contentError ??= error;
+      }
+    }
+    if (!plans.size) res.status(contentError instanceof NotFoundError ? 404 : 502);
+    const experiences = experienceIds.map((id) => ({ id, plan: plans.get(id) }));
 
-  res.render('index', { identifyRequested: Boolean(userId), experiences });
+    res.render('index', { isPreview: request.isPreview, identifyRequested, experiences });
+  } finally {
+    request.destroy();
+  }
 });
 
 app.use((error: unknown, _request: Request, response: Response, next: NextFunction) => {

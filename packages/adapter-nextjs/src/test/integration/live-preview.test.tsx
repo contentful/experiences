@@ -1,0 +1,389 @@
+/** @vitest-environment jsdom */
+import type { Config, ExperiencePayload } from '@contentful/experiences-react';
+import { useExperiences } from '@contentful/experiences-react/client';
+import type { PreviewClientFactory } from '@contentful/experiences-runtime';
+import { ContentfulExperiences, type PortableRenderPlan } from '@contentful/experiences-web';
+import { act, Suspense } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { bindAppRouterClientExperiences } from '../../app-router/app-router-client.js';
+import { bindPagesRouterExperiences } from '../../pages-router/pages-router.js';
+import type { RequestResult } from '../../presentation/request-result.js';
+
+const route = vi.hoisted(() => ({
+  path: '/home',
+  search: '',
+  events: { on: vi.fn(), off: vi.fn() },
+}));
+vi.mock('next/navigation.js', () => ({
+  usePathname: () => route.path,
+  useSearchParams: () => new globalThis.URLSearchParams(route.search),
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
+vi.mock('next/router.js', () => ({
+  useRouter: () => ({ isReady: true, asPath: route.path + route.search, events: route.events }),
+}));
+const plan = (label: string): PortableRenderPlan => ({
+  nodes: [],
+  debug: false,
+  diagnostics: [],
+  metadata: { label },
+});
+function clientFactory() {
+  return vi.fn<PreviewClientFactory>(() => ({
+    getResult: () => ({ data: undefined, error: undefined }),
+    subscribe: () => () => {},
+    subscribeStatus: () => () => {},
+  }));
+}
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+describe('managed Next Live Preview', () => {
+  let root: Root;
+  let container: HTMLDivElement;
+  let sdk: ContentfulExperiences;
+  let network: ReturnType<typeof vi.fn>;
+  function Probe() {
+    sdk = useExperiences() as ContentfulExperiences;
+    return null;
+  }
+  beforeEach(() => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+    network = vi.fn(() => {
+      throw new Error('Unexpected network');
+    });
+    vi.stubGlobal('fetch', network);
+    window.localStorage.clear();
+    route.path = '/home';
+    route.search = '';
+    window.history.replaceState(null, '', '/home');
+    container = document.createElement('div');
+    root = createRoot(container);
+  });
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it.each(
+    (['app', 'pages'] as const).flatMap((family) =>
+      (['request', 'ordinary', 'request analytics', 'ordinary analytics'] as const).flatMap(
+        (surface) => [true, false].map((configured) => ({ family, surface, configured }))
+      )
+    )
+  )(
+    '$family $surface sets URL owner mode without guessing a source (configured=$configured)',
+    async ({ family, surface, configured }) => {
+      const createClient = clientFactory();
+      const options = {
+        config: { components: {} },
+        spaceId: 'space',
+        environmentId: 'master',
+        delivery: { accessToken: 'delivery' },
+        allowedEventTypes: [],
+        defaults: { consent: false, persistenceConsent: false },
+        preview: configured
+          ? {
+              accessToken: 'preview',
+              createClient,
+              sessionHost: 'https://preview.example.com',
+              resourceResolution: 'resolved',
+            }
+          : undefined,
+      };
+      const binding =
+        family === 'app'
+          ? bindAppRouterClientExperiences(options)
+          : bindPagesRouterExperiences(options);
+      const owner = surface.startsWith('request') ? binding.request : binding;
+      const BoundRoot = surface.endsWith('analytics')
+        ? owner.ExperiencesAnalyticsRoot
+        : owner.ExperiencesRoot;
+      route.search = '?preview_session_id=a';
+      window.history.replaceState(null, '', route.path + route.search);
+      await act(async () =>
+        root.render(
+          <BoundRoot
+            preview={
+              configured
+                ? { accessToken: undefined, createClient: undefined, sessionHost: undefined }
+                : undefined
+            }
+          >
+            <Probe />
+          </BoundRoot>
+        )
+      );
+      expect(sdk.isPreview).toBe(configured);
+      expect(sdk.config.preview !== undefined).toBe(configured);
+      if (configured) expect(sdk.config.preview).toMatchObject(options.preview!);
+      expect(network).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['app', 'pages'] as const)(
+    '%s configures one explicit context while renderer IDs stay ordinary',
+    async (family) => {
+      const createClient = clientFactory();
+      const options = {
+        config: { components: {} },
+        spaceId: 'space',
+        environmentId: 'master',
+        delivery: { accessToken: 'delivery' },
+        preview: { accessToken: 'preview', createClient },
+      };
+      route.search = '?preview_session_id=session';
+      window.history.replaceState(null, '', route.path + route.search);
+      const binding =
+        family === 'app'
+          ? bindAppRouterClientExperiences(options)
+          : bindPagesRouterExperiences(options);
+      const subscribe = vi
+        .spyOn(ContentfulExperiences.prototype, 'subscribeToPreview')
+        .mockImplementation(() => ({ unsubscribe: vi.fn() }));
+      const result: RequestResult = {
+        requestId: 'primary',
+        routeKey: '/home?preview_session_id=session',
+        experience: { experienceId: 'hero' },
+        plan: plan('hero'),
+      };
+      await act(async () =>
+        root.render(
+          <binding.request.ExperiencesRoot result={result}>
+            <Probe />
+            <binding.request.Experience />
+            <binding.Experience experienceId="footer" initialPlan={plan('footer')} />
+          </binding.request.ExperiencesRoot>
+        )
+      );
+      expect(sdk.config.preview?.createClient).toBe(createClient);
+      expect(sdk.isPreview).toBe(true);
+      expect(subscribe.mock.calls.map(([id]) => id)).toEqual(['hero', 'footer']);
+    }
+  );
+
+  it.each(['app', 'pages'] as const)(
+    '%s retains server resolve context for client preview updates without refetching its seed',
+    async (family) => {
+      const metadata = { slug: '/home', locale: 'de-DE' };
+      const resolveData = vi.fn(
+        (context: { experience: { metadata: Record<string, unknown> } }) => ({
+          href: `${context.experience.metadata.slug}?locale=${context.experience.metadata.locale}`,
+        })
+      );
+      const config: Config = { components: { hero: { component: () => null, resolveData } } };
+      let data: ExperiencePayload | undefined;
+      let update = () => {};
+      const createClient: PreviewClientFactory = () => ({
+        getResult: () => ({ data, error: undefined }),
+        subscribe: (listener) => {
+          update = listener;
+          return () => {};
+        },
+        subscribeStatus: () => () => {},
+      });
+      const options = {
+        config,
+        spaceId: 'space',
+        environmentId: 'master',
+        delivery: { accessToken: 'delivery' },
+        preview: { accessToken: 'preview', createClient },
+      };
+      route.search = '?preview_session_id=session';
+      window.history.replaceState(null, '', route.path + route.search);
+      const bound = (
+        family === 'app'
+          ? bindAppRouterClientExperiences(options)
+          : bindPagesRouterExperiences(options)
+      ).request;
+      const fetch = vi.spyOn(ContentfulExperiences.prototype, 'fetchExperience');
+      const subscribe = vi.spyOn(ContentfulExperiences.prototype, 'subscribeToPreview');
+      const resolved = vi.fn();
+      const result: RequestResult = {
+        requestId: 'primary',
+        routeKey: route.path + route.search,
+        experience: { experienceId: 'hero' },
+        plan: { ...plan('server'), metadata, debug: true },
+      };
+      await act(async () =>
+        root.render(
+          <bound.ExperiencesRoot result={result}>
+            <bound.Experience onExperienceResolved={resolved} />
+          </bound.ExperiencesRoot>
+        )
+      );
+      expect(fetch).not.toHaveBeenCalled();
+      expect(subscribe).toHaveBeenCalledWith(
+        'hero',
+        expect.objectContaining({ metadata, debug: true }),
+        expect.any(Function)
+      );
+      await act(async () => {
+        data = {
+          sys: { type: 'Experience', id: 'hero' },
+          nodes: [
+            {
+              component: {
+                sys: {
+                  type: 'ResourceLink',
+                  linkType: 'Contentful:Component',
+                  urn: 'crn:contentful:::experience:components/hero',
+                },
+              },
+              contentProperties: {},
+              designProperties: {},
+              slots: {},
+            },
+          ],
+        };
+        update();
+      });
+      expect(resolveData).toHaveBeenCalledOnce();
+      expect(resolved).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            metadata,
+            debug: true,
+            nodes: [
+              expect.objectContaining({
+                props: expect.objectContaining({ resolved: { href: '/home?locale=de-DE' } }),
+              }),
+            ],
+          }),
+        })
+      );
+      expect(network).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['app', 'pages'] as const)(
+    '%s presents an error-only Preview result without fetching',
+    async (family) => {
+      const options = {
+        config: { components: {} },
+        spaceId: 'space',
+        environmentId: 'master',
+        delivery: { accessToken: 'delivery' },
+        preview: { accessToken: 'preview', createClient: clientFactory() },
+      };
+      route.search = '?preview_session_id=session';
+      window.history.replaceState(null, '', route.path + route.search);
+      const bound = (
+        family === 'app'
+          ? bindAppRouterClientExperiences(options)
+          : bindPagesRouterExperiences(options)
+      ).request;
+      const result: RequestResult = {
+        requestId: 'preview-error',
+        routeKey: route.path + route.search,
+        experience: { experienceId: 'hero' },
+        contentError: 'Preview Session content unavailable.',
+      };
+      const onError = vi.fn();
+      await act(async () =>
+        root.render(
+          <bound.ExperiencesRoot result={result}>
+            <Probe />
+            <bound.Experience
+              onExperienceError={onError}
+              errorFallback={({ error }) => <p role="alert">{error?.message}</p>}
+            />
+          </bound.ExperiencesRoot>
+        )
+      );
+      expect(container.querySelector('[role="alert"]')?.textContent).toBe(result.contentError);
+      expect(onError).toHaveBeenCalledOnce();
+      expect(onError.mock.calls[0]![0]).not.toHaveProperty('statusCode');
+      expect(sdk.isPreview).toBe(true);
+      expect(network).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['app', 'pages'] as const)(
+    '%s preserves initial content and history guards while reconnecting session selections',
+    async (family) => {
+      const createClient = clientFactory();
+      const options = {
+        config: { components: {} },
+        spaceId: 'space',
+        environmentId: 'master',
+        delivery: { accessToken: 'delivery' },
+        allowedEventTypes: [],
+        defaults: { consent: false, persistenceConsent: false },
+        preview: { accessToken: 'preview', createClient },
+      };
+      const bound =
+        family === 'app'
+          ? bindAppRouterClientExperiences(options).request
+          : bindPagesRouterExperiences(options).request;
+      const pending = deferred<void>();
+      let suspended = false;
+      function Suspend() {
+        if (suspended) throw pending.promise;
+        return null;
+      }
+      const fetch = vi
+        .spyOn(ContentfulExperiences.prototype, 'fetchExperience')
+        .mockResolvedValue(plan('preview'));
+      const tree = (requestId: string, session?: string) => {
+        route.search = session ? '?preview_session_id=' + session : '';
+        const routeKey = route.path + route.search;
+        window.history.replaceState(null, '', routeKey);
+        const result: RequestResult = {
+          requestId,
+          routeKey,
+          experience: { experienceId: 'primary', personalization: { events: [] } },
+          plan: plan(requestId),
+        };
+        return (
+          <Suspense fallback="Waiting">
+            <bound.ExperiencesRoot result={result}>
+              <Suspend />
+              <Probe />
+              <bound.Experience>
+                {(state) => <output>{String(state.data?.metadata.label)}</output>}
+              </bound.Experience>
+            </bound.ExperiencesRoot>
+          </Suspense>
+        );
+      };
+      await act(async () => root.render(tree('original', 'a')));
+      const previewSdk = sdk;
+      expect(sdk.isPreview).toBe(true);
+      expect(createClient).toHaveBeenCalledOnce();
+      expect(fetch).not.toHaveBeenCalled();
+      expect(container.textContent).toBe('original');
+      const subscribe = vi.spyOn(ContentfulExperiences.prototype, 'subscribeToPreview');
+      await act(async () => root.render(tree('second', 'b')));
+      expect(sdk).not.toBe(previewSdk);
+      expect(subscribe).toHaveBeenCalledWith('primary', expect.anything(), expect.any(Function));
+      expect(createClient).toHaveBeenLastCalledWith(expect.objectContaining({ sessionId: 'b' }));
+      suspended = true;
+      await act(async () => root.render(tree('second', 'b')));
+      suspended = false;
+      await act(async () => pending.resolve());
+      expect(sdk).not.toBe(previewSdk);
+      const destroy = vi.spyOn(sdk, 'destroy');
+      await act(async () => root.render(tree('ordinary')));
+      expect(destroy).toHaveBeenCalledOnce();
+      expect(sdk).not.toBe(previewSdk);
+      expect(sdk.isPreview).toBe(false);
+      // Returning to the original route must not re-adopt its original SSR plan.
+      await act(async () => root.render(tree('original', 'a')));
+      expect(container.textContent).toBe('preview');
+      expect(fetch).toHaveBeenCalledWith(
+        expect.objectContaining({ experienceId: 'primary' }),
+        expect.objectContaining({ metadata: { label: 'original' }, debug: false }),
+        expect.objectContaining({ isCurrent: expect.any(Function) })
+      );
+      expect(network).not.toHaveBeenCalled();
+    }
+  );
+});

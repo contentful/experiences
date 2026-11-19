@@ -1,0 +1,194 @@
+/*
+ * Recursive renderer over PortableRenderNodes. Resolved design values auto-fill
+ * matching props (below content/resolveData) and are also available via
+ * `useDesignValues()`.
+ */
+
+import { Fragment, createElement, type ReactNode } from 'react';
+
+import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
+
+import type { ComponentErrorProps } from '../diagnostics/component-error.js';
+import { ExperienceNode } from '../nodes/experience-node.js';
+import type { MissingComponentProps } from '../diagnostics/missing-component.js';
+import { resolveNodeProps } from '../nodes/resolve-node-props.js';
+import type { Config } from '../registry/types.js';
+import type {
+  ExperienceTrackingOptions,
+  OnExperienceNodeRoot,
+} from '../tracking/root-binding-types.js';
+
+export type RenderUnknown = (props: MissingComponentProps) => ReactNode;
+export type RenderError = (props: ComponentErrorProps) => ReactNode;
+
+/**
+ * Reports one render-time diagnostic (unregistered id, a component that
+ * threw). `ServerExperienceRenderer` passes a closure that pushes onto a
+ * plain array (SSR is synchronous top-down, so the array is fully populated
+ * by the time `<DebugExperience>` reads it — see the element-order note
+ * there). `ClientExperienceRenderer` passes a `setState` updater instead, so
+ * `<DebugExperience>` re-renders reactively when a later interaction throws.
+ */
+export type DiagnosticReporter = (error: Error) => void;
+
+export interface NodesRendererProps extends ExperienceTrackingOptions {
+  nodes: PortableRenderNode[];
+  config: Config;
+  renderUnknown: RenderUnknown;
+  renderError: RenderError;
+  onDiagnostic: DiagnosticReporter;
+  onNodeRoot?: OnExperienceNodeRoot;
+}
+
+export function NodesRenderer({
+  nodes,
+  config,
+  renderUnknown,
+  renderError,
+  onDiagnostic,
+  clickable,
+  trackClicks,
+  trackHovers,
+  trackViews,
+  onNodeRoot,
+}: NodesRendererProps): ReactNode {
+  if (!nodes.length) return null;
+  return (
+    <Fragment>
+      {nodes.map((node, index) => (
+        <NodeRenderer
+          key={node.nodeId ?? index}
+          node={node}
+          config={config}
+          renderUnknown={renderUnknown}
+          renderError={renderError}
+          onDiagnostic={onDiagnostic}
+          clickable={clickable}
+          trackClicks={trackClicks}
+          trackHovers={trackHovers}
+          trackViews={trackViews}
+          onNodeRoot={onNodeRoot}
+        />
+      ))}
+    </Fragment>
+  );
+}
+
+interface NodeRendererProps extends ExperienceTrackingOptions {
+  node: PortableRenderNode;
+  config: Config;
+  renderUnknown: RenderUnknown;
+  renderError: RenderError;
+  onDiagnostic: DiagnosticReporter;
+  onNodeRoot?: OnExperienceNodeRoot;
+}
+
+function NodeRenderer({
+  node,
+  config,
+  renderUnknown,
+  renderError,
+  onDiagnostic,
+  clickable,
+  trackClicks,
+  trackHovers,
+  trackViews,
+  onNodeRoot,
+}: NodeRendererProps): ReactNode {
+  const { kind, id } = node.registration;
+  const isExperienceTemplate = kind === 'experienceTemplate';
+
+  // Diagnostics are reported straight to `onDiagnostic`, synchronously during
+  // render. Deliberate: this component is shared between SSR and CSR, and
+  // `useEffect` never runs during `renderToStaticMarkup`/streaming SSR — an
+  // effect-deferred report would silently vanish on the server.
+  //
+  // Dedup lives in `onDiagnostic` (see both renderers), not here. An ancestor
+  // re-render re-executes this whole function, so an unregistered id or
+  // malformed slot would otherwise be re-reported every time — the collectors
+  // drop a message they already hold. Keeping the guard there rather than in a
+  // `useRef` is what lets this module stay hook-free, and therefore usable from
+  // a React Server Component: `ServerExperienceRenderer` renders it without a
+  // `'use client'` boundary, which is what keeps `config` (component
+  // references, unserializable) from having to cross one.
+
+  // Pre-render each slot's children as an *array* of ReactNodes (one keyed
+  // element per child), not a single wrapping node. A component can drop the
+  // array straight into JSX for the common "just render them" case (React
+  // renders keyed arrays), or map/filter/wrap the children individually.
+  //
+  // Slot name → prop name, for both node kinds: a coded Experience Template
+  // declaring a `content` slot receives a `content` prop. `children` is not a
+  // special case, just the conventional default slot name.
+  const slotProps: Record<string, ReactNode[]> = {};
+  for (const [slotName, children] of Object.entries(node.slots)) {
+    // Defensive: `node.slots[x]` is typed as an array, but a hand-built
+    // PortableRenderPlan (a supported path — customers can construct one
+    // directly instead of going through `resolveExperience`) is not
+    // type-checked at runtime. Warn + drop rather than letting `.map` throw.
+    if (!Array.isArray(children)) {
+      const message =
+        `Slot "${slotName}" on ${kind} "${id}"${node.nodeId ? ` (node "${node.nodeId}")` : ''} ` +
+        `is not an array of nodes; rendering it as empty instead of throwing.`;
+      if (typeof console !== 'undefined') {
+        console.warn(`[@contentful/experiences-react] ${message}`);
+      }
+      onDiagnostic(new Error(message));
+      slotProps[slotName] = [];
+      continue;
+    }
+    slotProps[slotName] = children.map((child, index) => (
+      <NodeRenderer
+        key={child.nodeId ?? index}
+        node={child}
+        config={config}
+        renderUnknown={renderUnknown}
+        renderError={renderError}
+        onDiagnostic={onDiagnostic}
+        clickable={clickable}
+        trackClicks={trackClicks}
+        trackHovers={trackHovers}
+        trackViews={trackViews}
+        onNodeRoot={onNodeRoot}
+      />
+    ));
+  }
+
+  const resolved = resolveNodeProps(node, config);
+  if (resolved.status === 'unregistered') {
+    // An unregistered Experience Template would blank the page if we swapped
+    // it for the missing-component box, so warn and render its slot children
+    // unwrapped — the content survives, the diagnostic names what's missing.
+    if (isExperienceTemplate) {
+      const message = `No experience template registered for id "${id}". Rendering its slot children without the experience template wrapper.`;
+      if (typeof console !== 'undefined') {
+        console.warn(`[@contentful/experiences-react] ${message}`);
+      }
+      onDiagnostic(new Error(message));
+      return <Fragment>{Object.values(slotProps).flat()}</Fragment>;
+    }
+    // `MissingComponent` (the default `renderUnknown`) does its own
+    // console.warn; a custom override may not, so the diagnostic is recorded
+    // here regardless of which fallback ends up rendering.
+    onDiagnostic(
+      new Error(
+        `No component registered for id "${id}"${node.nodeId ? ` (nodeId: ${node.nodeId})` : ''}.`
+      )
+    );
+    return createElement(renderUnknown, { componentId: id, nodeId: node.nodeId });
+  }
+  // Slots go through the explicit `slots` prop so a slot can't collide with one
+  // of ExperienceNode's own prop names.
+  return (
+    <ExperienceNode
+      node={resolved}
+      renderError={renderError}
+      slots={slotProps}
+      clickable={clickable}
+      trackClicks={trackClicks}
+      trackHovers={trackHovers}
+      trackViews={trackViews}
+      onNodeRoot={onNodeRoot}
+    />
+  );
+}

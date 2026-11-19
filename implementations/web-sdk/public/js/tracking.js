@@ -52,7 +52,7 @@ export function createTrackingLog(sdk) {
   function createRow(event, interval) {
     const row = cloneTemplate('event-row').firstElementChild;
     // Maintainer: selectors expose real interval/entity metadata for inspection.
-    // A reused XDA identify message is still a separate observed attempt.
+    // A repeated message ID is still a separate observed attempt.
     row.dataset.testid = `event-${event.type}-${event.messageId ?? 'attempt'}-${rawEventCount}`;
     const id = event[`${interval}Id`];
     if (interval && typeof id === 'string') {

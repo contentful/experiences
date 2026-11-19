@@ -1,0 +1,71 @@
+import { ContentfulViewDeliveryClient } from '@contentful/experiences-client';
+
+type DeliveryClientBaseOptions = Omit<
+  ContentfulViewDeliveryClient.Options,
+  'token' | 'baseUrl' | 'spaceId' | 'environmentId'
+>;
+
+/** Identity the runtime already owns (`Config.spaceId`/`environmentId`),
+ * threaded in separately so callers don't repeat it in `delivery`/`preview` config. */
+export type DeliveryClientIdentity = {
+  spaceId: string;
+  environmentId: string;
+};
+
+/** Configuration for a Delivery or Preview client owned by a runtime. */
+export type DeliveryClientOptions = DeliveryClientBaseOptions &
+  (
+    | {
+        /** Bearer token or token supplier used for direct Delivery/Preview API access. */
+        accessToken: ContentfulViewDeliveryClient.Options['token'];
+        /** Optional endpoint override or endpoint supplier. */
+        host?: ContentfulViewDeliveryClient.Options['baseUrl'];
+      }
+    | {
+        accessToken?: never;
+        /** Explicit proxy endpoint that owns upstream authentication. */
+        host: NonNullable<ContentfulViewDeliveryClient.Options['baseUrl']>;
+      }
+  );
+
+/**
+ * Constructs a runtime-owned client, disabling generated auth for a tokenless proxy.
+ * `defaultHeaders` sit beneath any caller-configured `headers`.
+ */
+export function createDeliveryClient(
+  options: DeliveryClientOptions,
+  identity: DeliveryClientIdentity,
+  {
+    defaultHost,
+    defaultHeaders,
+    configuration = 'delivery',
+  }: {
+    defaultHost?: NonNullable<ContentfulViewDeliveryClient.Options['baseUrl']>;
+    defaultHeaders?: Record<string, string>;
+    configuration?: 'delivery' | 'preview';
+  } = {}
+): ContentfulViewDeliveryClient {
+  const { accessToken, host, ...configured } = options;
+  const rest =
+    defaultHeaders === undefined
+      ? configured
+      : { ...configured, headers: { ...defaultHeaders, ...configured.headers } };
+  if (accessToken === undefined && host === undefined) {
+    throw new Error(
+      `${configuration} requires ${configuration}.accessToken or an explicit trusted proxy ${configuration}.host.` +
+        (configuration === 'preview'
+          ? ' preview.sessionHost does not supply API authentication.'
+          : '')
+    );
+  }
+
+  const baseUrl = host ?? (rest.environment === undefined ? defaultHost : undefined);
+  const clientOptions =
+    accessToken === undefined
+      ? { ...rest, ...identity, auth: rest.auth ?? false, baseUrl }
+      : { ...rest, ...identity, token: accessToken, baseUrl };
+
+  return new ContentfulViewDeliveryClient(
+    clientOptions as unknown as ContentfulViewDeliveryClient.Options
+  );
+}

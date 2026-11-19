@@ -8,12 +8,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@contentful/experiences-react": "*",
-    "@contentful/experiences-web": "*",
-    "next": "^15.0.0",
+    "@contentful/experiences-nextjs": "*",
+    "@contentful/experiences-live-preview": "*",
+    "next": "^15.5.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

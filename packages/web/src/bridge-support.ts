@@ -1,4 +1,4 @@
-import type { PersonalizationState } from './interceptors.js';
+import type { PersonalizationState } from './state/interceptors.js';
 import {
   CORE_BRIDGE_CAPABILITIES_SYMBOL,
   getCoreBridgeCapabilities,

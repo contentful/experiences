@@ -1,6 +1,6 @@
 import styled from 'styled-components';
 
-import { useDesignValues } from '@contentful/experiences-react';
+import { useDesignValues } from '@contentful/experiences-react/client';
 
 export interface CardProps {
   title?: string;
