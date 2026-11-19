@@ -52,8 +52,10 @@ export interface ComponentErrorProps {
   componentId: string;
   /** Optional — only present when the payload supplied an id for this node. */
   nodeId?: string;
-  /** The caught error's message, when available. */
+  /** The boundary error's message, after the host's error transform when configured. */
   message?: string;
+  /** Retry this node's rendering through its native Svelte boundary, not content fetching or visitor reset. */
+  reset?: () => void;
 }
 
 export type RenderError = Component<ComponentErrorProps>;
@@ -61,8 +63,9 @@ export type RenderError = Component<ComponentErrorProps>;
 /**
  * Reports one render-time diagnostic (unregistered id, a component that
  * threw). `ServerExperienceRenderer` passes a closure that pushes onto a
- * plain array (Svelte SSR is synchronous top-down, so the array is fully
- * populated by the time `<DebugExperience>` reads it). `ClientExperienceRenderer`
+ * plain array for synchronous traversal diagnostics. SSR component exceptions
+ * are reported by the host's `transformError`, not the boundary's `onerror`.
+ * `ClientExperienceRenderer`
  * passes a closure that mutates a `$state` array instead, so `<DebugExperience>`
  * re-renders reactively when a later interaction throws.
  */

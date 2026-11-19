@@ -12,6 +12,7 @@ export default defineConfig({
     // vitest.ssr.config.ts instead.
     exclude: ['src/**/*.ssr.test.ts'],
     setupFiles: ['./vitest.setup.ts'],
+    globalSetup: ['./src/test/ssr-recovery.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

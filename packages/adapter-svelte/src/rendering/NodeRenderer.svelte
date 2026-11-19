@@ -180,12 +180,17 @@
     return true;
   }
 
-  // Reported from `<svelte:boundary onerror={...}>` when the customer's
-  // component throws during render. See the README's error-handling section
-  // for the SSR/CSR asymmetry: `<svelte:boundary>` only catches client-side —
-  // a throw during SvelteKit's server render still fails the whole render.
+  function getRenderErrorMessage(error: unknown): string | undefined {
+    if (typeof error === 'string') return error;
+    if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string')
+      return error.message;
+    return undefined;
+  }
+
+  // Client `onerror` receives the host-transformed error, including after hydration.
+  // Server boundary recovery/reporting is configured by the host's transformError.
   function reportRenderError(error: unknown): void {
-    const reason = error instanceof Error ? error.message : String(error);
+    const reason = getRenderErrorMessage(error) ?? 'Unknown render error';
     const message =
       `Component "${id}" (${kind}${node.nodeId ? `, node "${node.nodeId}"` : ''}) threw while ` +
       `rendering: ${reason}. Rendering the error fallback instead of crashing the surrounding tree.`;
@@ -201,8 +206,8 @@
   {@const ErrorFallback = renderError}
   <svelte:boundary onerror={(error) => reportRenderError(error)}>
     <Cmp {...composed} />
-    {#snippet failed()}
-      <ErrorFallback componentId={id} nodeId={node.nodeId} />
+    {#snippet failed(error, reset)}
+      <ErrorFallback componentId={id} nodeId={node.nodeId} message={getRenderErrorMessage(error)} {reset} />
     {/snippet}
   </svelte:boundary>
 {:else if orphanedSnippets}

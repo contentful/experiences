@@ -4,9 +4,9 @@
  * (visible box in debug mode, silent null otherwise), visually distinct
  * (different color/label) so a customer can tell "not registered" apart
  * from "registered but threw" at a glance. The diagnostic + console.warn
- * for this failure mode are recorded once, at the `<svelte:boundary>` call
- * site in `NodeRenderer.svelte` — not here — so they still fire even when a
- * customer overrides `renderError` with their own fallback.
+ * for client failures are recorded at the `<svelte:boundary>` call site in
+ * `NodeRenderer.svelte`, including with a custom fallback. Server exceptions
+ * pass through the host's error transform before rendering this fallback.
 -->
 <script lang="ts">
   import type { ComponentErrorProps } from '../rendering/component-props.js';

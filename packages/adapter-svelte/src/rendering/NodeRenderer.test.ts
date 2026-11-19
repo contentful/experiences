@@ -1,8 +1,12 @@
-import type { ExperiencePayload } from '@contentful/experiences-sdk-core';
+import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import { resolveExperience } from '@contentful/experiences-sdk-core';
-import { render } from '@testing-library/svelte';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, waitFor, within } from '@testing-library/svelte';
+import { mount, hydrate, unmount, tick } from 'svelte';
+import { SvelteMap } from 'svelte/reactivity';
+import { describe, expect, it, vi, inject } from 'vitest';
 import type { Config } from '../registry/types.js';
+import type { Component } from 'svelte';
+import type { ComponentErrorProps, RenderError } from './component-props.js';
 import ClientExperienceRenderer from './ClientExperienceRenderer.svelte';
 import ServerExperienceRenderer from './ServerExperienceRenderer.svelte';
 import PropsProbe from '../test/fixtures/PropsProbe.svelte';
@@ -19,6 +23,12 @@ import {
   sysWithExperienceTemplate,
 } from '../test/fixtures/render-plan.js';
 import { minimalSourceMap } from '../test/fixtures/source-map.js';
+
+declare module 'vitest' {
+  export interface ProvidedContext {
+    rendererFailure: { body: string; plan: PortableRenderPlan };
+  }
+}
 
 const read = (container: HTMLElement, attribute: string) =>
   JSON.parse(container.querySelector('[data-props]')!.getAttribute(attribute)!);
@@ -242,10 +252,8 @@ describe('client node diagnostics', () => {
         // ($state-backed renderDiagnostics): the boundary's onerror resolves
         // after the initial render even under this client-mounted harness, and
         // ServerExperienceRenderer's plain-array collection is evaluated once,
-        // matching its documented "one synchronous SSR pass" contract — real
-        // `svelte/server` never reaches the catching code at all (see the
-        // README's SSR/CSR asymmetry section), so this component never shows
-        // this diagnostic in the debug panel in any real deployment either.
+        // matching its one synchronous traversal pass. SSR boundary errors
+        // instead pass through the host's transformError, not this onerror.
         if (name === 'ClientExperienceRenderer') {
           const errorList = container.querySelector('[data-experiences-debug-errors]');
           expect(errorList).not.toBeNull();
@@ -276,6 +284,166 @@ describe('client node diagnostics', () => {
         warn.mockRestore();
       }
     });
+  });
+
+  it('forwards transformed public errors and native reset without refetching or changing siblings', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const target = document.createElement('div');
+    document.body.append(target);
+    let instance: ReturnType<typeof mount> | undefined;
+    try {
+      const config: Config = {
+        components: { broken: BrokenFixture, button: ButtonFixture },
+      };
+      const experience = await resolveExperience(
+        {
+          nodes: [
+            componentNode('broken', { id: 'broken-node' }),
+            componentNode('button', { contentProperties: { label: 'healthy sibling' } }),
+          ],
+        },
+        config
+      );
+      const transformError = vi.fn(() => ({ message: 'Public rendering error', code: 'render' }));
+      const content = new SvelteMap([['plan', experience]]);
+      instance = mount(ClientExperienceRenderer, {
+        target,
+        props: {
+          get experience() {
+            return content.get('plan')!;
+          },
+          config,
+          debug: true,
+          renderError: PropsProbe,
+        },
+        transformError,
+      });
+      const view = within(target);
+      await waitFor(() =>
+        expect(read(target, 'data-props')).toMatchObject({
+          componentId: 'broken',
+          nodeId: 'broken-node',
+          message: 'Public rendering error',
+        })
+      );
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('Public rendering error'));
+      expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('[object Object]'));
+      const sibling = view.getByText('healthy sibling');
+      await fireEvent.click(view.getByText('Retry rendering'));
+      await waitFor(() => expect(transformError).toHaveBeenCalledTimes(2));
+      expect(view.getByText('Retry rendering')).toBeTruthy();
+      const corrected = await resolveExperience(
+        {
+          nodes: [
+            componentNode('broken', { id: 'broken-node', contentProperties: { fail: false } }),
+            componentNode('button', { contentProperties: { label: 'healthy sibling' } }),
+          ],
+        },
+        config
+      );
+      content.set('plan', corrected);
+      await tick();
+      await fireEvent.click(view.getByText('Retry rendering'));
+      await waitFor(() => expect(view.getByText('Recovered component')).toBeTruthy());
+      expect(view.queryByText('Retry rendering')).toBeNull();
+      expect(view.getByText('healthy sibling')).toBe(sibling);
+      expect(transformError).toHaveBeenCalledTimes(2);
+    } finally {
+      if (instance) await unmount(instance);
+      target.remove();
+      warn.mockRestore();
+    }
+  });
+
+  it.each(['Thrown message', { message: 'Thrown message' }])(
+    'preserves legacy fallback props for non-Error throws: %s',
+    async (failure) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        let received: Omit<ComponentErrorProps, 'reset'> | undefined;
+        const legacy: Component<Omit<ComponentErrorProps, 'reset'>> = (_anchor, props) => {
+          received = props;
+          return {};
+        };
+        const renderError: RenderError = legacy;
+        const config: Config = { components: { broken: BrokenFixture } };
+        const experience = await resolveExperience(
+          {
+            nodes: [
+              componentNode('broken', {
+                id: 'b',
+                contentProperties: { failure },
+              }),
+            ],
+          },
+          config
+        );
+        render(ClientExperienceRenderer, { props: { experience, config, renderError } });
+        await waitFor(() =>
+          expect(received).toMatchObject({
+            componentId: 'broken',
+            nodeId: 'b',
+            message: 'Thrown message',
+          })
+        );
+      } finally {
+        warn.mockRestore();
+      }
+    }
+  );
+
+  it('hydrates the actual server fallback and resets it with corrected client input', async () => {
+    const { body, plan } = inject('rendererFailure');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const target = document.createElement('div');
+    document.body.append(target);
+    let instance: ReturnType<typeof hydrate> | undefined;
+    try {
+      const config: Config = { components: { broken: BrokenFixture, button: ButtonFixture } };
+      expect(body).not.toContain('boom');
+      expect(body).toContain('healthy sibling');
+      target.innerHTML = body;
+      const serverFallback = target.querySelector('[data-props]');
+      const content = new SvelteMap([['plan', plan]]);
+      const transformError = vi.fn(() => ({ message: 'Safe client rendering error' }));
+      instance = hydrate(ClientExperienceRenderer, {
+        target,
+        props: {
+          get experience() {
+            return content.get('plan')!;
+          },
+          config,
+          renderError: PropsProbe,
+        },
+        transformError,
+      });
+      const view = within(target);
+      await waitFor(() => expect(view.getByText('Retry rendering')).toBeTruthy());
+      expect(target.querySelector('[data-props]')).toBe(serverFallback);
+      expect(read(target, 'data-props').message).toBe('Safe server rendering error');
+      expect(transformError).not.toHaveBeenCalled();
+      const corrected = await resolveExperience(
+        {
+          nodes: [
+            componentNode('broken', { id: 'b', contentProperties: { fail: false } }),
+            componentNode('button', {
+              id: 'healthy',
+              contentProperties: { label: 'healthy sibling' },
+            }),
+          ],
+        },
+        config
+      );
+      content.set('plan', corrected);
+      await tick();
+      await fireEvent.click(view.getByText('Retry rendering'));
+      await waitFor(() => expect(view.getByText('Recovered component')).toBeTruthy());
+      expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('hydration_mismatch'));
+    } finally {
+      if (instance) await unmount(instance);
+      target.remove();
+      warn.mockRestore();
+    }
   });
 
   describe('ClientExperienceRenderer — render-time diagnostics dedupe across re-renders', () => {

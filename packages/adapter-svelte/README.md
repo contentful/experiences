@@ -493,6 +493,108 @@ MissingComponent; // Default fallback for unregistered component types
 NodesRenderer; // Exposed so you can re-render a slot's raw nodes yourself (see Slot children)
 ```
 
+### Component errors and rendering recovery
+
+Registered nodes already have a native `<svelte:boundary>` with a `failed`
+snippet. Both renderers accept `renderError`, a Svelte component with
+`ComponentErrorProps`: `componentId: string`, `nodeId?: string`,
+`message?: string` and `reset?: () => void`. The message comes from the boundary
+error, including a host-transformed plain object's `message`. The default
+`ComponentError` fallback is visible only in debug mode and has no retry button.
+A custom fallback controls its own visibility:
+
+```svelte
+<!-- ComponentFallback.svelte -->
+<script lang="ts">
+  import type { ComponentErrorProps } from '@contentful/experiences-svelte';
+  let { componentId, nodeId, reset }: ComponentErrorProps = $props();
+</script>
+
+<div data-render-error={componentId} data-node-id={nodeId}>
+  <p>This component could not be displayed.</p>
+  {#if reset}
+    <button type="button" onclick={() => reset?.()}>Try rendering again</button>
+  {/if}
+</div>
+```
+
+```svelte
+<script lang="ts">
+  import { ServerExperienceRenderer } from '@contentful/experiences-svelte';
+  import ComponentFallback from './ComponentFallback.svelte';
+  import { experienceConfig } from './experience-config';
+  import type { PortableRenderPlan } from '@contentful/experiences-svelte';
+  let { experience }: { experience: PortableRenderPlan } = $props();
+</script>
+
+<ServerExperienceRenderer {experience} config={experienceConfig}
+  renderError={ComponentFallback} />
+```
+
+`reset` retries this node's rendering. It neither fetches content nor resets
+visitor SDK state; managed `retry()` is a separate event-free content fetch.
+The native SSR callback is a no-op; hydration supplies a working browser callback.
+A component that still throws returns to the fallback. If the fallback itself
+throws, the error bubbles normally to an outer boundary or the host.
+
+Svelte supports `failed` boundary SSR recovery through
+`render(..., { transformError })` since 5.51 (verified on 5.57.3; supported peer
+`^5.55.7`). The default transform rethrows, so SSR recovery requires host setup.
+For **Kit 2.70.4**, merge both opt-ins into your existing `svelte.config.js`,
+preserving other compiler, Kit and experimental options:
+
+```js
+// Fields in the existing exported configuration object.
+compilerOptions: { experimental: { async: true } },
+kit: { experimental: { handleRenderingErrors: true } },
+```
+
+`kit.experimental.handleRenderingErrors` defaults to `false`. Kit 2's rendering
+transform is always async, so this option alone is insufficient: async compilation
+is also required. **Kit 3.2.0** wires native SSR recovery through `handleError`
+automatically; the synchronous hook below needs no async opt-in. Promise-returning
+hooks require async compiler mode. Kit passes the original exception to the server
+hook; compose this handling with your existing hooks:
+
+```ts
+// src/hooks.server.ts
+import type { HandleServerError } from '@sveltejs/kit';
+
+export const handleError: HandleServerError = ({ error }) => {
+  console.error(error); // Original exception stays in server logs.
+  return { message: 'This component could not be displayed.' };
+};
+```
+
+For standalone Svelte SSR, pass a safe transform to your existing render call:
+
+```ts
+import { render } from 'svelte/server';
+import Page from './Page.svelte';
+
+const rendered = render(Page, {
+  props: { experience }, // The page above imports its registry and fallback.
+  transformError(error) {
+    console.error(error);
+    return { message: 'This component could not be displayed.' };
+  },
+});
+```
+
+The standalone transform above is synchronous. Promise-returning transforms or
+hooks require `compilerOptions.experimental.async: true` and awaited rendering
+(`await render(...)` for standalone SSR). Awaiting `render` alone cannot enable
+async mode: synchronous-compiled Svelte 5.57.3 fails with `await_invalid` when a
+transform returns a Promise.
+
+Return a plain JSON-safe public error for SSR serialization; do not return the
+raw exception or stack, or copy a private exception message into public output.
+The framework owns sanitization and HTTP status. A recovered fallback does not
+promise HTTP 200. Svelte's SSR compiler ignores boundary `onerror`, so the host
+handler reports the original server exception; SDK `DebugExperience` does not
+list those SSR component exceptions. Browser boundary `onerror` reports the SDK
+diagnostic, including during hydration with the sanitized error message.
+
 ### Styling + runtime context (helpers)
 
 ```ts

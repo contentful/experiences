@@ -20,3 +20,7 @@
     props.value ??
     ''}</span
 >
+
+{#if typeof props.reset === 'function'}
+  <button onclick={() => (props.reset as () => void)()}>Retry rendering</button>
+{/if}

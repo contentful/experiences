@@ -79,9 +79,7 @@ describe('SSR customer rendering failures', () => {
       slots: {},
     });
 
-  // The supported server renderer propagates customer component errors;
-  // NodeRenderer.test.ts covers the client boundary's per-node recovery.
-  describe('NodesRenderer — SSR component-render-error (the documented gap)', () => {
+  describe('NodesRenderer — native SSR boundary policy', () => {
     const brokenConfig: Config = {
       components: { broken: BrokenFixture, 'contentful-button': ButtonFixture },
     };
@@ -97,6 +95,46 @@ describe('SSR customer rendering failures', () => {
         () =>
           render(ServerExperienceRenderer, {
             props: { experience: plan, config: brokenConfig },
+          }).body
+      ).toThrow('boom');
+    });
+
+    it('recovers a node through a public host transform', async () => {
+      const config: Config = {
+        components: { broken: BrokenFixture, 'contentful-button': ButtonFixture },
+      };
+      const plan = await resolveExperience(
+        { nodes: [button('before'), componentNode('broken', { id: 'b' }), button('after')] },
+        config
+      );
+      const errors: unknown[] = [];
+      const transformError = (error: unknown) => {
+        errors.push(error);
+        const publicError = { message: 'Public rendering error' };
+        return publicError;
+      };
+      const { body } = await render(ServerExperienceRenderer, {
+        props: { experience: plan, config, debug: true, renderError: PropsProbe },
+        transformError,
+      });
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toBeInstanceOf(Error);
+      expect(body).toContain('before');
+      expect(body).toContain('after');
+      expect(body).toContain('Public rendering error');
+      expect(body).toContain('Retry rendering');
+      expect(body).toContain('componentId');
+      expect(body).not.toContain('boom');
+      expect(body).not.toContain('[object Object]');
+    });
+
+    it('propagates a failing custom fallback instead of catching it recursively', async () => {
+      const plan = await resolveExperience({ nodes: [componentNode('broken')] }, brokenConfig);
+      expect(
+        () =>
+          render(ServerExperienceRenderer, {
+            props: { experience: plan, config: brokenConfig, renderError: BrokenFixture },
+            transformError: () => ({ message: 'Public rendering error' }),
           }).body
       ).toThrow('boom');
     });

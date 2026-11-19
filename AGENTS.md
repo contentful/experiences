@@ -1166,11 +1166,34 @@ An editor-authored ("composite") Experience Template arrives as plain `component
 
 The Component Domain Model RFC describes `defineComponent({ props: { resolve, mergePolicy: { precedence, conflictStrategy }, private } })` — multi-source merge with explicit conflict handling. Today we have a single `resolveData` fn with fixed precedence.
 
-### Svelte: no SSR recovery for `component-render-error`
+### Svelte: host configuration for SSR `component-render-error` recovery
 
-`<svelte:boundary onerror failed>` doesn't run its catching machinery under `svelte/server` — a throw during SvelteKit's server render propagates and fails the entire page; the boundary only catches client-side. React and Angular don't share this gap (React's per-node `<Suspense>` boundary degrades gracefully under streaming SSR too; Angular has no separate server renderer at all). See the README's [Error handling & troubleshooting](./README.md#error-handling--troubleshooting) section for the full per-framework table.
+The SDK already wraps registered nodes in `<svelte:boundary>` with a `failed`
+snippet. Svelte supports SSR fallback recovery through a nonthrowing
+`render(..., { transformError })` since 5.51; the default transform rethrows.
+Verified versions are Svelte 5.57.3 (adapter peer `^5.55.7`), Kit 2.70.4 and Kit
+3.2.0. Kit 2 requires both `compilerOptions.experimental.async: true` and
+`kit.experimental.handleRenderingErrors: true` (the latter defaults to `false`):
+its rendering transform is always async. Kit 3's native SSR wires recovery through
+`handleError` automatically; a synchronous hook needs no async opt-in.
+Promise-returning transforms/hooks require async compilation and awaited
+rendering. Awaiting `render` alone does not enable async mode; synchronous-compiled
+Svelte 5.57.3 fails with `await_invalid` when a transform returns a Promise.
+The host handler receives the original exception and owns logging, sanitization
+and HTTP status. Return a plain JSON-safe public error, never a raw exception or
+stack. Recovered fallback content need not imply HTTP 200; fallback failures
+bubble normally.
 
-This is upstream Svelte behavior, not something fixable at the adapter level — `svelte/server` exposes no per-node recovery primitive below its single top-level `render()` call. The README's mitigation is a `handleError` hook, which turns the crash into a controlled response without giving per-node isolation. Revisit if Svelte ships SSR-aware error boundaries.
+Svelte's SSR compiler ignores boundary `onerror`: do not promise that SDK
+`DebugExperience` lists SSR component exceptions. Browser `onerror` reports the
+SDK diagnostic, including after hydration with a transformed plain-object
+message. `ComponentErrorProps` adds optional `reset?: () => void`, forwarding the
+native boundary callback with `componentId`, `nodeId` and normalized `message`.
+It retries node rendering, not content fetching or visitor SDK reset. The SSR
+callback is inert until hydration supplies a working client callback. Managed
+`retry()` remains a separate event-free content fetch; the default error fallback
+stays debug-only, without a built-in retry button. Keep host setup in applications;
+see the [adapter recovery guide](./packages/adapter-svelte/README.md#component-errors-and-rendering-recovery).
 
 ### Angular: `component-render-error` isolation covers creation-time and adapter-driven resolution, not customer-internal later throws
 
