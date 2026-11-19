@@ -8,7 +8,11 @@ import PropsProbe from '../test/fixtures/PropsProbe.svelte';
 import ExperienceTemplateFixture from '../test/fixtures/ExperienceTemplateFixture.svelte';
 import BrokenFixture from '../test/fixtures/BrokenFixture.svelte';
 import ButtonFixture from '../test/fixtures/ButtonFixture.svelte';
-import { componentNode, experienceTemplateNode } from '../test/fixtures/render-plan.js';
+import {
+  attributedPlan,
+  componentNode,
+  experienceTemplateNode,
+} from '../test/fixtures/render-plan.js';
 import { minimalSourceMap } from '../test/fixtures/source-map.js';
 
 const node = componentNode('probe', { id: 'n' });
@@ -97,4 +101,24 @@ describe('SSR customer rendering failures', () => {
       ).toThrow('boom');
     });
   });
+});
+
+it('serializes forwarded and named root attribution without binding props', () => {
+  const config = {
+    components: { button: ButtonFixture },
+    experienceTemplates: {
+      page: { component: ExperienceTemplateFixture, root: { prop: 'experienceRoot' } },
+    },
+  };
+  const experience = attributedPlan('page', {}, 'experienceTemplate');
+  experience.nodes[0]!.slots = {
+    content: attributedPlan('button', { 'data-ctfl-scopes': 'manual' }).nodes,
+    sidebar: [],
+  };
+  const { body } = render(ServerExperienceRenderer, { props: { experience, config } });
+  expect(body.match(/data-ctfl-scopes="hero"/g)).toHaveLength(2);
+  expect(body).toContain('data-ctfl-scopes="manual"');
+  expect(body.match(/data-ctfl-attribution=/g)).toHaveLength(1);
+  expect(body).not.toContain('experienceRoot');
+  expect(body).not.toContain('Symbol');
 });

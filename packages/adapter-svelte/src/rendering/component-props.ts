@@ -15,9 +15,14 @@ import type { Component } from 'svelte';
 
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 
-import type { Config } from '../registry/types.js';
+import type { Config, ExperienceRootProps } from '../registry/types.js';
 
 export interface ServerExperienceRendererProps {
+  /** Native Experience container, e.g. tbody inside a table or optgroup inside a select. */
+  // eslint-disable-next-line no-undef -- TypeScript's DOM library defines the intrinsic HTML tag map.
+  as?: keyof HTMLElementTagNameMap;
+  /** Container attributes. The renderer owns plan attribution and children. */
+  rootProps?: ExperienceRootProps;
   experience: PortableRenderPlan | null | undefined;
   config: Config;
   /** Shallow-merges over the plan's `metadata`. Only needed to override it. */

@@ -127,6 +127,8 @@ export type {
   Config,
   ContentfulComponent,
   ContentfulExperienceTemplate,
+  ExperienceRootBinding,
+  ExperienceRootProps,
   ExperienceTemplateConfig,
   ExperienceTemplateRegistration,
   ExperienceTemplates,

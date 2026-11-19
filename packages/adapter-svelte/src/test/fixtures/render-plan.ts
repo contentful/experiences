@@ -3,7 +3,30 @@ import type {
   ExperiencePayload,
   ExperienceTemplateNode,
   ManualDesignValue,
+  PortableRenderPlan,
 } from '@contentful/experiences-sdk-core';
+
+export function attributedPlan(
+  id: string,
+  content: Record<string, unknown> = {},
+  kind: 'component' | 'experienceTemplate' = 'component'
+): PortableRenderPlan {
+  const scope = { key: 'hero', entityId: 'hero', entityKind: 'ExperienceFragment' as const };
+  return {
+    metadata: {},
+    debug: false,
+    diagnostics: [],
+    attribution: { scopes: { hero: scope } },
+    nodes: [
+      {
+        registration: { kind, id },
+        attribution: { roots: [scope], scopes: [scope] },
+        props: { content, design: {}, designRaw: {} },
+        slots: {},
+      },
+    ],
+  };
+}
 
 export const m = (value: string): ManualDesignValue => ({ type: 'ManualDesignValue', value });
 

@@ -11,7 +11,7 @@
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte';
 
-  import type { PortableRenderNode } from '@contentful/experiences-sdk-core';
+  import { getTrackingAttributes, type PortableRenderNode } from '@contentful/experiences-sdk-core';
 
   import {
     setContentfulComponent,
@@ -25,6 +25,7 @@
     type ContentfulComponent,
     type ContentfulExperienceTemplate,
     type Config,
+    type ExperienceRootBinding,
     type RenderContext,
   } from '../registry/types.js';
 
@@ -130,19 +131,30 @@
   }
 
   const tokenResolvedDesign = $derived(node.props.design);
+  const rootBinding: ExperienceRootBinding = {
+    get attribution() {
+      return node.attribution;
+    },
+    getRootProps(_key, props = {}) {
+      return { ...getTrackingAttributes(node.attribution), ...props };
+    },
+  };
 
   setResolvedDesign(() => tokenResolvedDesign);
 
   // Merge precedence (last wins): defaults < design < content < resolveData < slots.
   const composed = $derived.by(() => {
     if (!componentConfig) return null;
-    return {
+    const props = {
       ...componentConfig.defaults,
       ...tokenResolvedDesign,
       ...node.props.content,
       ...node.props.resolved,
       ...slotSnippets,
     };
+    return componentConfig.root
+      ? { ...props, [componentConfig.root.prop]: rootBinding }
+      : rootBinding.getRootProps(undefined, props);
   });
 
   // An unregistered Experience Template would blank the page if we swapped it

@@ -21,7 +21,8 @@
   {@render props.children(current)}
 {:else if !current.redirect && current.data}
   <ExperienceRenderer experience={current.data} {config} metadata={props.metadata}
-    debug={props.debug} renderUnknown={props.renderUnknown} renderError={props.renderError} />
+    debug={props.debug} renderUnknown={props.renderUnknown} renderError={props.renderError}
+    as={props.as} rootProps={props.rootProps} />
 {:else if !current.redirect && current.error}
   {@render props.errorFallback?.(current)}
 {:else if !current.redirect}

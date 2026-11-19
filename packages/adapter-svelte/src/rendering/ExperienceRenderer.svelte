@@ -1,6 +1,7 @@
 <!-- Shared supplied-plan traversal; the public facades select context/diagnostic timing. -->
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { getTrackingAttributes } from '@contentful/experiences-sdk-core';
 
   import ComponentError from '../diagnostics/ComponentError.svelte';
   import DebugExperience from '../diagnostics/DebugExperience.svelte';
@@ -18,6 +19,8 @@
     renderUnknown = MissingComponent,
     renderError = ComponentError,
     mode,
+    as = 'div',
+    rootProps,
   }: ServerExperienceRendererProps & { mode: 'client' | 'server' } = $props();
 
   // The facade selects one lifetime policy, even when the server facade is
@@ -67,6 +70,9 @@
 </script>
 
 {#if experience}
+  <svelte:element this={as} {...rootProps}
+    {...getTrackingAttributes(experience.attribution ?? { scopes: {} })}
+    style={`display: contents;${rootProps?.style ?? ''}`}>
   <NodesRenderer
     nodes={experience.nodes}
     {config}
@@ -75,6 +81,7 @@
     {renderError}
     {onDiagnostic}
   />
+  </svelte:element>
   {#if resolvedDebug}
     <DebugExperience
       {experience}

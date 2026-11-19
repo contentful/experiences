@@ -12,6 +12,7 @@ import ContainerFixture from '../test/fixtures/ContainerFixture.svelte';
 import ExperienceTemplateFixture from '../test/fixtures/ExperienceTemplateFixture.svelte';
 import {
   componentNode,
+  attributedPlan,
   dt,
   experienceTemplateNode,
   m,
@@ -365,5 +366,48 @@ describe('getContentfulExperienceTemplate().attribution (client build)', () => {
 
     await rerender({ experience: second, config: templateConfig } as never);
     expect(text()).toBe('exp-b');
+  });
+});
+
+describe('actual-root attribution', () => {
+  it('forwards onto a component root while retaining explicit scopes', async () => {
+    const config = { components: { button: ButtonFixture } };
+    const view = render(ClientExperienceRenderer, {
+      experience: attributedPlan('button'),
+      config,
+    });
+    const button = view.container.querySelector('button')!;
+    expect(button.getAttribute('data-ctfl-scopes')).toBe('hero');
+    expect(button.parentElement!.hasAttribute('data-ctfl-attribution')).toBe(true);
+    expect(button.parentElement!.children).toHaveLength(1);
+    for (const scopes of ['manual manual', '', undefined]) {
+      await view.rerender({
+        experience: attributedPlan('button', { 'data-ctfl-scopes': scopes }),
+        config,
+      });
+      expect(button.getAttribute('data-ctfl-scopes')).toBe(scopes ?? null);
+    }
+  });
+
+  it('binds named template roots independently of nested component roots and payload props', () => {
+    const config = {
+      components: { button: ButtonFixture },
+      experienceTemplates: {
+        page: { component: ExperienceTemplateFixture, root: { prop: 'experienceRoot' } },
+      },
+    };
+    const experience = attributedPlan(
+      'page',
+      { experienceRoot: 'payload collision' },
+      'experienceTemplate'
+    );
+    experience.nodes[0]!.slots = { content: attributedPlan('button').nodes, sidebar: [] };
+    const view = render(ClientExperienceRenderer, { experience, config });
+    const main = view.container.querySelector('main')!;
+    const aside = view.container.querySelector('aside')!;
+    expect(main.parentElement).toBe(aside.parentElement);
+    expect(main.querySelector('button')!.getAttribute('data-ctfl-scopes')).toBe('hero');
+    expect(main.getAttribute('data-ctfl-scopes')).toBe('hero');
+    expect(aside.getAttribute('data-ctfl-scopes')).toBe('hero');
   });
 });

@@ -1,4 +1,5 @@
 import type { Component } from 'svelte';
+import type { HTMLAttributes } from 'svelte/elements';
 
 import type {
   DesignPropValue,
@@ -6,6 +7,7 @@ import type {
   RenderContext,
   ResolveContext,
   ResolveToken,
+  TrackingAttributes,
 } from '@contentful/experiences-sdk-core';
 
 export type { ResolveContext, ResolveToken };
@@ -65,6 +67,22 @@ export interface ContentfulExperienceTemplate {
 /** Render-time experience context, read with `getExperience()`. Declared in core so all adapters share one shape. */
 export type { RenderContext };
 
+/** Props to spread onto actual DOM roots, preserving caller attachments. */
+export type ExperienceRootProps<TElement extends Element = HTMLElement> = HTMLAttributes<TElement> &
+  TrackingAttributes & {
+    [name: string]: unknown;
+  };
+
+/** Named attribution binding for components that deliberately select their roots. */
+export interface ExperienceRootBinding {
+  readonly attribution?: NodeAttribution;
+  /** Explicit own props override defaults, including undefined scope suppression. */
+  getRootProps<TElement extends Element = HTMLElement>(
+    key?: string,
+    props?: ExperienceRootProps<TElement>
+  ): ExperienceRootProps<TElement>;
+}
+
 /**
  * Customer-supplied configuration for a single component type. The `component`
  * receives the merged props (design + content + resolveData + one `Snippet[]`
@@ -73,6 +91,8 @@ export type { RenderContext };
  * `getExperience()` / `getContentfulComponent()`.
  */
 export interface ComponentConfig<Props extends object = Record<string, unknown>> {
+  /** Inject the actual-root binding under this prop instead of forwarding root props. */
+  root?: { prop: string };
   /**
    * Lowest-precedence defaults object. Merged in before content / resolveData /
    * slots. Useful for variant fallbacks the editorial layer doesn't always supply.
@@ -104,6 +124,8 @@ export type Registration<Props extends object = Record<string, unknown>> =
  * prop), so there is no `children` special case.
  */
 export interface ExperienceTemplateConfig<Props extends object = Record<string, unknown>> {
+  /** Inject the actual-root binding under this prop instead of forwarding root props. */
+  root?: { prop: string };
   /**
    * Lowest-precedence defaults object. Merged in before content / resolveData /
    * slots. Useful for variant fallbacks the editorial layer doesn't always supply.
