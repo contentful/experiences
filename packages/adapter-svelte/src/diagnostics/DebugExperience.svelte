@@ -1,0 +1,96 @@
+<!--
+ * First-party debug panel. Renders the resolved Experience plan as pretty
+ * JSON so a customer can see exactly what the SDK interpreted from the payload
+ * — node tree, registrations, and resolved props.
+ *
+ * Two ways to use it:
+ *  - Auto-mounted by the renderers when `debug` is on (above the tree).
+ *  - Mounted manually anywhere: `<DebugExperience experience={plan} />`.
+ *
+ * v1 is just the JSON dump wrapped in a native <details> so it collapses
+ * without any extra JS. Room to grow into a node-tree explorer and resolveData
+ * timing panel — kept deliberately small for now.
+-->
+<script lang="ts">
+  import type { DebugExperienceProps } from '../rendering/component-props.js';
+
+  let { experience, defaultOpen = false, errors = [] }: DebugExperienceProps = $props();
+
+  // Auto-expand whenever there's something to see, even if the caller didn't
+  // explicitly ask — a beta customer shouldn't have to know to click into a
+  // collapsed panel to discover that something went wrong.
+  const open = $derived(defaultOpen || errors.length > 0);
+
+  const nodeCount = $derived(experience.nodes.length);
+  // Coded Experience Templates are ordinary top-level nodes, so name them from
+  // the node list — a composite Experience simply has none to report.
+  const templateIds = $derived(
+    experience.nodes
+      .filter((node) => node.registration.kind === 'experienceTemplate')
+      .map((node) => node.registration.id)
+  );
+  const summary = $derived(
+    `Experience debug — ${nodeCount} top-level node${nodeCount === 1 ? '' : 's'}${
+      templateIds.length
+        ? `, experience template${templateIds.length === 1 ? '' : 's'}: ${templateIds.join(', ')}`
+        : ''
+    }`
+  );
+
+  // JSON.stringify with a circular-reference guard: a customer's resolveData
+  // could stash a non-serializable value on props.resolved — degrade to a
+  // placeholder rather than throwing inside a debug panel.
+  function safeStringify(value: unknown): string {
+    const seen = new WeakSet<object>();
+    try {
+      return JSON.stringify(
+        value,
+        function (this: unknown, key, val) {
+          // Delivery diagnostics can contain private upstream details. Keep them
+          // on the plan for explicit inspection, outside automatic debug output.
+          if (this === value && key === 'deliveryDiagnostics') return undefined;
+          if (typeof val === 'object' && val !== null) {
+            if (seen.has(val)) return '[Circular]';
+            seen.add(val);
+          }
+          if (typeof val === 'function') return `[Function ${val.name || 'anonymous'}]`;
+          if (typeof val === 'undefined') return '[undefined]';
+          return val;
+        },
+        2
+      );
+    } catch (err) {
+      // `err` isn't guaranteed to be an Error — a getter deep in customer data
+      // (a resolveData result, resolved design values) can `throw null` or
+      // `throw 'reason'` during JSON.stringify's replacer walk, and this
+      // fallback's whole job is to never throw itself.
+      const reason = err instanceof Error ? err.message : String(err);
+      return `[DebugExperience: could not serialize plan — ${reason}]`;
+    }
+  }
+
+  const json = $derived(safeStringify(experience));
+</script>
+
+<details
+  {open}
+  data-experiences-debug
+  style="margin: 1rem 0; border: 1px solid #6b7280; border-radius: 6px; background: #0b1021; color: #e2e8f0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; overflow: hidden;"
+>
+  <summary
+    style="cursor: pointer; padding: 0.5rem 0.75rem; background: #111827; user-select: none;"
+  >
+    {summary}
+  </summary>
+  {#if errors.length > 0}
+    <!-- Deliberately unstyled for now — this just needs to make the data
+         visible, not console-only. Visual treatment can grow later. -->
+    <ul data-experiences-debug-errors>
+      {#each errors as error, index (index)}
+        <li>{error.message}</li>
+      {/each}
+    </ul>
+  {/if}
+  <pre
+    style="margin: 0; padding: 0.75rem; overflow: auto; max-height: 32rem; white-space: pre-wrap; word-break: break-word;">{json}</pre>
+</details>

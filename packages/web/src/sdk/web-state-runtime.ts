@@ -6,7 +6,7 @@ import {
 } from '../browser/identity-cookie.js';
 import LocalStore from '../storage/local-store.js';
 import { resolveStatefulDefaults } from '../browser/stateful-defaults.js';
-import type { ConfigDefaults } from './types.js';
+import type { ConfigDefaults, PreparationApplicability } from './types.js';
 import { installCoreBridgeCapabilities } from '../bridge-support/capabilities.js';
 import {
   effect,
@@ -50,6 +50,68 @@ import { FlagExposure } from '../flags/flag-exposure.js';
 export abstract class WebStateRuntime<
   TConfig extends RuntimeConfig,
 > extends RuntimeContentfulExperiences<TConfig> {
+  private preparationRevision = 0;
+  protected hasConfiguredIdentityProvider = false;
+  private readonly preparations = new WeakMap<PreparationApplicability, { advance: () => void }>();
+
+  /** Capture browser applicability before an optional speculative server preparation. */
+  capturePreparation(): PreparationApplicability {
+    const token = this.resetToken;
+    const revision = this.preparationRevision;
+    let profile = profileSignal.peek();
+    let changes = changesSignal.peek();
+    let identity = this.adoptedProfileId.peek();
+    let provider = this.getAnonymousIdProvider();
+    let ownProvider = provider;
+    let invalid = false;
+    const preparation: PreparationApplicability = Object.freeze({
+      inputs: Object.freeze({
+        profileId: provider ?? profile?.id ?? identity,
+        locale: this.locale,
+        consent: Object.freeze({
+          events: consentSignal.peek(),
+          persistence: persistenceConsentSignal.peek(),
+        }),
+      }),
+      isCurrent: () => {
+        const currentProvider = this.getAnonymousIdProvider();
+        invalid ||=
+          !this.isCurrent(token) ||
+          revision !== this.preparationRevision ||
+          consentSignal.peek() !== preparation.inputs.consent.events ||
+          persistenceConsentSignal.peek() !== preparation.inputs.consent.persistence ||
+          this.locale !== preparation.inputs.locale ||
+          profileSignal.peek() !== profile ||
+          changesSignal.peek() !== changes ||
+          this.adoptedProfileId.peek() !== identity ||
+          (currentProvider !== provider &&
+            (this.hasConfiguredIdentityProvider || currentProvider !== ownProvider));
+        if (!invalid && currentProvider === ownProvider) provider = currentProvider;
+        return !invalid;
+      },
+    });
+    this.preparations.set(preparation, {
+      advance: () => {
+        profile = profileSignal.peek();
+        changes = changesSignal.peek();
+        identity = this.adoptedProfileId.peek();
+        // Persistence effects may publish this operation's identity when the batch exits.
+        ownProvider =
+          persistenceConsentSignal.peek() === true ? (profile?.id ?? identity) : undefined;
+        provider = this.getAnonymousIdProvider();
+      },
+    });
+    return preparation;
+  }
+
+  protected ownsPreparation(preparation: PreparationApplicability): boolean {
+    return this.preparations.has(preparation);
+  }
+
+  protected advancePreparation(preparation: PreparationApplicability | undefined): void {
+    if (preparation) this.preparations.get(preparation)?.advance();
+  }
+
   protected contentLifetime = 0;
   protected profileRevision = 0;
   protected stateRevision = 0;
@@ -111,7 +173,8 @@ export abstract class WebStateRuntime<
     data: PersonalizationState,
     isCurrent: () => boolean,
     canApplyProfile: () => boolean = () => true,
-    canApplyChanges: () => boolean = () => true
+    canApplyChanges: () => boolean = () => true,
+    didCommit: () => void = () => {}
   ): Promise<void> {
     if (this.destroyed) return;
     const stateRevision = this.stateRevision;
@@ -126,6 +189,7 @@ export abstract class WebStateRuntime<
         this.commitIncomingState(next, canApplyProfile(), canApplyChanges());
       }
       personalizationRequestStateSignal.value = { status: 'success' };
+      didCommit();
     });
   }
 
@@ -163,6 +227,15 @@ export abstract class WebStateRuntime<
    */
   protected requestIdentity(): string | undefined {
     return this.getAnonymousIdProvider() ?? profileSignal.value?.id ?? this.adoptedProfileId.value;
+  }
+
+  /**
+   * Capture owner authority; reset or destruction permanently invalidates the
+   * returned guard. Event consent remains the event admission path's responsibility.
+   */
+  captureLifetime(): () => boolean {
+    const generation = this.contentLifetime;
+    return () => !this.destroyed && this.contentLifetime === generation;
   }
 
   protected isCurrent(token: object): boolean {
@@ -219,9 +292,19 @@ export abstract class WebStateRuntime<
   }
 
   protected installStateRevisionEffect(): () => void {
+    let previousInputs = [
+      consentSignal.peek(),
+      persistenceConsentSignal.peek(),
+      localeSignal.peek(),
+    ];
     let previousProfile = profileSignal.peek();
     let previousChanges = changesSignal.peek();
     return effect(() => {
+      const inputs = [consentSignal.value, persistenceConsentSignal.value, localeSignal.value];
+      if (inputs.some((value, index) => value !== previousInputs[index])) {
+        previousInputs = inputs;
+        this.preparationRevision += 1;
+      }
       const profile = profileSignal.value;
       const changes = changesSignal.value;
       if (profile !== previousProfile) this.profileRevision += 1;

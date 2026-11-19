@@ -77,6 +77,46 @@ describe('SourceController', () => {
     expect(source.subscribeToPreview).not.toHaveBeenCalled();
   });
 
+  it('ignores a late redirect after a newer source has supplied usable content', async () => {
+    const source = sourceSdk();
+    const obsolete = deferred<PortableRenderPlan | { redirect: { path: string } }>();
+    const current = plan('current route');
+    source.fetchExperience.mockReturnValueOnce(obsolete.promise).mockResolvedValueOnce(current);
+    const controller = new SourceController();
+    const published = vi.fn();
+    controller.setSnapshotListener(published);
+
+    controller.updateOptions(options(source, { request: { experienceId: 'old' } }));
+    controller.updateOptions(options(source, { request: { experienceId: 'current' } }));
+    await settle();
+    expect(controller.getSnapshot().data).toBe(current);
+
+    obsolete.resolve({ redirect: { path: '/obsolete-target' } });
+    await settle();
+    expect(controller.getSnapshot()).toEqual({
+      status: 'success',
+      data: current,
+      error: undefined,
+    });
+    expect(published.mock.calls.every(([snapshot]) => snapshot.redirect === undefined)).toBe(true);
+  });
+
+  it('retains the exact usable plan after refresh fails while exposing the acquisition error', async () => {
+    const source = sourceSdk();
+    const usable = { ...plan('usable content'), metadata: { title: 'Original title' } };
+    const error = new Error('temporary acquisition failure');
+    source.fetchExperience.mockResolvedValueOnce(usable).mockRejectedValueOnce(error);
+    const controller = new SourceController();
+    controller.updateOptions(options(source));
+    await settle();
+
+    await controller.refresh();
+
+    expect(controller.getSnapshot()).toEqual({ status: 'error', data: usable, error });
+    expect(controller.getSnapshot().data).toBe(usable);
+    expect(controller.getSnapshot().data?.metadata).toBe(usable.metadata);
+  });
+
   it('keeps a seeded destination plan without startup fetching and does not guess preview identity', () => {
     const source = sourceSdk();
     const initialPlan = plan();

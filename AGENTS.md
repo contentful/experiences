@@ -53,7 +53,8 @@ experiences/
 │   ├── web-sdk/              # Vanilla browser/UMD reference, managed through Nx
 │   ├── node-sdk+web-sdk/     # Express/EJS SSR + browser/UMD hybrid, managed through Nx
 │   ├── react-sdk/           # React/Vite runtime reference, managed through Nx
-│   └── nextjs-sdk/          # Next.js App/Pages reference, managed through Nx
+│   ├── nextjs-sdk/          # Next.js App/Pages reference, managed through Nx
+│   └── svelte-sdk/          # SvelteKit 3 reference, managed through Nx
 ├── skills/                # Agent-invokable skills (SKILL.md), readable by any agent or person
 │   └── implement-framework-adapter/  # Build a renderer for a framework with no first-party adapter
 └── lib/
@@ -67,8 +68,9 @@ experiences/
 **`implementations/`** holds reference implementations for SDK maintainers, not customers. Point integrators to `examples/`, never to a reference implementation as a how-to guide; link into `implementations/` only for authoritative maintainer detail (for example, the XDA workaround removal criteria linked from `packages/node/README.md`); see [CONTRIBUTING.md](./CONTRIBUTING.md#example-apps-vs-reference-implementations) for the split. Implementations stay outside npm workspaces and consume packed SDK artifacts.
 Use `npm run implementation:install` to prepare all references, or scoped
 `implementation-node-sdk`, `implementation-web-sdk`,
-`implementation-node-sdk-web-sdk`, `implementation-react-sdk`, or
-`implementation-nextjs-sdk` Nx `setup` / `dev` targets. Root aggregate checks
+`implementation-node-sdk-web-sdk`, `implementation-react-sdk`,
+`implementation-nextjs-sdk`, or `implementation-svelte-sdk` Nx `setup` / `dev`
+targets. Root aggregate checks
 exclude implementations; the Build CI job explicitly prepares and checks them.
 Follow [implementations/AGENTS.md](./implementations/AGENTS.md)
 and the app README for the package boundary, local `.env`, and lifecycle commands.
@@ -86,7 +88,7 @@ and the app README for the package boundary, local `.env`, and lifecycle command
 | `packages/live-preview`    | `@contentful/experiences-live-preview` | **Customer-facing.** Optional, framework-neutral Preview Session source.                                                          |
 | `packages/adapter-react`   | `@contentful/experiences-react`        | **Customer-facing.** React renderer + re-exports of everything.                                                                   |
 | `packages/adapter-nextjs`  | `@contentful/experiences-nextjs`       | **Customer-facing.** App/Pages request families, built-in roots and React rendering via explicit subpaths.                        |
-| `packages/adapter-svelte`  | `@contentful/experiences-svelte`       | **Customer-facing.** Svelte 5 renderer + re-exports of everything.                                                                |
+| `packages/adapter-svelte`  | `@contentful/experiences-svelte`       | **Customer-facing.** Svelte 5 renderer, managed browser root and optional Kit bindings.                                           |
 | `packages/adapter-angular` | `@contentful/experiences-angular`      | **Customer-facing.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) + re-exports of everything.                                       |
 | `lib/mocks`                | `mocks`                                | **Internal, private.** Source-consumed Personalization/Analytics handlers and explicit Contentful maintenance tools.              |
 
@@ -162,8 +164,9 @@ routers use the incoming request URL. Bare Node integrations pass request-local
 Without capability configuration or an ID, the owner uses ordinary Delivery.
 `Node RequestContext.isPreview` and `Web Config.isPreview` do not exist; read-only
 `isPreview` gates all events, automatic tracking, embedded fetch personalization
-and handoff preparation/replay before event work. Managed browser owners replace
-the SDK on session changes and preview entry/exit without consumer keys or wrappers.
+and handoff preparation/replay before event work. Managed browser integration ends
+the current activation and starts a new one on session changes and preview entry/exit
+without consumer keys or wrappers; each activation retains its owned SDK.
 No iframe detection, CPA toggle, `debug` or socket status selects this policy.
 Socket/factory failure preserves isolated preview mode and the last usable content.
 Raw `sdk.api` and free Delivery fetches remain outside owner policy.
@@ -189,7 +192,7 @@ or owns per-view state. Web shares in-flight fetching/resolution and owns
 mode/event/profile/lifetime policy; views retain presentation state. Do not add
 SDK per-view state. View subscriptions detach independently; SDK destruction
 closes the one context connection. Changing session replaces the context; React
-and Next handle their owned SDK replacement without a consumer key. SSR-only adapters
+and Next handle Preview teardown/new activation without a consumer key. SSR-only adapters
 observe matching content revisions for server refresh without browser resolution.
 Snapshot runtimes expose inert undefined Preview state; other states are unchanged.
 
@@ -447,6 +450,13 @@ consent and offline capacity admission, before transport; capacity refusal
 publishes no event. Attempts never stream on retries or transport completion. Prepared admission emits each accepted
 event once and batch refusal emits none. Blocked publication follows `onEventBlocked`. Reset clears
 profile, changes, request outcome, and event streams while retaining consent and locale.
+Profile, changes, consent, locale and event observables use module-scoped signals,
+not isolated browser state per SDK instance. Construction initializes those shared
+values; Preview state, interceptors, queues and revision/lifetime guards remain
+instance-local. The one-live-instance lock and owned teardown before a fresh
+activation remain distinct safeguards. An inert SSR
+snapshot is not another live owner. Do not add an in-place SDK replacement path
+on the assumption that each SDK carries independent copies of this browser state.
 Web startup values use `defaults: ConfigDefaults` (`profile`, `changes`, `consent`, and
 `persistenceConsent`). Constructor locale and `setLocale()` use the copied
 Optimization `normalizeExplicitLocale`/`normalizeLocale` rules; both helpers are
@@ -531,6 +541,13 @@ Retained differences:
   Optimization reference's public mutable extension surface. No current supported
   consumer requires that new member; guarded bridge/handoff ingestion and flag
   reads/observables suffice and keep flag state SDK-owned.
+- Live Web exposes `captureLifetime()` over its existing content lifetime so
+  adapters can reject delayed visitor work after reset or destruction. Consent
+  changes retain that lifetime; individual event attempts and queues keep their
+  separate consent admission and withdrawal guards. This is an additive integration
+  capability, not an Optimization baseline API. It adds no lifecycle state or
+  notification channel and does not retract completed renderer content; source and presentation ownership remain
+  separate from pending runtime authority.
 - Automatic flag exposure quietly skips preview and missing profiles. Consent
   refusals follow Optimization through normal blocked-event reporting. Active
   subscriptions retry when changes, profile, or consent changes, including
@@ -854,6 +871,33 @@ Packages stay under `1.0.0` no matter what commit types land. **Remove this sett
 - Non-component modules: `kebab-case.ts(x)`
 - Tests: `<source>.test.ts(x)` next to the source
 
+In `adapter-svelte`, keep the root barrel and public entry facades thin; organize
+implementation by domain: `experience`, `runtime`, `kit`, `rendering`,
+`diagnostics`, `hooks`, `registry` and `design`. Colocate module tests with their
+source and match its filename stem/case (`NodeRenderer.test.ts`,
+`NodeRenderer.ssr.test.ts` for `NodeRenderer.svelte`; `use-experience-plan.test.ts`
+for `use-experience-plan.svelte.ts`). Shared fixtures belong in `src/test/fixtures`; genuine cross-owner
+composition tests belong in `src/test/integration`. Preserve the browser/SSR compiler
+split. Exclude development tests and support from published package contents.
+
+Svelte owns one SDK per explicit activation lifetime, retained across rerenders and
+ordinary navigation. Its outer Preview boundary tears down old resources before
+starting a keyed activation, including while outgoing DOM outros remain. The inner
+runtime activates once. Portable hosts report Preview URL session entry/change/
+exit through the existing committed `routeKey`; with Preview enabled, hash routers
+use full `pathname + search + hash` so outer query changes reach the boundary.
+There is no extra SDK URL observer or Preview-specific component key requirement.
+The runtime captures its injected SDK for that activation; no
+in-place injected SDK rebinding is supported. Construction/destruction of an
+injected SDK stays with the caller. React and Svelte Providers capture the injected
+SDK on first mount and ignore later `sdk` prop changes; a new key/remount captures
+a fresh binding after the caller retires the old SDK. Kit init and its first root share one owner;
+failed init is sticky and disposal is terminal. Keep request adoption history at the separate stable request boundary across owned
+Preview activations. The one Svelte package exposes Kit only through optional
+`/kit/client` and server-only `/kit/server` entries. Keep portable runtime and
+declaration graphs Kit-free. Follow the [Kit integration guide](./packages/adapter-svelte/README.md#managed-sveltekit-integration)
+and [supported toolchains](./packages/adapter-svelte/README.md#compatibility).
+
 ### Tests
 
 Add focused maintained unit/contract cases at the owning layer. Cover optional-page ordering,
@@ -954,6 +998,65 @@ Renaming the folder needs all three updated. Cross-reference: `project.json#sour
 
 ## Things known to be broken
 
+### Svelte adapter explicit typecheck (fixed)
+
+The browser/SSR test suites and package build passed while an explicit
+`svelte-check` reported unused renderer bindings and invalid test types. Keep
+the adapter's explicit check in validation: use the server renderer's inferred
+component type rather than casting it to `never`, and account for optional
+capture fields. Passing runtime tests alone does not validate these types.
+
+### Svelte managed activation ownership (fixed)
+
+An internal generic SDK replacement path conflated owned activation and injected
+binding lifetimes. Svelte now keeps each owned SDK stable for its activation and
+uses an explicit Preview boundary for teardown/new activation. Resource teardown
+releases the singleton before the next acquisition even with DOM outros. Injected
+SDKs are fixed per activation and never constructed or destroyed by the adapter. Superseded prototype replacement
+tests are not a contract to retain; verify current lifetime effects and refusals.
+
+### SvelteKit managed request lifecycle (fixed)
+
+Retain the current visit/read when the URL and content selector, including
+parameters and locale, stay the same. Start no new automatic page intent. Adopt
+the exact application-supplied source after native Kit navigation commits.
+Explicit reads remain event-free. Expired state/event preparation alone neither blocks
+applicable content nor forces reevaluation; Web must refuse stale state/replay.
+Reset, SDK profile changes and ordinary failed reads preserve applicable completed
+data with its original provenance; the host controls concealment. Preserve logical
+selection/route/locale/session applicability, Preview isolation, authoritative
+missing/auth outcomes and superseded pending-work guards. Request history stays
+stable across Preview activations for SDK state/event/replay deduplication. It
+does not suppress otherwise applicable exact committed cached content after owner
+changes or back navigation; preserve the raw complete result and original provenance.
+Keep page ownership in the shared runtime.
+
+### Svelte Kit/browser source handover (fixed)
+
+A hydrated Kit root can present an ordinary managed Web fetch for explicit
+same-URL actions while retaining its SDK. Publication, Retry and cleanup belong
+to the currently selected source; earlier reads, hydration/replay and teardown
+must not overwrite its content or visitor state. Managed `current.acquire({
+personalization })` starts fresh intent on the committed selector, including
+identical repeated calls. Retry remains an event-free read of the active source.
+A new unseeded selecting binding with explicit events also declares fresh intent.
+Changed selector inputs supersede earlier inputs; unchanged earlier views observe
+rather than reclaim acquisition. Equivalent content-only inputs share the current
+source. Keep seeds synchronous for SSR/hydration. Typed observers expose only
+their own result family; the action returns its complete browser operation.
+
+### SvelteKit selector and browser ownership migrations (fixed)
+
+The customer Kit app uses one managed request root for native loader data,
+consent and actions. The standalone Kit 3 reference also demonstrates direct Web
+CSR under that owner. An event-free Retry reads the current Kit or Web source.
+The customer Vite app supplies its committed route and handles redirects itself.
+For managed Preview, route session selection and runtime-owned updates replace
+per-view connections. Legacy getters may read supplied content under the root
+without taking ownership. Kit/Vite components forward attribution to their
+actual roots. [Local Preview and Destination wiring](./packages/adapter-svelte/README.md#service-verification)
+is distinct from deferred service verification and the existing release hold.
+
 ### Malformed selector diagnostics before normalization (fixed)
 
 One internal Client assertion checks selector shape, nonempty strings and absolute
@@ -1039,7 +1142,19 @@ Web's current-page tracker owns XDA page admission and deduplication. React supp
 route identity and liveness; same-route consent retry waits for preparation, not
 HTTP. Only a final admitted committing page claims the route. Blocked pages remain
 eligible, and reset/destroy invalidate pending attempts. Admission is not a service
-commitment receipt.
+commitment receipt. Svelte's ordinary explicit page retry retains its payload and
+uses Web's current consent and a fresh message identity. Kit root page builders
+configure ordinary browser intent without overriding explicit events or prepared
+request ownership.
+
+### Web content caller lifetime after transport (fixed)
+
+Web fetches previously checked a supplied current-page caller's lifetime before
+transport but could still adopt its response after that caller was superseded.
+Keep the same caller check after transport, through asynchronous state interception
+and before returning content. Already admitted event attempts remain queue-owned.
+The Web content owner tests cover stale responses and intercepted state without
+overwriting the current profile or flags.
 
 ---
 
@@ -1069,11 +1184,34 @@ An editor-authored ("composite") Experience Template arrives as plain `component
 
 The Component Domain Model RFC describes `defineComponent({ props: { resolve, mergePolicy: { precedence, conflictStrategy }, private } })` — multi-source merge with explicit conflict handling. Today we have a single `resolveData` fn with fixed precedence.
 
-### Svelte: no SSR recovery for `component-render-error`
+### Svelte: host configuration for SSR `component-render-error` recovery
 
-`<svelte:boundary onerror failed>` doesn't run its catching machinery under `svelte/server` — a throw during SvelteKit's server render propagates and fails the entire page; the boundary only catches client-side. React and Angular don't share this gap (React's per-node `<Suspense>` boundary degrades gracefully under streaming SSR too; Angular has no separate server renderer at all). See the README's [Error handling & troubleshooting](./README.md#error-handling--troubleshooting) section for the full per-framework table.
+The SDK already wraps registered nodes in `<svelte:boundary>` with a `failed`
+snippet. Svelte supports SSR fallback recovery through a nonthrowing
+`render(..., { transformError })` since 5.51; the default transform rethrows.
+Verified versions are Svelte 5.57.3 (adapter peer `^5.55.7`), Kit 2.70.4 and Kit
+3.2.0. Kit 2 requires both `compilerOptions.experimental.async: true` and
+`kit.experimental.handleRenderingErrors: true` (the latter defaults to `false`):
+its rendering transform is always async. Kit 3's native SSR wires recovery through
+`handleError` automatically; a synchronous hook needs no async opt-in.
+Promise-returning transforms/hooks require async compilation and awaited
+rendering. Awaiting `render` alone does not enable async mode; synchronous-compiled
+Svelte 5.57.3 fails with `await_invalid` when a transform returns a Promise.
+The host handler receives the original exception and owns logging, sanitization
+and HTTP status. Return a plain JSON-safe public error, never a raw exception or
+stack. Recovered fallback content need not imply HTTP 200; fallback failures
+bubble normally.
 
-This is upstream Svelte behavior, not something fixable at the adapter level — `svelte/server` exposes no per-node recovery primitive below its single top-level `render()` call. The README's mitigation is a `handleError` hook, which turns the crash into a controlled response without giving per-node isolation. Revisit if Svelte ships SSR-aware error boundaries.
+Svelte's SSR compiler ignores boundary `onerror`: do not promise that SDK
+`DebugExperience` lists SSR component exceptions. Browser `onerror` reports the
+SDK diagnostic, including after hydration with a transformed plain-object
+message. `ComponentErrorProps` adds optional `reset?: () => void`, forwarding the
+native boundary callback with `componentId`, `nodeId` and normalized `message`.
+It retries node rendering, not content fetching or visitor SDK reset. The SSR
+callback is inert until hydration supplies a working client callback. Managed
+`retry()` remains a separate event-free content fetch; the default error fallback
+stays debug-only, without a built-in retry button. Keep host setup in applications;
+see the [adapter recovery guide](./packages/adapter-svelte/README.md#component-errors-and-rendering-recovery).
 
 ### Angular: `component-render-error` isolation covers creation-time and adapter-driven resolution, not customer-internal later throws
 

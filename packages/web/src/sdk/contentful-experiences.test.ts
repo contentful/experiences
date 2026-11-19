@@ -60,6 +60,182 @@ describe.runIf(environment === 'browser')('Web SDK in a browser', () => {
     document.title = '';
   });
 
+  describe('opt-in server preparation applicability', () => {
+    function prepared(runtime: ContentfulExperiences): ExperiencesHandoff {
+      return {
+        spaceId: 'space',
+        environmentId: 'environment',
+        cache: { scope: 'private-request' },
+        profileId: 'prepared-profile',
+        state: {
+          profile: completeProfile('prepared-profile'),
+          changes: [
+            {
+              type: 'Variable',
+              key: 'banner',
+              value: true,
+              meta: { experienceId: 'experiment', variantIndex: 1 },
+            },
+          ],
+        },
+        replay: { routeKey: '/prepared', events: [runtime.eventBuilder.buildPageView()] },
+      };
+    }
+    it.each([
+      'provider',
+      'profile',
+      'flags',
+      'consent',
+      'persistence',
+      'locale',
+      'reset',
+      'destroy',
+    ] as const)(
+      'refuses stale %s preparation through asynchronous state interception',
+      async (race) => {
+        let provider = 'configured-profile';
+        const runtime = createRuntime({ getAnonymousId: () => provider });
+        const preparation = runtime.capturePreparation();
+        expect(preparation.inputs).toEqual({
+          profileId: provider,
+          locale: 'en-US',
+          consent: { events: true, persistence: true },
+        });
+        const entered = deferred<void>(),
+          release = deferred<void>();
+        runtime.interceptors.state.add(async (state) => {
+          entered.resolve();
+          await release.promise;
+          return state;
+        });
+        const attempts: unknown[] = [];
+        subscriptions.push(
+          runtime.states.eventStream.subscribe((event) => {
+            if (event) attempts.push(event);
+          })
+        );
+        const send = vi
+          .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
+          .mockResolvedValue({ profile: completeProfile('delivered') } as never);
+        const pending = runtime.hydrateAndTrackCurrentPage(prepared(runtime), {
+          routeKey: '/prepared',
+          preparation,
+        });
+        await entered.promise;
+        switch (race) {
+          case 'provider':
+            provider = 'new-provider';
+            break;
+          case 'profile':
+            signals.profile.value = completeProfile('new-visitor');
+            break;
+          case 'flags':
+            signals.changes.value = [];
+            break;
+          case 'consent':
+            runtime.consent({ events: false });
+            runtime.consent({ events: true });
+            break;
+          case 'persistence':
+            runtime.consent({ persistence: false });
+            break;
+          case 'locale':
+            runtime.setLocale('de-DE');
+            break;
+          case 'reset':
+            runtime.reset();
+            break;
+          case 'destroy':
+            runtime.destroy();
+            break;
+        }
+        release.resolve();
+        await expect(pending).resolves.toEqual({ accepted: false });
+        expect(preparation.isCurrent()).toBe(false);
+        expect(runtime.states.profile.current?.id).not.toBe('prepared-profile');
+        expect(signals.changes.peek()).toEqual(race === 'flags' ? [] : undefined);
+        expect(window.localStorage.getItem(PROFILE_CACHE_KEY) ?? '').not.toContain(
+          'prepared-profile'
+        );
+        expect(attempts).toEqual([]);
+        expect(send).not.toHaveBeenCalled();
+      }
+    );
+    it.each([undefined, 'configured-profile'])(
+      'recognizes its own adoption and preserves admitted queue delivery with provider %s',
+      async (provider) => {
+        const runtime = createRuntime(provider ? { getAnonymousId: () => provider } : {});
+        runtime['online'] = false;
+        const preparation = runtime.capturePreparation();
+        const send = vi
+          .spyOn(PersonalizationApiClient.prototype, 'upsertProfile')
+          .mockResolvedValue({ profile: completeProfile('prepared-profile') } as never);
+        const input = prepared(runtime);
+        await expect(
+          runtime.hydrateAndTrackCurrentPage(input, { routeKey: '/prepared', preparation })
+        ).resolves.toEqual({ accepted: true });
+        expect(runtime.states.profile.current?.id).toBe('prepared-profile');
+        expect(signals.changes.peek()).toEqual(input.state?.changes);
+        expect(preparation.isCurrent()).toBe(true);
+        runtime.setLocale('de-DE');
+        expect(preparation.isCurrent()).toBe(false);
+        runtime['online'] = true;
+        await runtime.flush();
+        expect(send).toHaveBeenCalledTimes(1);
+        expect(send.mock.calls[0]?.[0].profileId).toBe(provider ?? 'prepared-profile');
+        expect(send.mock.calls[0]?.[0].events[0]?.messageId).toBe(
+          input.replay?.events[0]?.messageId
+        );
+      }
+    );
+    it.each(['locale', 'flags', 'provider'] as const)(
+      'refuses synchronous subscriber %s changes before admission',
+      async (change) => {
+        let provider = 'configured-profile';
+        const runtime = createRuntime({ getAnonymousId: () => provider });
+        const preparation = runtime.capturePreparation();
+        subscriptions.push(
+          runtime.states.profile.subscribe((profile) => {
+            if (profile?.id !== 'prepared-profile') return;
+            switch (change) {
+              case 'locale':
+                runtime.setLocale('de-DE');
+                break;
+              case 'flags':
+                signals.changes.value = [];
+                break;
+              case 'provider':
+                provider = 'new-provider';
+                break;
+            }
+          })
+        );
+        const send = vi.spyOn(PersonalizationApiClient.prototype, 'upsertProfile');
+        await expect(
+          runtime.hydrateAndTrackCurrentPage(prepared(runtime), {
+            routeKey: '/prepared',
+            preparation,
+          })
+        ).resolves.toEqual({ accepted: false });
+        expect(runtime.states.eventStream.current).toBeUndefined();
+        expect(send).not.toHaveBeenCalled();
+      }
+    );
+    it('refuses tokens belonging to a retired owner', async () => {
+      const first = createRuntime();
+      const preparation = first.capturePreparation();
+      first.destroy();
+      const current = createRuntime();
+      await expect(
+        current.hydrateAndTrackCurrentPage(prepared(current), {
+          routeKey: '/prepared',
+          preparation,
+        })
+      ).resolves.toEqual({ accepted: false });
+      expect(current.states.profile.current).toBeUndefined();
+    });
+  });
+
   it('wires live browser context and Web attribution into its event builder', () => {
     window.history.replaceState({}, '', '/first?tag=one&tag=two#details');
     document.title = 'First page';
@@ -281,6 +457,31 @@ describe.runIf(environment === 'browser')('Web SDK in a browser', () => {
       persistence: runtime.states.persistenceConsent.current,
     }).toEqual({ events: true, persistence: true });
   });
+
+  it.each([false, true])(
+    'captures owner authority across consent changes until reset or destruction (initial consent=%s)',
+    (consent) => {
+      const runtime = createRuntime({ defaults: { consent } });
+      const initial = runtime.captureLifetime();
+      expect(initial()).toBe(true);
+      runtime.consent({ persistence: false });
+      expect(initial()).toBe(true);
+      runtime.consent({ events: false });
+      expect(initial()).toBe(true);
+      runtime.consent({ events: true });
+      expect(initial()).toBe(true);
+      runtime.reset();
+      expect(initial()).toBe(false);
+      runtime.consent({ events: true });
+      expect(initial()).toBe(false);
+
+      const afterReset = runtime.captureLifetime();
+      expect(afterReset()).toBe(true);
+      runtime.destroy();
+      expect(afterReset()).toBe(false);
+      expect(runtime.captureLifetime()()).toBe(false);
+    }
+  );
 
   it('rejects selected content completing after consent withdrawal instead of returning it to a managed view', async () => {
     let finish!: (plan: unknown) => void;

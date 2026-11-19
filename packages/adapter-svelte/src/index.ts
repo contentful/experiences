@@ -13,32 +13,69 @@
  */
 
 // ─── Renderers ─────────────────────────────────────────────────────────────
-export { default as ClientExperienceRenderer } from './ClientExperienceRenderer.svelte';
-export { default as ExperienceRenderer } from './ClientExperienceRenderer.svelte';
-export { default as ServerExperienceRenderer } from './ServerExperienceRenderer.svelte';
-export { default as MissingComponent } from './MissingComponent.svelte';
-export { default as ComponentError } from './ComponentError.svelte';
-export { default as DebugExperience } from './DebugExperience.svelte';
+export { createExperiences } from './experience/create-experiences.js';
+export type {
+  CreateExperiencesOptions,
+  CreateExperiencesResult,
+  BoundExperienceRendererProps,
+} from './experience/create-experiences.js';
+export { default as Experience } from './experience/Experience.svelte';
+export { useManagedExperience } from './experience/use-managed-experience.svelte.js';
+export type {
+  ExperienceProps,
+  BoundExperienceProps,
+  ExperienceNotifications,
+  UseManagedExperienceOptions,
+} from './experience/presentation-types.js';
+export type {
+  ManagedExperience,
+  ManagedExperienceAcquireOptions,
+  ManagedExperienceOptions,
+  ManagedExperienceSnapshot,
+  ManagedExperienceOperationResult,
+} from './experience/source-types.js';
+export { default as ExperiencesRoot } from './runtime/ExperiencesRoot.svelte';
+export { default as ExperiencesProvider } from './runtime/ExperiencesProvider.svelte';
+export {
+  getExperiences,
+  getExperiencesState,
+  getExperiencesActions,
+} from './runtime/context.svelte.js';
+export type { ExperiencesState, ExperiencesActions } from './runtime/context.svelte.js';
+export type {
+  ExperiencesRootProps,
+  ExperiencesProviderProps,
+  OnStatesReady,
+} from './runtime/types.js';
+export { default as ClientExperienceRenderer } from './rendering/ClientExperienceRenderer.svelte';
+export { default as ExperienceRenderer } from './rendering/ClientExperienceRenderer.svelte';
+export { default as ServerExperienceRenderer } from './rendering/ServerExperienceRenderer.svelte';
+export { default as MissingComponent } from './diagnostics/MissingComponent.svelte';
+export { default as ComponentError } from './diagnostics/ComponentError.svelte';
+export { default as DebugExperience } from './diagnostics/DebugExperience.svelte';
 
 // Every slot already arrives as a same-named `Snippet[]` prop; this is exposed so
 // advanced customers can render a slot's raw nodes themselves instead:
 // e.g. `<NodesRenderer nodes={contentful.slots.header as PortableRenderNode[]} ... />`.
-export { default as NodesRenderer } from './NodesRenderer.svelte';
+export { default as NodesRenderer } from './rendering/NodesRenderer.svelte';
 
-export { useLivePreviewExperience } from './use-live-preview-experience.svelte.js';
+export { useLivePreviewExperience } from './hooks/use-live-preview-experience.svelte.js';
 export type {
   UseLivePreviewExperienceOptions,
   UseLivePreviewExperienceResult,
-} from './use-live-preview-experience.svelte.js';
-export { useLivePreview } from './use-live-preview.svelte.js';
-export type { UseLivePreviewOptions, UseLivePreviewResult } from './use-live-preview.svelte.js';
+} from './hooks/use-live-preview-experience.svelte.js';
+export { useLivePreview } from './hooks/use-live-preview.svelte.js';
+export type {
+  UseLivePreviewOptions,
+  UseLivePreviewResult,
+} from './hooks/use-live-preview.svelte.js';
 
-export { useExperiencePlan } from './use-experience-plan.svelte.js';
+export { useExperiencePlan } from './hooks/use-experience-plan.svelte.js';
 export type {
   ExperiencePlanResolveOptions,
   UseExperiencePlanOptions,
   UseExperiencePlanResult,
-} from './use-experience-plan.svelte.js';
+} from './hooks/use-experience-plan.svelte.js';
 export type {
   LivePreviewClient,
   LivePreviewResult,
@@ -59,10 +96,10 @@ export {
   getExperience,
   getContentfulComponent,
   getContentfulExperienceTemplate,
-} from './context.js';
-export { getDesignValues } from './get-design-values.js';
-export { toCss } from './design-utils.js';
-export type { ToCssOptions } from './design-utils.js';
+} from './rendering/context.js';
+export { getDesignValues } from './hooks/get-design-values.js';
+export { toCss } from './design/design-utils.js';
+export type { ToCssOptions } from './design/design-utils.js';
 
 // Component prop shapes live in component-props.ts (not .svelte module
 // blocks) so `tsc --noEmit` can see them without the Svelte language server.
@@ -76,7 +113,7 @@ export type {
   RenderError,
   RenderUnknown,
   ServerExperienceRendererProps,
-} from './component-props.js';
+} from './rendering/component-props.js';
 
 // ─── Authoring helpers + Config types ─────────────────────────────────────
 export {
@@ -84,20 +121,22 @@ export {
   defineExperienceTemplate,
   normalizeComponentRegistration,
   normalizeExperienceTemplateRegistration,
-} from './types.js';
+} from './registry/types.js';
 export type {
   ComponentConfig,
   Components,
   Config,
   ContentfulComponent,
   ContentfulExperienceTemplate,
+  ExperienceRootBinding,
+  ExperienceRootProps,
   ExperienceTemplateConfig,
   ExperienceTemplateRegistration,
   ExperienceTemplates,
   Registration,
   RenderContext,
   ResolveToken,
-} from './types.js';
+} from './registry/types.js';
 
 // ─── Resolver (re-exported from render-core) ──────────────────────────────
 export { resolveExperience } from '@contentful/experiences-sdk-core';

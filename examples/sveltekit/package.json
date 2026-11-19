@@ -11,14 +11,15 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
+    "@contentful/experiences-live-preview": "*",
     "@contentful/experiences-svelte": "*",
     "@contentful/experiences-web": "*"
   },
   "devDependencies": {
     "@sveltejs/adapter-auto": "^3.3.0",
-    "@sveltejs/kit": "^2.8.0",
+    "@sveltejs/kit": "2.70.4",
     "@sveltejs/vite-plugin-svelte": "^5.1.1",
-    "svelte": "^5.0.0",
+    "svelte": "5.57.3",
     "svelte-check": "^4.0.0",
     "typescript": "^5.9.3",
     "vite": "^6.4.3"

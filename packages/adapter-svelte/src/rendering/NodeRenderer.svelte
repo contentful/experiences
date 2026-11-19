@@ -1,0 +1,223 @@
+<!--
+ * Single-node renderer. Splits out of NodesRenderer so the per-node
+ * `setContext` for the contentful payload happens during *that node's*
+ * component init (Svelte's setContext can only be called at top level).
+ *
+ * A node's `registration.kind` picks which half of the customer Config owns
+ * its implementation — `experienceTemplates` for a coded Experience Template,
+ * `components` otherwise. Everything else (slot props, merge precedence,
+ * design resolution) is identical across the two kinds.
+-->
+<script lang="ts">
+  import { untrack, type Snippet } from 'svelte';
+
+  import { getTrackingAttributes, type PortableRenderNode } from '@contentful/experiences-sdk-core';
+
+  import {
+    setContentfulComponent,
+    setContentfulExperienceTemplate,
+    setResolvedDesign,
+  } from './context.js';
+  import type { DiagnosticReporter, RenderError, RenderUnknown } from './component-props.js';
+  import {
+    normalizeComponentRegistration,
+    normalizeExperienceTemplateRegistration,
+    type ContentfulComponent,
+    type ContentfulExperienceTemplate,
+    type Config,
+    type ExperienceRootBinding,
+    type RenderContext,
+  } from '../registry/types.js';
+
+  interface NodeRendererProps {
+    node: PortableRenderNode;
+    config: Config;
+    experience: RenderContext;
+    renderUnknown: RenderUnknown;
+    renderError: RenderError;
+    onDiagnostic: DiagnosticReporter;
+    /**
+     * Pre-rendered slot children keyed by slot name — one zero-arg Snippet per
+     * child node. Spread onto the customer component as named props, so a slot
+     * named `content` arrives as a `content` prop. `children` is not special.
+     */
+    slotSnippets: Record<string, Snippet[]>;
+  }
+
+  let {
+    node,
+    config,
+    renderUnknown,
+    renderError,
+    onDiagnostic,
+    slotSnippets,
+  }: NodeRendererProps = $props();
+
+  // Captured once: the context set below can only be chosen at init.
+  // NodesRenderer keys on the registration, so a change remounts this node.
+  const { kind, id } = untrack(() => node.registration);
+  const isExperienceTemplate = kind === 'experienceTemplate';
+
+  // Any reactive re-run of this component's `$derived`/`{@const}` blocks
+  // would otherwise re-report the same
+  // diagnostic every time — matches Angular's `lastDiagnostics` guard in
+  // NodeRenderEngine and React's equivalent in NodeRenderer. `reported` is a
+  // plain (non-reactive) binding, stable for this component instance's
+  // lifetime — mutating it doesn't itself trigger reactivity, it's purely a
+  // guard for calls this component makes.
+  const reported = new Set<string>();
+  function reportOnce(error: Error): void {
+    if (reported.has(error.message)) return;
+    reported.add(error.message);
+    onDiagnostic(error);
+  }
+
+  const entry = $derived(
+    isExperienceTemplate ? config.experienceTemplates?.[id] : config.components[id]
+  );
+  const componentConfig = $derived.by(() => {
+    if (!entry) return null;
+    return isExperienceTemplate
+      ? normalizeExperienceTemplateRegistration(entry)
+      : normalizeComponentRegistration(entry);
+  });
+
+  // Getters over the reactive `node` prop, not a snapshot: `{#each}` in
+  // NodesRenderer keys on `nodeId`, so a plan update that reuses an id keeps
+  // this instance, and a one-time copy would go stale.
+  if (isExperienceTemplate) {
+    const contentful: ContentfulExperienceTemplate = {
+      experienceTemplateId: id,
+      get nodeId() {
+        return node.nodeId;
+      },
+      get content() {
+        return node.props.content;
+      },
+      get design() {
+        return node.props.designRaw;
+      },
+      get resolved() {
+        return node.props.resolved;
+      },
+      get attribution() {
+        return node.attribution;
+      },
+    };
+    setContentfulExperienceTemplate(contentful);
+  } else {
+    const contentful: ContentfulComponent = {
+      componentId: id,
+      get nodeId() {
+        return node.nodeId;
+      },
+      get content() {
+        return node.props.content;
+      },
+      get design() {
+        return node.props.designRaw;
+      },
+      get resolved() {
+        return node.props.resolved;
+      },
+      get attribution() {
+        return node.attribution;
+      },
+      get slots() {
+        return node.slots;
+      },
+    };
+    setContentfulComponent(contentful);
+  }
+
+  const tokenResolvedDesign = $derived(node.props.design);
+  const rootBinding: ExperienceRootBinding = {
+    get attribution() {
+      return node.attribution;
+    },
+    getRootProps(_key, props = {}) {
+      return { ...getTrackingAttributes(node.attribution), ...props };
+    },
+  };
+
+  setResolvedDesign(() => tokenResolvedDesign);
+
+  // Merge precedence (last wins): defaults < design < content < resolveData < slots.
+  const composed = $derived.by(() => {
+    if (!componentConfig) return null;
+    const props = {
+      ...componentConfig.defaults,
+      ...tokenResolvedDesign,
+      ...node.props.content,
+      ...node.props.resolved,
+      ...slotSnippets,
+    };
+    return componentConfig.root
+      ? { ...props, [componentConfig.root.prop]: rootBinding }
+      : rootBinding.getRootProps(undefined, props);
+  });
+
+  // An unregistered Experience Template would blank the page if we swapped it
+  // for the missing-component box, so warn and render its slot children
+  // unwrapped — the content survives, the diagnostic names what's missing.
+  const orphanedSnippets = $derived.by(() => {
+    if (componentConfig || !isExperienceTemplate) return null;
+    const message = `No experience template registered for id "${id}". Rendering its slot children without the experience template wrapper.`;
+    if (typeof console !== 'undefined') {
+      console.warn(`[@contentful/experiences-svelte] ${message}`);
+    }
+    reportOnce(new Error(message));
+    return Object.values(slotSnippets).flat();
+  });
+
+  // `MissingComponent` (the default `renderUnknown`) does its own
+  // console.warn via an `$effect`; a custom override may not, so the
+  // diagnostic is recorded here regardless of which fallback ends up
+  // rendering.
+  function reportMissingComponent(): true {
+    const message = `No component registered for id "${id}"${node.nodeId ? ` (nodeId: ${node.nodeId})` : ''}.`;
+    reportOnce(new Error(message));
+    return true;
+  }
+
+  function getRenderErrorMessage(error: unknown): string | undefined {
+    if (typeof error === 'string') return error;
+    if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string')
+      return error.message;
+    return undefined;
+  }
+
+  // Client `onerror` receives the host-transformed error, including after hydration.
+  // Server boundary recovery/reporting is configured by the host's transformError.
+  function reportRenderError(error: unknown): void {
+    const reason = getRenderErrorMessage(error) ?? 'Unknown render error';
+    const message =
+      `Component "${id}" (${kind}${node.nodeId ? `, node "${node.nodeId}"` : ''}) threw while ` +
+      `rendering: ${reason}. Rendering the error fallback instead of crashing the surrounding tree.`;
+    if (typeof console !== 'undefined') {
+      console.warn(`[@contentful/experiences-svelte] ${message}`);
+    }
+    onDiagnostic(new Error(message, { cause: error instanceof Error ? error : undefined }));
+  }
+</script>
+
+{#if componentConfig && composed}
+  {@const Cmp = componentConfig.component}
+  {@const ErrorFallback = renderError}
+  <svelte:boundary onerror={(error) => reportRenderError(error)}>
+    <Cmp {...composed} />
+    {#snippet failed(error, reset)}
+      <ErrorFallback componentId={id} nodeId={node.nodeId} message={getRenderErrorMessage(error)} {reset} />
+    {/snippet}
+  </svelte:boundary>
+{:else if orphanedSnippets}
+  {#each orphanedSnippets as childSnippet, index (index)}
+    {@render childSnippet()}
+  {/each}
+{:else}
+  {@const Unknown = (reportMissingComponent(), renderUnknown)}
+  <Unknown
+    componentId={id}
+    nodeId={node.nodeId}
+  />
+{/if}

@@ -1,5 +1,6 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vitest/config';
+import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
   plugins: [svelte({ hot: false })],
@@ -11,6 +12,7 @@ export default defineConfig({
     // vitest.ssr.config.ts instead.
     exclude: ['src/**/*.ssr.test.ts'],
     setupFiles: ['./vitest.setup.ts'],
+    globalSetup: ['./src/test/ssr-recovery.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
@@ -19,6 +21,9 @@ export default defineConfig({
     },
   },
   resolve: {
+    alias: {
+      '$app/navigation': fileURLToPath(new URL('./src/test/kit-navigation.ts', import.meta.url)),
+    },
     conditions: ['browser'],
   },
 });

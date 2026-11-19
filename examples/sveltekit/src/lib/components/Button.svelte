@@ -1,5 +1,7 @@
 <script lang="ts" module>
-  export interface ButtonProps {
+  import type { HTMLAttributes } from 'svelte/elements';
+
+  export interface ButtonProps extends Omit<HTMLAttributes<HTMLElement>, 'children'> {
     label?: string;
     url?: string;
     // Design properties, auto-filled as props. `target` is a semantic key (it
@@ -17,6 +19,8 @@
     target = '_self',
     backgroundColor = '#111',
     color = '#fff',
+    style: callerStyle,
+    ...rootProps
   }: ButtonProps = $props();
 
   const style = $derived(
@@ -31,12 +35,15 @@
       'cursor: pointer',
       `background: ${backgroundColor}`,
       `color: ${color}`,
-    ].join('; ')
+      callerStyle,
+    ]
+      .filter(Boolean)
+      .join('; ')
   );
 </script>
 
 {#if url}
-  <a href={url} {style} {target} rel="noopener noreferrer">{label}</a>
+  <a href={url} {target} rel="noopener noreferrer" {...rootProps} {style}>{label}</a>
 {:else}
-  <button type="button" {style}>{label}</button>
+  <button type="button" {...rootProps} {style}>{label}</button>
 {/if}

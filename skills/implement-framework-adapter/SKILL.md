@@ -191,7 +191,7 @@ Let the app override the unregistered-component and error fallbacks, as `renderU
 
 ### 4.6 Per-node error isolation
 
-Wrap each node in your framework's error boundary, so a component that throws renders the error fallback and its siblings keep rendering. Report a diagnostic that names the component, kind, and node, with the original error as `cause`. Check your framework's server behavior. Svelte's `<svelte:boundary>` and React's class error boundaries don't catch during server rendering. Vue's `onErrorCaptured` does fire during `renderToString`, so a boundary can render the fallback on the server too: render the child, then a sibling that reads an error flag set by `onErrorCaptured`. Document the gap if your framework can't close it.
+Wrap each node in your framework's error boundary, so a component that throws renders the error fallback and its siblings keep rendering. Report a diagnostic that names the component, kind, and node, with the original error as `cause`. Check your framework's server behavior. React's class error boundaries do not catch during server rendering. Svelte's `<svelte:boundary>` can render its fallback during SSR when the host configures a nonthrowing transform and a compatible compiler mode. See the [Svelte recovery guide](../../packages/adapter-svelte/README.md#component-errors-and-rendering-recovery). Vue's `onErrorCaptured` does fire during `renderToString`, so a boundary can render the fallback on the server too: render the child, then a sibling that reads an error flag set by `onErrorCaptured`. Document the gap if your framework can't close it.
 
 ### 4.7 Diagnostics and debugging
 
@@ -274,14 +274,14 @@ const plan: PortableRenderPlan = {
 
 Read these in this order. Svelte and Angular are the closest models for a non-React framework.
 
-| File                                                                                                                               | Shows                                                                                           |
-| ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| [`packages/adapter-svelte/src/NodeRenderer.svelte`](../../packages/adapter-svelte/src/NodeRenderer.svelte)                         | One node: lookup, payload context, merge, fallbacks, error boundary, deduplicated diagnostics   |
-| [`packages/adapter-svelte/src/NodesRenderer.svelte`](../../packages/adapter-svelte/src/NodesRenderer.svelte)                       | The recursive walk and slot pre-rendering                                                       |
-| [`packages/adapter-svelte/src/context.ts`](../../packages/adapter-svelte/src/context.ts)                                           | Context keys and accessors                                                                      |
-| [`packages/adapter-svelte/src/ServerExperienceRenderer.svelte`](../../packages/adapter-svelte/src/ServerExperienceRenderer.svelte) | Root render context, diagnostics collection, debug panel                                        |
-| [`packages/adapter-angular/src/node-render-engine.ts`](../../packages/adapter-angular/src/node-render-engine.ts)                   | Slots as nodes plus a renderer, per-node DI scopes, error handling without a boundary component |
-| [`packages/adapter-react/src/nodes/resolve-node-props.ts`](../../packages/adapter-react/src/nodes/resolve-node-props.ts)           | The canonical lookup and merge                                                                  |
-| [`packages/adapter-react/src/nodes/experience-node.tsx`](../../packages/adapter-react/src/nodes/experience-node.tsx)               | Providers and error boundary around one node                                                    |
+| File                                                                                                                                       | Shows                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| [`packages/adapter-svelte/src/rendering/NodeRenderer.svelte`](../../packages/adapter-svelte/src/rendering/NodeRenderer.svelte)             | One node: lookup, payload context, merge, fallbacks, error boundary, deduplicated diagnostics   |
+| [`packages/adapter-svelte/src/rendering/NodesRenderer.svelte`](../../packages/adapter-svelte/src/rendering/NodesRenderer.svelte)           | The recursive walk and slot pre-rendering                                                       |
+| [`packages/adapter-svelte/src/rendering/context.ts`](../../packages/adapter-svelte/src/rendering/context.ts)                               | Context keys and accessors                                                                      |
+| [`packages/adapter-svelte/src/rendering/ExperienceRenderer.svelte`](../../packages/adapter-svelte/src/rendering/ExperienceRenderer.svelte) | Root render context, diagnostics collection, debug panel                                        |
+| [`packages/adapter-angular/src/node-render-engine.ts`](../../packages/adapter-angular/src/node-render-engine.ts)                           | Slots as nodes plus a renderer, per-node DI scopes, error handling without a boundary component |
+| [`packages/adapter-react/src/nodes/resolve-node-props.ts`](../../packages/adapter-react/src/nodes/resolve-node-props.ts)                   | The canonical lookup and merge                                                                  |
+| [`packages/adapter-react/src/nodes/experience-node.tsx`](../../packages/adapter-react/src/nodes/experience-node.tsx)                       | Providers and error boundary around one node                                                    |
 
 The first-party examples in [`examples/`](../../examples) register the same components against the same demo Experience. Port one of them to check your adapter renders identically.

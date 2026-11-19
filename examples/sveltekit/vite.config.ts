@@ -11,6 +11,9 @@ export default defineConfig({
   ssr: {
     noExternal: [
       '@contentful/experiences-svelte',
+      '@contentful/experiences-node',
+      '@contentful/experiences-runtime',
+      '@contentful/experiences-live-preview',
       '@contentful/experiences-web',
       '@contentful/experiences-sdk-core',
       '@contentful/experiences-design',

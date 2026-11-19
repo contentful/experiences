@@ -1,9 +1,4 @@
-import { EventBuilder } from '@contentful/experiences-svelte';
-
-const eventBuilder = new EventBuilder({
-  channel: 'server',
-  library: { name: 'experiences-sveltekit-example', version: '0.0.0' },
-});
+import type { PageViewBuilderArgs } from '@contentful/experiences-svelte';
 
 // XDA takes the visitor's location from the event, not from the request IP, and
 // falls back to San Francisco (US) when it is absent. The example sends Berlin
@@ -12,13 +7,13 @@ const EU_LOCATION = { city: 'Berlin', countryCode: 'DE', continent: 'EU' };
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
-export function buildPagePersonalization(options: {
+export function buildPagePayload(options: {
   origin: string;
   path: string;
   locale: string;
   referrer: string;
   searchParams: SearchParams;
-}) {
+}): PageViewBuilderArgs {
   const url = new URL(options.path, options.origin);
 
   for (const [key, value] of Object.entries(options.searchParams)) {
@@ -44,12 +39,11 @@ export function buildPagePersonalization(options: {
     url: url.toString(),
   };
 
-  const event = eventBuilder.buildPageView({
+  // The owning SDK builds this argument once, applying its channel and consent.
+  return {
     locale: options.locale,
     location: EU_LOCATION,
     page,
     properties: page,
-  });
-
-  return { events: [event] };
+  };
 }

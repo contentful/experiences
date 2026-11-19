@@ -277,11 +277,14 @@ managed result retains the initial or last usable plan alongside errors. An
 uses the same owners through its [router bindings](./packages/adapter-nextjs/README.md#router-bindings);
 server-only preview updates render through a server round-trip.
 
-For application-supplied payloads use `useExperiencePlan` from
-`@contentful/experiences-react/client`; it resolves data but owns no connection.
-For framework-neutral code, import `createLivePreviewClient` directly from
-`@contentful/experiences-live-preview`. Svelte retains its `useLivePreview` getter
-and Angular its `injectLivePreview` getter; see their adapter references.
+For application-supplied React payloads, use `useExperiencePlan` from
+`@contentful/experiences-react/client`. It resolves data without opening a connection.
+Svelte's managed bindings use the same [runtime-owned Preview capability](./packages/adapter-svelte/README.md#migration).
+For standalone or supplied-content Preview, Svelte exposes
+[`useLivePreview` and `useLivePreviewExperience`](./packages/adapter-svelte/README.md#live-preview)
+and Angular exposes [`injectLivePreview`](./packages/adapter-angular/README.md#live-preview).
+For framework-neutral code, import
+`createLivePreviewClient` from `@contentful/experiences-live-preview`.
 
 Browser owners use the current URL; managed server routers use the incoming
 request URL. Bare Node integrations pass the ID through
@@ -821,7 +824,7 @@ function Fallback({ componentId, nodeId }: MissingComponentProps) {
 
 ## Error handling & troubleshooting
 
-Every non-happy-path — a malformed payload, a throwing `resolveData`, an unresolved design token, an unregistered id, and (the big one) **a registered component that throws while rendering** — degrades instead of crashing the page, and is reported as a plain `Error` you can inspect.
+Malformed payloads, throwing `resolveData` hooks, unresolved design tokens and unregistered ids degrade instead of crashing the page, and are reported as plain `Error`s you can inspect. **A registered component that throws while rendering** uses per-node recovery, subject to the framework and host configuration described below.
 
 ### Two kinds of diagnostic
 
@@ -830,7 +833,7 @@ Every non-happy-path — a malformed payload, a throwing `resolveData`, an unres
 | **Resolve-time** | Inside `resolveExperience()`, before any renderer mounts | `plan.diagnostics` (`Error[]`, always present, `[]` on the happy path) | malformed payload, malformed slot, unidentifiable node, `resolveData` failure, unresolved design token |
 | **Render-time**  | Per-framework, per-render                                | Merged into `<DebugExperience>`'s `errors` prop by the renderer        | unregistered component, unregistered experience template, a component that threw while rendering       |
 
-Each diagnostic is a plain `new Error(message)` — the message names the node/component/slot involved. When it wraps a real caught exception (a component that throws while rendering, or a `resolveData` that throws or rejects), `.cause` holds the original error, so the real stack trace stays reachable (`console.error(err)`, or `err.cause.stack`).
+Each SDK diagnostic is a plain `new Error(message)` — the message names the node/component/slot involved. When it wraps a real caught exception (a component that throws while rendering, or a `resolveData` that throws or rejects), `.cause` holds the original error, so the real stack trace stays reachable (`console.error(err)`, or `err.cause.stack`). Svelte SSR exceptions go through the host error handler; browser diagnostics after hydration may instead describe a sanitized plain object, without an original exception in `.cause`.
 
 ### Delivery diagnostics
 
@@ -863,16 +866,16 @@ React/Svelte/Angular adapters directly from its Core owner.
 
 ### Per-failure-mode behavior
 
-| Failure                                                                        | Behavior                                                                                                           | Override point             |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ | -------------------------- |
-| Malformed top-level payload (`nodes` not an array)                             | Warn, treat as `[]`, don't throw                                                                                   | —                          |
-| Malformed slot shape (a hand-built `PortableRenderPlan` with a non-array slot) | Warn, treat that slot as `[]`                                                                                      | —                          |
-| A payload node with no readable `component`/`experienceTemplate` ref           | Warn, drop that node + its subtree, siblings unaffected                                                            | —                          |
-| `resolveData` throws (sync or async) or rejects                                | Warn, node renders without `props.resolved`, other nodes' resolvers unaffected                                     | —                          |
-| A design token has no `resolveToken` mapping                                   | Warn, the **raw `DesignToken`** reaches the component instead of being dropped, in case it can make some use of it | `resolveToken` on `Config` |
-| Component id not in `Config.components`                                        | Renders `MissingComponent` (visible box in debug, silent otherwise)                                                | `renderUnknown`            |
-| Experience Template id not in `Config.experienceTemplates`                     | Warn, renders the template's slot children unwrapped (content survives)                                            | —                          |
-| **A registered component throws while rendering**                              | Isolated per-node; siblings render normally. Renders `ComponentError` (visible box in debug, silent otherwise)     | `renderError`              |
+| Failure                                                                        | Behavior                                                                                                                                 | Override point             |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| Malformed top-level payload (`nodes` not an array)                             | Warn, treat as `[]`, don't throw                                                                                                         | —                          |
+| Malformed slot shape (a hand-built `PortableRenderPlan` with a non-array slot) | Warn, treat that slot as `[]`                                                                                                            | —                          |
+| A payload node with no readable `component`/`experienceTemplate` ref           | Warn, drop that node + its subtree, siblings unaffected                                                                                  | —                          |
+| `resolveData` throws (sync or async) or rejects                                | Warn, node renders without `props.resolved`, other nodes' resolvers unaffected                                                           | —                          |
+| A design token has no `resolveToken` mapping                                   | Warn, the **raw `DesignToken`** reaches the component instead of being dropped, in case it can make some use of it                       | `resolveToken` on `Config` |
+| Component id not in `Config.components`                                        | Renders `MissingComponent` (visible box in debug, silent otherwise)                                                                      | `renderUnknown`            |
+| Experience Template id not in `Config.experienceTemplates`                     | Warn, renders the template's slot children unwrapped (content survives)                                                                  | —                          |
+| **A registered component throws while rendering**                              | Isolated per-node when framework/host recovery is enabled (see below); renders `ComponentError` (visible box in debug, silent otherwise) | `renderError`              |
 
 ### `renderError` — custom fallback for a component that throws
 
@@ -897,7 +900,7 @@ function Fallback({ componentId, nodeId, message }: ComponentErrorProps) {
 />;
 ```
 
-The Svelte and Angular adapters take the same prop with their own component shape (`ComponentErrorProps` / `cf-component-error`'s inputs are `componentId`, `nodeId?`, `message?`).
+The Svelte and Angular adapters take the same prop with their own component shape (`ComponentErrorProps` / `cf-component-error`'s inputs are `componentId`, `nodeId?`, `message?`). Svelte also supplies an optional native `reset?: () => void` callback to retry that node's rendering; it does not fetch content or reset the visitor SDK. See the [Svelte fallback and SSR recovery guide](./packages/adapter-svelte/README.md#component-errors-and-rendering-recovery).
 
 ### `<DebugExperience>` and errors
 
@@ -913,16 +916,16 @@ Pass `errors` explicitly if you're mounting `<DebugExperience>` yourself instead
 
 Unlike every other diagnostic, `component-render-error` can only be discovered by actually rendering the component — and each framework's server renderer handles that failure differently:
 
-| Framework   | SSR behavior                                                                                                                                                                                  | CSR behavior                                             | Diagnostic recorded during SSR?           |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------- |
-| **React**   | Degrades gracefully — an internal `<Suspense>` boundary emits the `renderError` fallback under both the legacy and streaming renderers (streaming defers the real retry to client hydration). | Catches via the standard class error-boundary mechanism. | No — only fires once the client executes. |
-| **Svelte**  | No recovery — `<svelte:boundary>` doesn't run its catching machinery server-side; a throw during the server walk fails the entire render.                                                     | Catches normally.                                        | No — SSR never reaches the catching code. |
-| **Angular** | Catches identically to CSR — there's no separate server renderer, so SSR and CSR run through the exact same component-creation path.                                                          | Same code path as SSR.                                   | Yes, for a creation-time throw.           |
+| Framework   | SSR behavior                                                                                                                                                                                  | CSR behavior                                             | Diagnostic recorded during SSR?                                                                 |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| **React**   | Degrades gracefully — an internal `<Suspense>` boundary emits the `renderError` fallback under both the legacy and streaming renderers (streaming defers the real retry to client hydration). | Catches via the standard class error-boundary mechanism. | No — only fires once the client executes.                                                       |
+| **Svelte**  | The per-node `failed` boundary renders the fallback when the host supplies a nonthrowing `transformError` with compatible compiler mode; the default transform rethrows.                      | Catches normally; native `reset` retries rendering.      | Host handler reports the original; SDK boundary `onerror` is browser-only, including hydration. |
+| **Angular** | Catches identically to CSR — there's no separate server renderer, so SSR and CSR run through the exact same component-creation path.                                                          | Same code path as SSR.                                   | Yes, for a creation-time throw.                                                                 |
 
 **Practical implications:**
 
 - **React** (Next.js App Router, Remix streaming, or any Suspense-aware pipeline): a throwing component degrades gracefully server-side, but the diagnostic itself only shows up after hydration — check `<DebugExperience>` again on the client if you need it during SSR.
-- **Svelte/SvelteKit**: a throwing component fails the whole page server-side. Add a [`handleError` hook](https://svelte.dev/docs/kit/hooks#Shared-hooks-handleError) in `src/hooks.server.ts` to turn that into a controlled error response instead of a raw crash — it won't give you per-node isolation, but it's the difference between a blank 500 and one you control. Test your components' unhappy paths before shipping; don't rely on SSR to catch a bad one for you.
+- **Svelte/SvelteKit**: Svelte supports `failed` boundary SSR recovery through `render(..., { transformError })` since 5.51 (verified on 5.57.3; adapter peer `^5.55.7`). Kit 2.70.4 requires both `compilerOptions.experimental.async: true` and `kit.experimental.handleRenderingErrors: true` (the latter defaults to `false`), because its rendering transform is always async. Kit 3.2.0 wires native SSR recovery through `handleError` automatically; a synchronous hook needs no async opt-in. Promise-returning transforms/hooks require async compilation and awaited rendering; awaiting `render` alone cannot enable async mode. Return a plain JSON-safe public error, keeping the original exception/stack in server logs. The host owns sanitization and HTTP status: recovered content need not mean HTTP 200, and a throwing fallback still bubbles normally. SSR `onerror` is ignored by the compiler, so do not expect SDK `<DebugExperience>` to list SSR component exceptions. See the [adapter guide](./packages/adapter-svelte/README.md#component-errors-and-rendering-recovery) for configuration and fallback examples.
 - **Angular** gives the strongest guarantee here: a component that throws during creation is isolated identically whether you're rendering server- or client-side.
 - None of the three frameworks catch a throw during a _later_ re-render with full parity — see below.
 
@@ -935,14 +938,27 @@ Unlike every other diagnostic, `component-render-error` can only be discovered b
 
 ## Svelte / SvelteKit
 
-`@contentful/experiences-svelte` is the Svelte 5 adapter. The public API matches React one for one: the same `Config`, `fetchExperience`, `resolveExperience`, `ServerExperienceRenderer`/`ClientExperienceRenderer`, design tokens, and `defineComponent`/`defineExperienceTemplate`. Three differences, all mechanical:
+Use `@contentful/experiences-svelte` with Svelte 5. For a SvelteKit app, start
+with the [managed SvelteKit setup](./packages/adapter-svelte/README.md#managed-sveltekit-integration).
+It pairs the browser-safe `/kit/client` binding with a private `/kit/server`
+binding. Vite and embedded browser apps use the [portable entry](./packages/adapter-svelte/README.md#managed-browser-integration)
+without Kit. The adapter guide covers [tested toolchains](./packages/adapter-svelte/README.md#compatibility),
+[shared React, Next.js and Svelte concepts](./packages/adapter-svelte/README.md#shared-concepts-across-react-nextjs-and-svelte),
+and [migration from manual loading, consent and Preview](./packages/adapter-svelte/README.md#migration).
 
-| Concern                    | React                                          | Svelte                                                                                                  |
-| -------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Register a component       | `component:` takes a React component           | `component:` takes a Svelte component                                                                   |
-| Read design (escape hatch) | `useDesignValues()`                            | `getDesignValues()` (read inside a `$derived`)                                                          |
-| Runtime context            | `useExperience()` / `useContentfulComponent()` | `getExperience()` / `getContentfulComponent()`                                                          |
-| Slots                      | each slot is a named React-node prop           | default slot is a `children` Snippet; others via `getContentfulComponent().slots` + `<NodesRenderer />` |
+Svelte shares `Config`, `fetchExperience`, `resolveExperience`,
+`ServerExperienceRenderer`, `ClientExperienceRenderer`, `defineComponent`,
+`defineExperienceTemplate`, and design tokens with the other rendering adapters.
+See the [Svelte API reference](./packages/adapter-svelte/README.md#public-api)
+for their Svelte signatures and the [manual SvelteKit recipe](#manual-sveltekit-loading-and-rendering)
+when the app owns fetching and presentation.
+
+| Concern                    | React                                          | Svelte                                                      |
+| -------------------------- | ---------------------------------------------- | ----------------------------------------------------------- |
+| Register a component       | `component:` takes a React component           | `component:` takes a Svelte component                       |
+| Read design (escape hatch) | `useDesignValues()`                            | `getDesignValues()` (read inside a `$derived`)              |
+| Render context             | `useExperience()` / `useContentfulComponent()` | `getExperience()` / `getContentfulComponent()`              |
+| Slots                      | Each slot is a named `ReactNode[]` prop        | Each slot is a named `Snippet[]` prop, including `children` |
 
 ### 1. Register your components
 
@@ -1005,22 +1021,88 @@ Resolved design auto-fills props here too, so a component styles itself straight
 
 ### 3. Fetch + render (SvelteKit)
 
+Bind the shared registry in a browser-safe module and configure the server
+binding and preparation endpoint with separate credentials. See the
+[complete server and client setup](./packages/adapter-svelte/README.md#kit-server-preparation).
+Return the managed source from the universal loader:
+
 ```ts
-// routes/[...path]/+page.server.ts: the URL path is the Destination path
+// src/routes/[...path]/+page.ts
+import { request } from '$lib/experiences';
+import type { PageLoad } from './$types';
+
+export const prerender = false;
+export const load: PageLoad = async (event) => ({
+  primarySource: await request.loadExperience(event, {
+    experience: { destinationId: 'your-destination', path: event.url.pathname },
+  }),
+});
+```
+
+```svelte
+<!-- src/routes/+layout.svelte -->
+<script lang="ts">
+  import { page } from '$app/state';
+  import { request } from '$lib/experiences';
+
+  const { ExperiencesRoot } = request;
+  let { children } = $props();
+</script>
+
+<ExperiencesRoot source={page.data.primarySource}>
+  {@render children()}
+</ExperiencesRoot>
+```
+
+```svelte
+<!-- src/routes/[...path]/+page.svelte -->
+<script lang="ts">
+  import { request } from '$lib/experiences';
+
+  const { Experience } = request;
+</script>
+
+<Experience />
+```
+
+For by-ID loading, pass `experience: { experienceId: 'your-experience-id' }`
+and authorize that selector in the server binding. The root adopts one complete
+source after Kit commits it. SSR, hybrid, browser-only and static routes have
+distinct [rendering modes](./packages/adapter-svelte/README.md#choose-the-rendering-mode).
+For application-owned loading, use the manual recipe below.
+
+#### Manual SvelteKit loading and rendering
+
+Use a `+page.server.ts` loader when the application owns the fetch and redirect
+handling. Keep Delivery credentials on the server and pass the projected plan to
+`ServerExperienceRenderer`. This recipe fetches ordinary published content without
+visitor state or event intent.
+
+```ts
+// src/routes/[...path]/+page.server.ts
 import { error, redirect } from '@sveltejs/kit';
-import { NotFoundError, fetchExperience } from '@contentful/experiences-svelte';
+import { fetchExperience, NotFoundError } from '@contentful/experiences-svelte';
+import { serializePlan } from '@contentful/experiences-svelte/kit/server';
 import { CDA_TOKEN, DESTINATION_ID, SPACE_ID } from '$env/static/private';
 import { experienceConfig } from '$lib/experience-config';
+import type { PageServerLoad } from './$types';
 
-export const load = async ({ params }) => {
+export const load: PageServerLoad = async ({ url }) => {
   try {
     const result = await fetchExperience(
-      { spaceId: SPACE_ID, destinationId: DESTINATION_ID, path: `/${params.path}` },
+      { spaceId: SPACE_ID, destinationId: DESTINATION_ID, path: url.pathname },
       { accessToken: CDA_TOKEN },
       { config: experienceConfig }
     );
-    if ('redirect' in result) redirect(307, result.redirect.path);
-    return { experience: result };
+    if ('redirect' in result) {
+      const path = result.redirect.path;
+      const target = new URL(path, url.origin);
+      if (!path.startsWith('/') || target.origin !== url.origin) {
+        error(400, 'Invalid Destination redirect');
+      }
+      redirect(307, target);
+    }
+    return { experience: serializePlan(result) };
   } catch (err) {
     if (err instanceof NotFoundError) error(404, 'Not found');
     throw err;
@@ -1029,18 +1111,26 @@ export const load = async ({ params }) => {
 ```
 
 ```svelte
-<!-- routes/[...path]/+page.svelte -->
+<!-- src/routes/[...path]/+page.svelte -->
 <script lang="ts">
   import { ServerExperienceRenderer } from '@contentful/experiences-svelte';
   import { experienceConfig } from '$lib/experience-config';
+  import type { PageProps } from './$types';
 
-  let { data } = $props();
+  let { data }: PageProps = $props();
 </script>
 
 <ServerExperienceRenderer experience={data.experience} config={experienceConfig} />
 ```
 
-To fetch by Experience id instead (when you already know its id), pass `{ spaceId, environmentId, experienceId }`; see [Destinations](#destinations). Everything else applies identically: advanced setup (preview, async `resolveData`), the API reference below, merge precedence, and design tokens. Substitute the Svelte spelling of each hook.
+For a known Experience ID, use `{ spaceId, environmentId, experienceId }` as the
+first argument to `fetchExperience`. If the application already has a payload,
+use `resolveExperience(payload, config, options)` before rendering. Review the
+[server serialization guidance](./packages/adapter-svelte/README.md#kit-server-preparation)
+before transferring resolver output in public loader data, including for static
+routes. [Destinations](#destinations), [Preview](#live-preview),
+[async `resolveData`](#async-resolvedata-with-external-fetch), [design tokens](#design-tokens),
+and [merge precedence](#merge-precedence-last-wins) apply to Svelte integrations.
 
 ---
 
@@ -1187,15 +1277,15 @@ Runnable example apps live in [`examples/`](./examples). Clone the repo, seed th
 | Example                                          | Stack                           | Shows                                                                                                                               |
 | ------------------------------------------------ | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | [`examples/nextjs`](./examples/nextjs)           | Next.js 15.5 (App Router)       | Managed dynamic Destination and by-id requests, redirects, Preview Sessions, consent and events; async `resolveData`, design tokens |
-| [`examples/sveltekit`](./examples/sveltekit)     | SvelteKit 2 + Svelte 5          | Destination routing, by-id preview, async `resolveData`, and design tokens                                                          |
+| [`examples/sveltekit`](./examples/sveltekit)     | SvelteKit 2 + Svelte 5          | Managed native loading, Destination and by-ID selectors, consent, optional Preview, async `resolveData` and design tokens           |
 | [`examples/angular`](./examples/angular)         | Angular 22 + `@angular/ssr`     | Same, on zoneless Angular; fetch in Express (keeps tokens server-side) + `TransferState` relay                                      |
 | [`examples/astro`](./examples/astro)             | Astro 7 + `@astrojs/react`      | Destination routing with a custom renderer from `@contentful/experiences-react/custom-renderer`: native islands, server-rendered    |
 | [`examples/vite-react`](./examples/vite-react)   | Vite 6 + React 19 (client-only) | One managed root and `Experience` for Destination and by-id loading in the browser; styled-components for CSS-in-JS                 |
-| [`examples/vite-svelte`](./examples/vite-svelte) | Vite 6 + Svelte 5 (client-only) | Browser fetch, resolve, and render for Destination and by-id selectors, mirroring the SvelteKit app                                 |
+| [`examples/vite-svelte`](./examples/vite-svelte) | Vite 6 + Svelte 5 (client-only) | Portable managed root with host-owned navigation, Destination and by-ID selectors                                                   |
 | [`examples/node`](./examples/node)               | Node `node:http`                | Carrying visitor identity between the Web SDK and the Node SDK with a cookie; no renderer                                           |
 | [`examples/scripts`](./examples/scripts)         | Node + tsx                      | One-time bootstrap that seeds the demo Experience the other examples render                                                         |
 
-The Next.js, SvelteKit, Angular, Astro, and Vite examples serve pages from a Destination: the URL path is the Destination path, and `/experiences/<id>` fetches one Experience by id. The Next.js example supports Preview Sessions through both selectors; the other server-rendered examples use the by-id route for preview. The client-only Vite examples have no Preview Session setup. They register the same components against the same Experiences, so they render identically; only the framework-specific setup differs. To run one, first seed the demo content into your Contentful space with the bootstrap script. It uses the experiences management API to provision the ContentType, entries, assets, design tokens, Components, Experience Template, DataAssemblies, the `home` and `landing` Experiences, and a Channel, Destination, and Destination Nodes.
+The Next.js, SvelteKit, Angular, Astro, and Vite examples serve pages from a Destination: the URL path is the Destination path, and `/experiences/<id>` fetches one Experience by id. The Next.js and SvelteKit examples wire Preview Sessions for their managed selectors. The other server-rendered examples use the by-ID route for Preview. The client-only Vite examples have no Preview Session setup. Live Preview and Destinations verification for Svelte remains [deferred](./packages/adapter-svelte/README.md#service-verification). The examples register the same components against the same Experiences, so they render identically; only the framework-specific setup differs. To run one, first seed the demo content into your Contentful space with the bootstrap script. It uses the experiences management API to provision the ContentType, entries, assets, design tokens, Components, Experience Template, DataAssemblies, the `home` and `landing` Experiences, and a Channel, Destination, and Destination Nodes.
 
 ```sh
 npm install --ignore-scripts
@@ -1697,7 +1787,7 @@ This is an Nx monorepo. Install the framework adapter for rendering. `@contentfu
 | [`packages/live-preview`](./packages/live-preview)       | `@contentful/experiences-live-preview` | **Public.** Framework-neutral Preview Session client.                                                                  |
 | [`packages/adapter-react`](./packages/adapter-react)     | `@contentful/experiences-react`        | **Public.** React rendering and managed browser integration.                                                           |
 | [`packages/adapter-nextjs`](./packages/adapter-nextjs)   | `@contentful/experiences-nextjs`       | **Public.** App/Pages request loading, built-in roots and React rendering via explicit subpaths.                       |
-| [`packages/adapter-svelte`](./packages/adapter-svelte)   | `@contentful/experiences-svelte`       | **Public.** Svelte 5 renderer with the same public API shape.                                                          |
+| [`packages/adapter-svelte`](./packages/adapter-svelte)   | `@contentful/experiences-svelte`       | **Public.** Svelte 5 renderer, managed browser root and optional SvelteKit bindings.                                   |
 | [`packages/adapter-angular`](./packages/adapter-angular) | `@contentful/experiences-angular`      | **Public.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) with the same public API shape.                                 |
 
 Future framework adapters slot in under the same pattern (`packages/adapter-vue`, and so on) and consume the same internal core and design packages. The Web SDK is a sibling public package to the Node SDK over Runtime, Client, and Core; it owns browser state and does not inherit Node request semantics.
