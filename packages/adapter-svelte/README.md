@@ -72,9 +72,11 @@ Destination selectors reject either field when defined. `locale`,
 `personalization`, `metadata`, `debug` and `resolveOptions` retain their runtime
 meanings. Selectors are validated before seeds or normalization. `initialPlan`
 and `initialError` seed the operation without a startup content fetch, including
-successful empty content. Equivalent views share one root primary; a selectorless
-`Experience` observes that primary. Independent simultaneous selections require
-separate application composition; they do not create a multi-Experience loader.
+successful empty content. The root presents one current primary. Equivalent
+content-only inputs share it; a changed selector supersedes the earlier input,
+including while the outgoing view is animating. A selectorless `Experience`
+observes that primary. Render its plan through `ExperienceRenderer` for additional
+presentations; selecting inputs do not create a multi-Experience loader.
 
 Call the bound `useManagedExperience(() => ({ experienceId }))` during component
 initialization to select reactively, or `useManagedExperience()` to observe the
@@ -89,8 +91,18 @@ that retained plan. `result?.notFound` marks an authoritative missing-content
 outcome; applications can render a recognizable “Page not found” message and
 return link in their snippet. Preview acquisition404 and successful empty plans
 do not set that flag.
-Retry and refresh are event-free reads. These portable operations are separate
-from future Kit request loading and its private result projection.
+Retry and refresh are event-free reads. For an explicit browser action below a
+hydrated Kit request root, render an ordinary registry-bound `Experience` with
+the current selector and `personalization.events`. Mounting an unseeded selecting
+view with nonempty explicit events declares fresh intent. A new keyed view starts
+each deliberate action, including identical repeated actions while outgoing DOM
+is animating; keep the SDK root mounted. Unchanged rerenders do not repeat that
+intent. The action uses Web fetching, and Retry follows the currently
+selected source without repeating its events. Native Kit revalidation remains
+event-free for an unchanged URL and content selection. Both result families can
+observe the displayed plan, but `result` is undefined when the current operation
+belongs to the other family; raw request results are never rewritten as browser
+operations or overlaid with retained content.
 
 Visitor reset preserves the completed displayed plan and its exact operation
 result. It clears visitor state and ends pending work and old page intent without

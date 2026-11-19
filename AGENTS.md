@@ -1029,6 +1029,19 @@ page owner are removed. Current owning-layer and native evidence verifies this
 revision; Phase4/G4 was accepted and completed on 2026-11-18. Earlier lifecycle
 fixes and test evidence remain revision-scoped.
 
+### Svelte Kit/browser source handover (fixed)
+
+A hydrated Kit root can present an ordinary managed Web fetch for explicit
+same-URL actions while retaining its SDK. Publication, Retry and cleanup belong
+to the currently selected source; earlier reads, hydration/replay and teardown
+must not overwrite its content or visitor state. A new unseeded selecting binding
+with explicit events declares fresh intent, including identical keyed actions
+while outgoing DOM outros remain. Changed selector inputs supersede earlier
+inputs; unchanged earlier views observe rather than reclaim acquisition.
+Equivalent content-only inputs share the current source. Keep seeds synchronous
+for SSR/hydration. Typed observers
+expose only their own result family, preserving raw request and browser operations.
+
 ### Malformed selector diagnostics before normalization (fixed)
 
 One internal Client assertion checks selector shape, nonempty strings and absolute

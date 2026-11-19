@@ -97,6 +97,7 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
   const selected = (value: Selection) =>
     !disposed &&
     selection === value &&
+    presentation.isSelected(value) &&
     route.revision === value.revision &&
     environment.getSdk() === value.sdk &&
     (value.options.request.locale ?? environment.getLocale()) === value.locale;
@@ -122,10 +123,11 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
     boundExperience = undefined;
   }
   function detach() {
+    const ownsPresentation = selection && presentation.isSelected(selection);
     selection = undefined;
     operation = undefined;
     stopBindings();
-    presentation.clear();
+    if (ownsPresentation) presentation.clear();
   }
   function bindPreview(value: Selection) {
     const sdk = value.sdk;
@@ -154,7 +156,7 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
   async function fetch(isRefresh: boolean) {
     const value = selection;
     const sdk = value?.sdk;
-    if (!value || !sdk || presentation.current.redirect) return;
+    if (!value || !sdk || !selected(value) || presentation.current.redirect) return;
     const attempt = {};
     operation = attempt;
     const lifetime = sdk.captureLifetime();
@@ -245,7 +247,7 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
           ? presentation.current.data
           : undefined;
       const data = sdk?.isPreview || failure === undefined ? candidate : undefined;
-      presentation.select(value);
+      presentation.select(value, refresh);
       complete(
         data || error
           ? { plan: data, error, ...(failure === 404 ? { notFound: true } : {}) }
@@ -260,14 +262,15 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
   function update(getOptions: () => SourceOptions | undefined) {
     const options = getOptions();
     if (!options) throw new Error('A managed primary selection is required when attaching.');
-    for (const other of registrations) {
-      const current = untrack(other);
-      if (other !== getOptions && current && !sameSelection(current, options))
-        throw new Error(
-          'One managed primary Experience selection is supported per Experiences root.'
-        );
-    }
+    assertExperienceSelector(options.request);
+    const newSeed =
+      (options.initialPlan !== undefined || options.initialError !== undefined) &&
+      (selection?.options.initialPlan !== options.initialPlan ||
+        selection?.options.initialError !== options.initialError);
+    if (selection && (!sameSelection(selection.options, options) || newSeed)) registrations.clear();
+    registrations.add(getOptions);
     apply(options);
+    return options;
   }
   const refresh = () => fetch(true);
   return {
@@ -278,13 +281,35 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
     retry: refresh,
     attach(getOptions) {
       if (disposed) throw new Error('Cannot attach to a disposed Experiences root.');
-      update(getOptions);
-      registrations.add(getOptions);
+      const initial = getOptions();
+      if (initial) assertExperienceSelector(initial.request);
+      // Mounting an event-bearing selector declares fresh intent. Outgoing views may still exist.
+      if (
+        initial?.request.personalization?.events?.length &&
+        initial.initialPlan === undefined &&
+        initial.initialError === undefined
+      ) {
+        registrations.clear();
+        selection = undefined;
+      }
+      let previous = update(getOptions);
+      let released = false;
       return {
         update() {
-          if (registrations.has(getOptions)) update(getOptions);
+          if (released || disposed) return;
+          const next = getOptions();
+          if (
+            next &&
+            (registrations.has(getOptions) ||
+              !sameSelection(previous, next) ||
+              previous.initialPlan !== next.initialPlan ||
+              previous.initialError !== next.initialError)
+          )
+            previous = update(getOptions);
         },
         release() {
+          if (released) return;
+          released = true;
           if (registrations.delete(getOptions) && !registrations.size) detach();
         },
       };

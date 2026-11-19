@@ -321,7 +321,20 @@ it('retains completed portable display on reset, refuses delayed content and rec
   source.dispose();
 });
 
-it('shares equivalent current selectors, diagnoses divergence and detaches after the last selector', () => {
+it('retains the seeded acquisition when an equivalent unseeded peer detaches', () => {
+  const { source, options, setSdk } = setup(plan());
+  setSdk(undefined);
+  const seeded = source.attach(() => options);
+  const peer = source.attach(() => ({ ...options, initialPlan: undefined }));
+  peer.release();
+  expect(source.current.data).toBe(options.initialPlan);
+  expect(source.current.result?.plan).toBe(options.initialPlan);
+  seeded.release();
+  expect(source.current.status).toBe('idle');
+  source.dispose();
+});
+
+it('shares equivalent inputs, supersedes changed selectors and ignores unchanged retired views', () => {
   const { source, options, setSdk } = setup(plan());
   setSdk(undefined);
   let left = options;
@@ -329,8 +342,12 @@ it('shares equivalent current selectors, diagnoses divergence and detaches after
   const first = source.attach(() => left);
   const second = source.attach(() => right);
   expect(source.current.data).toBe(options.initialPlan);
-  left = { ...options, request: { experienceId: 'b' } };
-  expect(() => first.update()).toThrow(/One managed primary/);
+  const nextPlan = plan('b');
+  left = { ...options, request: { experienceId: 'b' }, initialPlan: nextPlan };
+  first.update();
+  expect(source.current.data).toBe(nextPlan);
+  second.update();
+  expect(source.current.data).toBe(nextPlan);
   right = { ...left };
   expect(() => first.update()).not.toThrow();
   expect(() => second.update()).not.toThrow();

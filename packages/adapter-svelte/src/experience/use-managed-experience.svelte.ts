@@ -47,22 +47,32 @@ export function useBoundManagedExperience(
     } else if (binding) binding.update();
     else binding = scope.source.attach(getSelection);
   };
-  // Seeds are available during SSR; browser effects track raw input and source environment.
-  untrack(synchronize);
-  if (getOptions) $effect.pre(synchronize);
+  // Seeds are synchronous; fresh browser acquisition follows the committed selecting view.
+  const initial = untrack(getSelection);
+  if (
+    typeof window === 'undefined' ||
+    initial?.initialPlan !== undefined ||
+    initial?.initialError !== undefined
+  )
+    untrack(synchronize);
+  if (getOptions) $effect(synchronize);
   onDestroy(() => {
     binding?.release();
   });
 
-  return usePresentation(scope.presentation, () => {
-    const defaults = getDefaults();
-    const selected = getOptions?.();
-    return {
-      onRedirect: selected?.onRedirect ?? defaults.onRedirect,
-      onExperienceResolved: selected?.onExperienceResolved ?? defaults.onExperienceResolved,
-      onExperienceError: selected?.onExperienceError ?? defaults.onExperienceError,
-    };
-  });
+  return usePresentation(
+    scope.presentation,
+    () => {
+      const defaults = getDefaults();
+      const selected = getOptions?.();
+      return {
+        onRedirect: selected?.onRedirect ?? defaults.onRedirect,
+        onExperienceResolved: selected?.onExperienceResolved ?? defaults.onExperienceResolved,
+        onExperienceError: selected?.onExperienceError ?? defaults.onExperienceError,
+      };
+    },
+    (result) => (result && 'request' in result ? result : undefined)
+  );
 }
 
 /** Call during component initialization with a getter, or omit it to observe the primary source. */

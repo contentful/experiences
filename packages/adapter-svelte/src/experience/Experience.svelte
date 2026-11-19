@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import ExperienceRenderer from '../rendering/ClientExperienceRenderer.svelte';
+  import ExperiencePresentation from './ExperiencePresentation.svelte';
   import { useBoundManagedExperience } from './use-managed-experience.svelte.js';
   import type { ExperienceProps, UseManagedExperienceOptions } from './presentation-types.js';
 
@@ -17,14 +17,4 @@
       onExperienceError: props.onExperienceError }));
 </script>
 
-{#if props.children}
-  {@render props.children(current)}
-{:else if !current.redirect && current.data}
-  <ExperienceRenderer experience={current.data} {config} metadata={props.metadata}
-    debug={props.debug} renderUnknown={props.renderUnknown} renderError={props.renderError}
-    as={props.as} rootProps={props.rootProps} />
-{:else if !current.redirect && current.error}
-  {@render props.errorFallback?.(current)}
-{:else if !current.redirect}
-  {@render props.loadingFallback?.(current)}
-{/if}
+<ExperiencePresentation {current} {config} {...props} />

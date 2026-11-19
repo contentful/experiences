@@ -29,6 +29,7 @@ export function createRequestController(redirect: (path: string) => void | Promi
         promise?: Promise<void>;
       }
     | undefined;
+  let presentationKey: string | undefined;
   let disposed = false;
   const history = new Set<string>();
 
@@ -125,11 +126,13 @@ export function createRequestController(redirect: (path: string) => void | Promi
       typeof operation
     >;
     operation = value;
-    presentation.select(selection);
+    presentationKey = selection;
+    presentation.select(selection, refresh);
     route?.update({ routeKey: key, selection });
     const isCurrent = () =>
       !disposed &&
       operation === value &&
+      presentation.isSelected(value.selection) &&
       sdk === owner &&
       lifetime() &&
       applicable(value.candidate);
@@ -159,14 +162,17 @@ export function createRequestController(redirect: (path: string) => void | Promi
           owner.locale,
       };
       value.selection = requestSelection(value.candidate);
-      presentation.select(value.selection);
+      presentationKey = value.selection;
+      presentation.select(value.selection, refresh);
       route?.update({ routeKey: key, selection: value.selection });
       await adopt(value.candidate, isCurrent);
     })();
     return value.promise;
   }
-  function refresh() {
-    return source && committedKey ? run(source, committedKey, true) : Promise.resolve();
+  function refresh(): Promise<void> {
+    return source && committedKey && presentation.isSelected(presentationKey)
+      ? run(source, committedKey, true)
+      : Promise.resolve();
   }
   return {
     presentation,
@@ -180,7 +186,8 @@ export function createRequestController(redirect: (path: string) => void | Promi
     seed(candidate: ManagedRequestSource | undefined) {
       if (!candidate) return;
       const state = getRequestSourceState(candidate);
-      presentation.select(requestSelection(state));
+      presentationKey = requestSelection(state);
+      presentation.select(presentationKey, refresh);
       present(state, () => !disposed);
     },
     attach(next: ContentfulExperiences | undefined, sequence: PageSequence, nextSession?: string) {
@@ -192,7 +199,11 @@ export function createRequestController(redirect: (path: string) => void | Promi
       route = sequence;
     },
     observeLocale() {
-      if (operation && !applicable(operation.candidate)) {
+      if (
+        operation &&
+        presentation.isSelected(operation.selection) &&
+        !applicable(operation.candidate)
+      ) {
         operation = undefined;
         route?.abandonPresentation();
         presentation.invalidateData();
@@ -213,8 +224,10 @@ export function createRequestController(redirect: (path: string) => void | Promi
       if (!candidate) {
         source = operation = undefined;
         committedKey = undefined;
-        route?.abandonPresentation();
-        presentation.clear();
+        if (presentation.isSelected(presentationKey)) {
+          route?.abandonPresentation();
+          presentation.clear();
+        }
         return Promise.resolve();
       }
       const state = getRequestSourceState(candidate);
@@ -223,8 +236,10 @@ export function createRequestController(redirect: (path: string) => void | Promi
         source = undefined;
         committedKey = key;
         operation = undefined;
-        route?.abandonPresentation();
-        presentation.clear();
+        if (presentation.isSelected(presentationKey)) {
+          route?.abandonPresentation();
+          presentation.clear();
+        }
         return Promise.resolve();
       }
       if (
@@ -239,7 +254,8 @@ export function createRequestController(redirect: (path: string) => void | Promi
       committedKey = key;
       if (!sdk) {
         operation = undefined;
-        presentation.select(requestSelection(state));
+        presentationKey = requestSelection(state);
+        presentation.select(presentationKey, refresh);
         present(state, () => !disposed);
         return Promise.resolve();
       }

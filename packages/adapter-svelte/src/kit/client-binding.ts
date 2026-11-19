@@ -15,7 +15,7 @@ import {
 } from '../runtime/owner-controller.svelte.js';
 import KitRoot from './KitRoot.svelte';
 import KitProvider from './KitProvider.svelte';
-import ExperienceView from '../experience/Experience.svelte';
+import ExperiencePresentation from '../experience/ExperiencePresentation.svelte';
 import { getRuntimePresentation } from '../runtime/context.svelte.js';
 import {
   usePresentation,
@@ -25,12 +25,10 @@ import type { RequestResult } from './request-result.js';
 import type { PresentationProps } from '../experience/presentation-types.js';
 type RequestExperienceProps = Omit<PresentationProps<RequestResult>, 'config'> &
   PresentationNotifications<RequestResult>;
-// This factory binds the shared view to the request result family; no selector is supplied.
-const RequestExperience = ExperienceView as unknown as Component<
-  RequestExperienceProps & { config: Config }
->;
 function useManagedRequestExperience(getOptions?: () => PresentationNotifications<RequestResult>) {
-  return usePresentation(getRuntimePresentation<RequestResult>(), getOptions);
+  return usePresentation(getRuntimePresentation<RequestResult>(), getOptions, (result) =>
+    result && 'requestId' in result ? result : undefined
+  );
 }
 import { createClientLoader } from './client-loader.js';
 import { createRequestController, type RequestController } from './request-controller.svelte.js';
@@ -115,11 +113,16 @@ export function bindSvelteKitClientExperiences(options: SvelteKitClientExperienc
     KitProvider(internals, withBinding(props, binding));
 
   const Experience: Component<RequestExperienceProps> = (internals, props) => {
-    return RequestExperience(
+    const current = useManagedRequestExperience(() => props);
+    return ExperiencePresentation(
       internals,
-      new Proxy(props as RequestExperienceProps & { config: Config }, {
+      new Proxy(props as RequestExperienceProps & { config: Config; current: typeof current }, {
         get(target, key, receiver) {
-          return key === 'config' ? _config : Reflect.get(target, key, receiver);
+          return key === 'config'
+            ? _config
+            : key === 'current'
+              ? current
+              : Reflect.get(target, key, receiver);
         },
       })
     );

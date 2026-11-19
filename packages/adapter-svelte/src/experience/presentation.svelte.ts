@@ -31,6 +31,7 @@ interface Publication<T> {
 const idle = () => ({ status: 'idle' as const, data: undefined, error: undefined });
 /** Display ownership shared by portable and native acquisition. Results remain intact. */
 export function createPresentation<T>(refresh: () => Promise<void>) {
+  let refreshSelection = refresh;
   let publication = $state.raw<Publication<T>>({ snapshot: idle(), isCurrent: () => false });
   let completed = untrack(() => publication);
   let selection: unknown;
@@ -58,8 +59,8 @@ export function createPresentation<T>(refresh: () => Promise<void>) {
     get result() {
       return publication.snapshot.result;
     },
-    refresh,
-    retry: refresh,
+    refresh: () => refreshSelection(),
+    retry: () => refreshSelection(),
   };
   return {
     view,
@@ -98,7 +99,11 @@ export function createPresentation<T>(refresh: () => Promise<void>) {
         settled
       );
     },
-    select(key: unknown) {
+    isSelected(key: unknown) {
+      return selection === key;
+    },
+    select(key: unknown, retry = refresh) {
+      refreshSelection = retry;
       if (selection === key) return;
       selection = key;
       publish(idle(), () => false);
@@ -156,13 +161,20 @@ export type Presentation<T> = ReturnType<typeof createPresentation<T>>;
 /** One callback implementation; every callback may revoke remaining publication authority. */
 export function usePresentation<T>(
   model: Presentation<T>,
-  getOptions: () => PresentationNotifications<T> = () => ({})
+  getOptions: () => PresentationNotifications<T> = () => ({}),
+  getResult?: (result: T | undefined) => T | undefined
 ): PresentedExperience<T> {
   let active = true;
   onDestroy(() => {
     active = false;
   });
-  const current = model.view;
+  const current = getResult
+    ? new Proxy(model.view, {
+        get(target, key, receiver) {
+          return key === 'result' ? getResult(target.result) : Reflect.get(target, key, receiver);
+        },
+      })
+    : model.view;
   let reported: Pick<PresentationSnapshot<T>, 'data' | 'error' | 'redirect'> = {
     data: undefined,
     error: undefined,
