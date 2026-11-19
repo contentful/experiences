@@ -1,6 +1,10 @@
 import { onDestroy, untrack } from 'svelte';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import type { DestinationRedirectResult } from '@contentful/experiences-web';
+import type {
+  ManagedExperienceAcquireOptions,
+  ManagedExperienceOperationResult,
+} from './source-types.js';
 
 export interface PresentationSnapshot<T> {
   readonly status: 'idle' | 'loading' | 'success' | 'error' | 'redirect';
@@ -10,6 +14,9 @@ export interface PresentationSnapshot<T> {
   readonly result?: T;
 }
 export type PresentedExperience<T> = PresentationSnapshot<T> & {
+  acquire(
+    options: ManagedExperienceAcquireOptions
+  ): Promise<ManagedExperienceOperationResult | undefined>;
   refresh(): Promise<void>;
   retry(): Promise<void>;
 };
@@ -29,9 +36,12 @@ interface Publication<T> {
   redirectClaimed?: boolean;
 }
 const idle = () => ({ status: 'idle' as const, data: undefined, error: undefined });
+type Acquire = PresentedExperience<unknown>['acquire'];
+const unavailable: Acquire = async () => undefined;
 /** Display ownership shared by portable and native acquisition. Results remain intact. */
 export function createPresentation<T>(refresh: () => Promise<void>) {
   let refreshSelection = refresh;
+  let acquireSelection: Acquire = unavailable;
   let publication = $state.raw<Publication<T>>({ snapshot: idle(), isCurrent: () => false });
   let completed = untrack(() => publication);
   let selection: unknown;
@@ -59,6 +69,7 @@ export function createPresentation<T>(refresh: () => Promise<void>) {
     get result() {
       return publication.snapshot.result;
     },
+    acquire: (options) => untrack(() => acquireSelection(options)),
     refresh: () => refreshSelection(),
     retry: () => refreshSelection(),
   };
@@ -102,8 +113,9 @@ export function createPresentation<T>(refresh: () => Promise<void>) {
     isSelected(key: unknown) {
       return selection === key;
     },
-    select(key: unknown, retry = refresh) {
+    select(key: unknown, retry = refresh, acquire: Acquire = unavailable) {
       refreshSelection = retry;
+      acquireSelection = acquire;
       if (selection === key) return;
       selection = key;
       publish(idle(), () => false);
@@ -153,6 +165,8 @@ export function createPresentation<T>(refresh: () => Promise<void>) {
     },
     clear() {
       selection = undefined;
+      refreshSelection = refresh;
+      acquireSelection = unavailable;
       publish(idle(), () => false);
     },
   };
@@ -162,19 +176,26 @@ export type Presentation<T> = ReturnType<typeof createPresentation<T>>;
 export function usePresentation<T>(
   model: Presentation<T>,
   getOptions: () => PresentationNotifications<T> = () => ({}),
-  getResult?: (result: T | undefined) => T | undefined
+  getResult?: (result: T | undefined) => T | undefined,
+  isActionCurrent: () => boolean = () => true
 ): PresentedExperience<T> {
   let active = true;
   onDestroy(() => {
     active = false;
   });
-  const current = getResult
-    ? new Proxy(model.view, {
-        get(target, key, receiver) {
-          return key === 'result' ? getResult(target.result) : Reflect.get(target, key, receiver);
-        },
-      })
-    : model.view;
+  const canAct = () => untrack(() => active && isActionCurrent());
+  const acquire: Acquire = (options) =>
+    canAct() ? model.view.acquire(options) : unavailable(options);
+  const refresh = () => (canAct() ? model.view.refresh() : Promise.resolve());
+  const current = new Proxy(model.view, {
+    get(target, key, receiver) {
+      if (key === 'acquire') return acquire;
+      if (key === 'refresh' || key === 'retry') return refresh;
+      return key === 'result' && getResult
+        ? getResult(target.result)
+        : Reflect.get(target, key, receiver);
+    },
+  });
   let reported: Pick<PresentationSnapshot<T>, 'data' | 'error' | 'redirect'> = {
     data: undefined,
     error: undefined,

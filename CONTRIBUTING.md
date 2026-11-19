@@ -85,7 +85,7 @@ packages/
 ├── web/             # @contentful/experiences-web — stateful browser runtime
 ├── live-preview/    # @contentful/experiences-live-preview (optional customer-facing Preview Session source for any framework)
 ├── adapter-react/   # @contentful/experiences-react  — React renderer (customer-facing)
-├── adapter-svelte/  # @contentful/experiences-svelte — Svelte renderer (customer-facing)
+├── adapter-svelte/  # @contentful/experiences-svelte — Svelte renderer and managed Svelte/Kit bindings
 └── adapter-angular/ # @contentful/experiences-angular — Angular renderer (customer-facing)
 examples/            # Example apps (customer-facing)
 ├── nextjs/          # Next.js 15 example app
@@ -99,7 +99,10 @@ examples/            # Example apps (customer-facing)
 implementations/     # Reference implementations (maintainer-facing)
 ├── node-sdk/        # Express/EJS on the packed Node SDK
 ├── web-sdk/         # Vanilla browser app on the packed Web SDK UMD build
-└── node-sdk+web-sdk/ # Express/EJS SSR handing off to the Web SDK in the browser
+├── node-sdk+web-sdk/ # Express/EJS SSR handing off to the Web SDK in the browser
+├── react-sdk/       # React/Vite on the packed React and Web SDKs
+├── nextjs-sdk/      # Next.js App/Pages on the packed Next/Node/React SDKs
+└── svelte-sdk/      # SvelteKit 3 on the packed Svelte/Node/Web SDKs
 ```
 
 Package boundaries matter — see the "Conventions" section of [`AGENTS.md`](./AGENTS.md) before moving code between packages. In short: `core` stays free of framework and delivery-client dependencies, and only `client` may import `@contentful/experience-delivery`.
@@ -201,12 +204,24 @@ presentation, diagnostic Home/Page Two comparisons and optional Preview Sessions
 `npx nx run implementation-nextjs-sdk:dev`. Its README describes preserved server
 startup, browser navigation, server-only updates and supported response boundaries.
 
-All five references activate Live Preview only with `LIVE_PREVIEW_ENABLED=true`
+The [standalone SvelteKit reference](./implementations/svelte-sdk/README.md)
+uses the packed Svelte/Node/Web SDKs with Kit 3 for SSR/hybrid request-result
+adoption and direct Web CSR under one browser owner. Run
+`npx nx run implementation-svelte-sdk:setup`, then
+`npx nx run implementation-svelte-sdk:dev`. Its scoped `build`, `typecheck`, `lint`
+and `serve:stop` targets follow the same reference lifecycle; Kit 3's application
+toolchain stays local to this reference. Use the
+[SvelteKit 2](./examples/sveltekit/README.md) and
+[standalone Vite](./examples/vite-svelte/README.md) examples for customer
+integration and keep the portable package independent of Kit in builds and
+declarations.
+
+All six references activate Live Preview only with `LIVE_PREVIEW_ENABLED=true`
 and a nonempty URL `preview_session_id`. The local `.env` session ID is retained
 only for copying into the URL; code never reads it. Missing/empty parameters or
 a disabled flag keep ordinary event handling, including when a session parameter
 remains in the URL. Each deployment supplies Preview configuration conditionally;
-Web and Next infer sessions from the browser/request URL, while bare Node passes
+Web, Next and Kit infer sessions from the browser/request URL, while bare Node passes
 the incoming session in request-local `preview`. Consumers do not set a separate
 preview mode flag. Their `.env.example` preview flag/session fields are blank.
 

@@ -1,6 +1,13 @@
 import { resolvePreviewSessionId } from '@contentful/experiences-runtime';
 import type { ContentfulExperiences } from '@contentful/experiences-web';
+import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import { createPresentation, type PresentedExperience } from '../experience/presentation.svelte.js';
+import type { PrimarySource } from '../experience/primary-source.svelte.js';
+import type {
+  ManagedExperienceAcquireOptions,
+  ManagedExperienceOperationResult,
+} from '../experience/source-types.js';
+import type { Config } from '../registry/types.js';
 import type { PageSequence } from '../runtime/page-sequence.svelte.js';
 import type { RequestResult } from './request-result.js';
 import {
@@ -11,24 +18,31 @@ import {
   type ManagedRequestSource,
 } from './request-source.js';
 export type ManagedRequestExperience = PresentedExperience<RequestResult>;
+type Result = RequestResult | ManagedExperienceOperationResult;
+interface RequestOperation {
+  source: ManagedRequestSource;
+  candidate: RequestCandidate;
+  selection: string;
+  sdk: ContentfulExperiences;
+  promise?: Promise<void>;
+  browser?: {
+    locale?: string;
+  };
+}
 
 /** Exact committed sources and request history survive keyed Web activations. */
-export function createRequestController(redirect: (path: string) => void | Promise<unknown>) {
-  const presentation = createPresentation<RequestResult>(refresh);
+export function createRequestController(
+  redirect: (path: string) => void | Promise<unknown>,
+  config: Config = { components: {} }
+) {
+  const presentation = createPresentation<Result>(refresh);
   let sdk: ContentfulExperiences | undefined;
   let route: PageSequence | undefined;
+  let getBrowserSource: (() => PrimarySource) | undefined;
   let source: ManagedRequestSource | undefined;
   let committedKey: string | undefined;
   let sessionId: string | undefined;
-  let operation:
-    | {
-        source: ManagedRequestSource;
-        candidate: RequestCandidate;
-        selection: string;
-        sdk: ContentfulExperiences;
-        promise?: Promise<void>;
-      }
-    | undefined;
+  let operation: RequestOperation | undefined;
   let presentationKey: string | undefined;
   let disposed = false;
   const history = new Set<string>();
@@ -57,6 +71,37 @@ export function createRequestController(redirect: (path: string) => void | Promi
       isCurrent
     );
   }
+  async function followRedirect(
+    result: Result,
+    isCurrent: () => boolean,
+    baseline: PortableRenderPlan | undefined
+  ) {
+    if (!result.redirect || !isCurrent()) return;
+    const path = result.redirect.path;
+    try {
+      if (
+        !path.startsWith('/') ||
+        path.startsWith('//') ||
+        /[\\\t\r\n]/.test(path) ||
+        new globalThis.URL(path, 'https://redirect.invalid').pathname.startsWith('//')
+      )
+        throw new TypeError('Destination redirect must be a local absolute path.');
+      if (typeof window !== 'undefined') {
+        if ('request' in result) presentation.claimRedirect(presentation.current);
+        await redirect(path);
+      }
+    } catch {
+      if (isCurrent())
+        presentation.complete(
+          result,
+          {
+            plan: baseline,
+            error: new TypeError('Destination redirect must be a local absolute path.'),
+          },
+          isCurrent
+        );
+    }
+  }
   async function adopt(candidate: RequestCandidate, isCurrent: () => boolean) {
     if (!isCurrent() || !applicable(candidate)) return;
     const next = candidate.result;
@@ -64,32 +109,7 @@ export function createRequestController(redirect: (path: string) => void | Promi
     present(candidate, isCurrent);
     if (next?.redirect) {
       route?.abandonPresentation();
-      const path = next.redirect.path;
-      const fail = () => {
-        if (isCurrent())
-          presentation.complete(
-            next,
-            {
-              plan: baseline,
-              error: new TypeError('Destination redirect must be a local absolute path.'),
-            },
-            isCurrent
-          );
-      };
-      if (
-        !path.startsWith('/') ||
-        path.startsWith('//') ||
-        /[\\\t\r\n]/.test(path) ||
-        new globalThis.URL(path, 'https://redirect.invalid').pathname.startsWith('//')
-      )
-        fail();
-      else if (typeof window !== 'undefined') {
-        try {
-          await redirect(path);
-        } catch {
-          fail();
-        }
-      }
+      await followRedirect(next, isCurrent, baseline);
       return;
     }
     const alreadyAdopted = next ? history.has(`${next.requestId}\n${next.routeKey}`) : false;
@@ -122,16 +142,16 @@ export function createRequestController(redirect: (path: string) => void | Promi
         (read ? owner.locale : (acquired.locale ?? owner.locale)),
     };
     const selection = requestSelection(candidate);
-    const value = { source: candidateSource, sdk: owner, candidate, selection } as NonNullable<
-      typeof operation
-    >;
+    const value: RequestOperation = { source: candidateSource, sdk: owner, candidate, selection };
     operation = value;
     presentationKey = selection;
-    presentation.select(selection, refresh);
-    route?.update({ routeKey: key, selection });
+    presentation.select(selection, refresh, acquire);
+    route?.updateSelection(key, selection);
     const isCurrent = () =>
       !disposed &&
       operation === value &&
+      !value.browser &&
+      route?.routeKey === key &&
       presentation.isSelected(value.selection) &&
       sdk === owner &&
       lifetime() &&
@@ -163,8 +183,8 @@ export function createRequestController(redirect: (path: string) => void | Promi
       };
       value.selection = requestSelection(value.candidate);
       presentationKey = value.selection;
-      presentation.select(value.selection, refresh);
-      route?.update({ routeKey: key, selection: value.selection });
+      presentation.select(value.selection, refresh, acquire);
+      route?.updateSelection(key, value.selection);
       await adopt(value.candidate, isCurrent);
     })();
     return value.promise;
@@ -173,6 +193,58 @@ export function createRequestController(redirect: (path: string) => void | Promi
     return source && committedKey && presentation.isSelected(presentationKey)
       ? run(source, committedKey, true)
       : Promise.resolve();
+  }
+  function ownsPresentation(value: RequestOperation, sequence = route) {
+    return (
+      !disposed &&
+      operation === value &&
+      sdk === value.sdk &&
+      route === sequence &&
+      sequence?.isCurrent() === true &&
+      sequence.routeKey === value.candidate.routeKey &&
+      presentation.isSelected(value.selection)
+    );
+  }
+  function selectBrowser(value: RequestOperation) {
+    const sequence = route;
+    const experience = value.candidate.experience ?? value.candidate.result?.experience;
+    if (!experience || !getBrowserSource) return;
+    const { personalization: _personalization, ...selector } = experience;
+    const browser = { locale: selector.locale ?? value.sdk.locale };
+    const actions = getBrowserSource().fromCommittedRequest(
+      {
+        request: selector,
+        resolve: { ...value.candidate.resolveOptions, config },
+      },
+      {
+        current: () => ownsPresentation(value, sequence) && value.browser === browser,
+        redirect: followRedirect,
+      }
+    );
+    value.browser = browser;
+    presentation.select(value.selection, actions.retry, acquire);
+    return actions;
+  }
+  function acquire(options: ManagedExperienceAcquireOptions) {
+    const value = operation;
+    if (
+      !value ||
+      !ownsPresentation(value) ||
+      (!value.browser && !applicable(value.candidate)) ||
+      value.sdk.isPreview ||
+      presentation.current.redirect
+    )
+      return Promise.resolve(undefined);
+    return selectBrowser(value)?.acquire(options) ?? Promise.resolve(undefined);
+  }
+  function removeSource(key: string | undefined) {
+    if (presentationKey !== undefined && presentation.isSelected(presentationKey)) {
+      // The native route may already have advanced. Leave its fresh browser intent intact.
+      if (route?.routeKey === committedKey) route?.abandonPresentation();
+      presentation.clear();
+    }
+    source = operation = undefined;
+    committedKey = key;
   }
   return {
     presentation,
@@ -187,18 +259,34 @@ export function createRequestController(redirect: (path: string) => void | Promi
       if (!candidate) return;
       const state = getRequestSourceState(candidate);
       presentationKey = requestSelection(state);
-      presentation.select(presentationKey, refresh);
+      presentation.select(presentationKey, refresh, acquire);
       present(state, () => !disposed);
     },
-    attach(next: ContentfulExperiences | undefined, sequence: PageSequence, nextSession?: string) {
+    attach(
+      next: ContentfulExperiences | undefined,
+      sequence: PageSequence,
+      nextSession?: string,
+      browserSource?: () => PrimarySource
+    ) {
       if (sdk === next && route === sequence) return;
       if (sdk && sdk !== next) presentation.clear();
       operation = undefined;
       sdk = next;
       sessionId = nextSession;
       route = sequence;
+      getBrowserSource = browserSource;
     },
     observeLocale() {
+      if (operation?.browser && ownsPresentation(operation)) {
+        const selector = operation.candidate.experience ?? operation.candidate.result?.experience;
+        if (selector?.locale === undefined && operation.browser.locale !== operation.sdk.locale) {
+          route?.abandonPresentation();
+          presentation.reset();
+          presentation.invalidateData();
+          selectBrowser(operation);
+        }
+        return;
+      }
       if (
         operation &&
         presentation.isSelected(operation.selection) &&
@@ -214,7 +302,7 @@ export function createRequestController(redirect: (path: string) => void | Promi
       const id =
         presentation.current.data?.experienceId ??
         result?.plan?.experienceId ??
-        (result?.experience && 'experienceId' in result.experience
+        (result && 'experience' in result && 'experienceId' in result.experience
           ? result.experience.experienceId
           : undefined);
       if (sdk?.isPreview && id && experienceId === id) void refresh();
@@ -222,24 +310,13 @@ export function createRequestController(redirect: (path: string) => void | Promi
     update(candidate: ManagedRequestSource | undefined, key: string): Promise<void> {
       if (disposed) return Promise.resolve();
       if (!candidate) {
-        source = operation = undefined;
-        committedKey = undefined;
-        if (presentation.isSelected(presentationKey)) {
-          route?.abandonPresentation();
-          presentation.clear();
-        }
+        removeSource(undefined);
         return Promise.resolve();
       }
       const state = getRequestSourceState(candidate);
       if (state.routeKey !== key) {
         if (committedKey === key) return Promise.resolve();
-        source = undefined;
-        committedKey = key;
-        operation = undefined;
-        if (presentation.isSelected(presentationKey)) {
-          route?.abandonPresentation();
-          presentation.clear();
-        }
+        removeSource(key);
         return Promise.resolve();
       }
       if (
@@ -255,7 +332,7 @@ export function createRequestController(redirect: (path: string) => void | Promi
       if (!sdk) {
         operation = undefined;
         presentationKey = requestSelection(state);
-        presentation.select(presentationKey, refresh);
+        presentation.select(presentationKey, refresh, acquire);
         present(state, () => !disposed);
         return Promise.resolve();
       }

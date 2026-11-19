@@ -1,7 +1,8 @@
 <script lang="ts" module>
+  import type { HTMLAttributes } from 'svelte/elements';
   import type { Snippet } from 'svelte';
 
-  export interface SectionProps {
+  export interface SectionProps extends Omit<HTMLAttributes<HTMLElement>, 'children'> {
     // Slot children arrive as an array of Snippets — one per child node — so a
     // component can render them all or map/filter/wrap them individually.
     children?: Snippet[];
@@ -24,11 +25,14 @@
     children,
     direction = 'column',
     columns,
+    itemAlign: _itemAlign,
     gap,
     verticalSpacing,
     horizontalSpacing,
     backgroundColor,
     color,
+    style: callerStyle,
+    ...rootProps
   }: SectionProps = $props();
 
   const style = $derived.by(() => {
@@ -48,11 +52,12 @@
     if (horizontalSpacing) parts.push(`padding-inline: ${horizontalSpacing}`);
     if (backgroundColor) parts.push(`background: ${backgroundColor}`);
     if (color) parts.push(`color: ${color}`);
+    if (callerStyle) parts.push(callerStyle);
     return parts.join('; ');
   });
 </script>
 
-<div {style}>
+<div {...rootProps} {style}>
   {#each children ?? [] as child}
     {@render child()}
   {/each}

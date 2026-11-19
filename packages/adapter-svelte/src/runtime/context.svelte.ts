@@ -209,8 +209,8 @@ export function setRuntimeScope(
       if (!active) return;
       active = false;
       try {
-        if (source) source.dispose();
-        else presentation.reset();
+        presentation.reset();
+        source?.dispose();
         route.dispose();
         for (const cleanup of cleanups) cleanup();
         cells.clear();

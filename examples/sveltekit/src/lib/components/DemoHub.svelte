@@ -21,7 +21,7 @@
   <h1 style="margin-top: 0;">Contentful Experiences — SvelteKit example</h1>
   <p style="color: #4b5563;">
     This app renders Contentful Experiences with <code>@contentful/experiences-svelte</code> in a
-    SvelteKit server load. Pages are served from a <strong>Destination</strong>: the URL path is the
+    SvelteKit managed request. Pages are served from a <strong>Destination</strong>: the URL path is the
     Destination path. One Experience can also be fetched <strong>by id</strong>, which is the route
     for preview and live preview. The home Experience for this page is rendered
     below.
@@ -54,8 +54,8 @@
   </ul>
   <p style="color: #4b5563;">
     Options: <code>?personalization=true</code>, <code>?debug=true</code>,
-    <code>?locale=de-DE</code> (passed through to resolver metadata). Destinations do not support
-    preview.
+    <code>?locale=de-DE</code> (content locale). Destination session content requires
+    <code>master</code> and a matching Experience id; see the README for Preview limits.
   </p>
 
   <h2>By Experience id</h2>
@@ -74,7 +74,7 @@
     </li>
     <li>
       <code>?preview_session_id=&lt;id&gt;</code>: live preview. The Contentful app supplies the id
-      (needs <code>CPA_TOKEN</code>)
+      (needs enabled server and browser Preview configuration)
     </li>
   </ul>
 </main>

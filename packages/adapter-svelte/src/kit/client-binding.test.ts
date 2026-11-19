@@ -13,6 +13,7 @@ import RuntimeHarness from '../test/fixtures/RuntimeHarness.svelte';
 import type { RuntimeProbeCapture } from '../test/fixtures/runtime-probe.js';
 import { bindSvelteKitClientExperiences } from './client-binding.js';
 import { navigationHooks } from '../test/kit-navigation.js';
+import type { ManagedRequestExperience } from './request-controller.svelte.js';
 
 const browserConfig = {
   spaceId: 'space',
@@ -207,18 +208,28 @@ describe('Kit client startup', () => {
       sdk.consent({ events: true });
       finishPreparation();
       const source = await loading;
+      let current!: ManagedRequestExperience;
+      const browserFetch = vi.spyOn(sdk, 'fetchExperience');
       render(KitRequestHarness, {
         Provider: request.ExperiencesProvider,
         sdk,
         Experience: request.Experience,
         source,
         capture: context.capture,
+        observeRequest: (value) => {
+          current = value;
+        },
       });
       await waitFor(() =>
         expect(context.current.scope.presentation.current.result).toEqual(initial)
       );
       expect(context.current.scope.presentation.current.status).toBe('success');
       expect(operations).toEqual(['prepare']);
+      await expect(
+        current.acquire({ personalization: { events: [{ type: 'track', event: 'ignored' }] } })
+      ).resolves.toBeUndefined();
+      expect(current.result).toEqual(initial);
+      expect(browserFetch).not.toHaveBeenCalled();
       payload = { sys: { id: 'unrelated' }, nodes: [] };
       publish!();
       await tick();

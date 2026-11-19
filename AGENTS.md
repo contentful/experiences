@@ -53,7 +53,8 @@ experiences/
 │   ├── web-sdk/              # Vanilla browser/UMD reference, managed through Nx
 │   ├── node-sdk+web-sdk/     # Express/EJS SSR + browser/UMD hybrid, managed through Nx
 │   ├── react-sdk/           # React/Vite runtime reference, managed through Nx
-│   └── nextjs-sdk/          # Next.js App/Pages reference, managed through Nx
+│   ├── nextjs-sdk/          # Next.js App/Pages reference, managed through Nx
+│   └── svelte-sdk/          # SvelteKit 3 reference, managed through Nx
 ├── skills/                # Agent-invokable skills (SKILL.md), readable by any agent or person
 │   └── implement-framework-adapter/  # Build a renderer for a framework with no first-party adapter
 └── lib/
@@ -67,8 +68,9 @@ experiences/
 **`implementations/`** holds reference implementations for SDK maintainers, not customers. Point integrators to `examples/`, never to a reference implementation as a how-to guide; link into `implementations/` only for authoritative maintainer detail (for example, the XDA workaround removal criteria linked from `packages/node/README.md`); see [CONTRIBUTING.md](./CONTRIBUTING.md#example-apps-vs-reference-implementations) for the split. Implementations stay outside npm workspaces and consume packed SDK artifacts.
 Use `npm run implementation:install` to prepare all references, or scoped
 `implementation-node-sdk`, `implementation-web-sdk`,
-`implementation-node-sdk-web-sdk`, `implementation-react-sdk`, or
-`implementation-nextjs-sdk` Nx `setup` / `dev` targets. Root aggregate checks
+`implementation-node-sdk-web-sdk`, `implementation-react-sdk`,
+`implementation-nextjs-sdk`, or `implementation-svelte-sdk` Nx `setup` / `dev`
+targets. Root aggregate checks
 exclude implementations; the Build CI job explicitly prepares and checks them.
 Follow [implementations/AGENTS.md](./implementations/AGENTS.md)
 and the app README for the package boundary, local `.env`, and lifecycle commands.
@@ -86,7 +88,7 @@ and the app README for the package boundary, local `.env`, and lifecycle command
 | `packages/live-preview`    | `@contentful/experiences-live-preview` | **Customer-facing.** Optional, framework-neutral Preview Session source.                                                          |
 | `packages/adapter-react`   | `@contentful/experiences-react`        | **Customer-facing.** React renderer + re-exports of everything.                                                                   |
 | `packages/adapter-nextjs`  | `@contentful/experiences-nextjs`       | **Customer-facing.** App/Pages request families, built-in roots and React rendering via explicit subpaths.                        |
-| `packages/adapter-svelte`  | `@contentful/experiences-svelte`       | **Customer-facing.** Svelte 5 renderer + re-exports of everything.                                                                |
+| `packages/adapter-svelte`  | `@contentful/experiences-svelte`       | **Customer-facing.** Svelte 5 renderer, managed browser root and optional Kit bindings.                                           |
 | `packages/adapter-angular` | `@contentful/experiences-angular`      | **Customer-facing.** Angular renderer (`^20 \|\| ^21 \|\| ^22`) + re-exports of everything.                                       |
 | `lib/mocks`                | `mocks`                                | **Internal, private.** Source-consumed Personalization/Analytics handlers and explicit Contentful maintenance tools.              |
 
@@ -890,8 +892,11 @@ in-place injected SDK rebinding is supported. Construction/destruction of an
 injected SDK stays with the caller. React and Svelte Providers capture the injected
 SDK on first mount and ignore later `sdk` prop changes; a new key/remount captures
 a fresh binding after the caller retires the old SDK. Kit init and its first root share one owner;
-failed init is sticky and disposal is terminal. Keep request adoption history at the
-separate stable request boundary when that later integration is implemented.
+failed init is sticky and disposal is terminal. Keep request adoption history at the separate stable request boundary across owned
+Preview activations. The one Svelte package exposes Kit only through optional
+`/kit/client` and server-only `/kit/server` entries. Keep portable runtime and
+declaration graphs Kit-free. Follow the [Kit integration guide](./packages/adapter-svelte/README.md#managed-sveltekit-integration)
+and [supported toolchains](./packages/adapter-svelte/README.md#compatibility).
 
 ### Tests
 
@@ -1012,10 +1017,10 @@ tests are not a contract to retain; verify current lifetime effects and refusals
 
 ### SvelteKit managed request lifecycle (fixed)
 
-The 2026-11-18 approved simplification retains a visit/read for the same URL and
-content selector, including parameters and locale, without automatic fresh page
-intent. Adopt the exact application-supplied source after commitment; explicit
-reads remain event-free. Expired state/event preparation alone neither blocks
+Retain the current visit/read when the URL and content selector, including
+parameters and locale, stay the same. Start no new automatic page intent. Adopt
+the exact application-supplied source after native Kit navigation commits.
+Explicit reads remain event-free. Expired state/event preparation alone neither blocks
 applicable content nor forces reevaluation; Web must refuse stale state/replay.
 Reset, SDK profile changes and ordinary failed reads preserve applicable completed
 data with its original provenance; the host controls concealment. Preserve logical
@@ -1024,23 +1029,33 @@ missing/auth outcomes and superseded pending-work guards. Request history stays
 stable across Preview activations for SDK state/event/replay deduplication. It
 does not suppress otherwise applicable exact committed cached content after owner
 changes or back navigation; preserve the raw complete result and original provenance.
-The precommit navigation state machine, consumed-read promotion and separate Kit
-page owner are removed. Current owning-layer and native evidence verifies this
-revision; Phase4/G4 was accepted and completed on 2026-11-18. Earlier lifecycle
-fixes and test evidence remain revision-scoped.
+Keep page ownership in the shared runtime.
 
 ### Svelte Kit/browser source handover (fixed)
 
 A hydrated Kit root can present an ordinary managed Web fetch for explicit
 same-URL actions while retaining its SDK. Publication, Retry and cleanup belong
 to the currently selected source; earlier reads, hydration/replay and teardown
-must not overwrite its content or visitor state. A new unseeded selecting binding
-with explicit events declares fresh intent, including identical keyed actions
-while outgoing DOM outros remain. Changed selector inputs supersede earlier
-inputs; unchanged earlier views observe rather than reclaim acquisition.
-Equivalent content-only inputs share the current source. Keep seeds synchronous
-for SSR/hydration. Typed observers
-expose only their own result family, preserving raw request and browser operations.
+must not overwrite its content or visitor state. Managed `current.acquire({
+personalization })` starts fresh intent on the committed selector, including
+identical repeated calls. Retry remains an event-free read of the active source.
+A new unseeded selecting binding with explicit events also declares fresh intent.
+Changed selector inputs supersede earlier inputs; unchanged earlier views observe
+rather than reclaim acquisition. Equivalent content-only inputs share the current
+source. Keep seeds synchronous for SSR/hydration. Typed observers expose only
+their own result family; the action returns its complete browser operation.
+
+### SvelteKit selector and browser ownership migrations (fixed)
+
+The customer Kit app uses one managed request root for native loader data,
+consent and actions. The standalone Kit 3 reference also demonstrates direct Web
+CSR under that owner. An event-free Retry reads the current Kit or Web source.
+The customer Vite app supplies its committed route and handles redirects itself.
+For managed Preview, route session selection and runtime-owned updates replace
+per-view connections. Legacy getters may read supplied content under the root
+without taking ownership. Kit/Vite components forward attribution to their
+actual roots. [Local Preview and Destination wiring](./packages/adapter-svelte/README.md#service-verification)
+is distinct from deferred service verification and the existing release hold.
 
 ### Malformed selector diagnostics before normalization (fixed)
 
@@ -1127,7 +1142,10 @@ Web's current-page tracker owns XDA page admission and deduplication. React supp
 route identity and liveness; same-route consent retry waits for preparation, not
 HTTP. Only a final admitted committing page claims the route. Blocked pages remain
 eligible, and reset/destroy invalidate pending attempts. Admission is not a service
-commitment receipt.
+commitment receipt. Svelte's ordinary explicit page retry retains its payload and
+uses Web's current consent and a fresh message identity. Kit root page builders
+configure ordinary browser intent without overriding explicit events or prepared
+request ownership.
 
 ### Web content caller lifetime after transport (fixed)
 

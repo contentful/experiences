@@ -38,7 +38,8 @@ export interface ServerBindingOptions extends NodeConfig {
     >;
   };
   readonly request: {
-    readonly mode: 'ssr' | 'hybrid';
+    /** Selects the mode of an authorized ordinary document preparation. */
+    readonly mode: ServerValue<'ssr' | 'hybrid'>;
     readonly authorizeExperience: (
       event: RequestEvent,
       experience: FetchExperienceOptions,

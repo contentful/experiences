@@ -1,5 +1,7 @@
 <script lang="ts" module>
-  export interface TextProps {
+  import type { HTMLAttributes } from 'svelte/elements';
+
+  export interface TextProps extends HTMLAttributes<HTMLParagraphElement> {
     text?: string;
     // Design properties, auto-filled as props.
     align?: string;
@@ -8,7 +10,7 @@
 </script>
 
 <script lang="ts">
-  let { text, align, fontSize = '16px' }: TextProps = $props();
+  let { text, align, fontSize = '16px', style: callerStyle, ...rootProps }: TextProps = $props();
 
   const style = $derived(
     [
@@ -17,10 +19,11 @@
       'color: #4b5563',
       'margin: 0',
       align && `text-align: ${align}`,
+      callerStyle,
     ]
       .filter(Boolean)
       .join('; ')
   );
 </script>
 
-<p {style}>{text ?? ''}</p>
+<p {...rootProps} {style}>{text ?? ''}</p>

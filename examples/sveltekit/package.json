@@ -11,6 +11,7 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
+    "@contentful/experiences-live-preview": "*",
     "@contentful/experiences-svelte": "*",
     "@contentful/experiences-web": "*"
   },

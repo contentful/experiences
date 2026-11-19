@@ -1,4 +1,6 @@
 <script lang="ts" module>
+  import type { HTMLAttributes } from 'svelte/elements';
+
   // Minimal rich-text renderer — matches the Next.js example's coverage:
   // paragraphs + bold/italic marks. The document shape follows Contentful's
   // rich-text-types (nodeType: 'document' | 'paragraph' | 'text', marks[]).
@@ -8,7 +10,7 @@
   type Paragraph = { nodeType: 'paragraph'; content: TextNode[] };
   type RichDoc = { nodeType: 'document'; content: Paragraph[] };
 
-  export interface RichTextProps {
+  export interface RichTextProps extends HTMLAttributes<HTMLDivElement> {
     document?: unknown;
     // Design properties, auto-filled as props.
     align?: string;
@@ -27,18 +29,18 @@
 </script>
 
 <script lang="ts">
-  let { document, align, fontSize }: RichTextProps = $props();
+  let { document, align, fontSize, style: callerStyle, ...rootProps }: RichTextProps = $props();
   const doc = $derived(extractDoc(document));
 
   const style = $derived(
-    [align && `text-align: ${align}`, fontSize && `font-size: ${fontSize}`]
+    [align && `text-align: ${align}`, fontSize && `font-size: ${fontSize}`, callerStyle]
       .filter(Boolean)
       .join('; ')
   );
 </script>
 
 {#if doc}
-  <div {style}>
+  <div {...rootProps} {style}>
     {#each doc.content as p}
       <p style="margin: 0 0 0.75em; line-height: 1.5;">
         {#each p.content as span}

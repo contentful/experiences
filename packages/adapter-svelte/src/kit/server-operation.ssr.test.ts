@@ -110,9 +110,10 @@ describe('Kit owned server operation', () => {
 
   it('prepares enhanced navigation as hybrid without cookies or document callback', async () => {
     const onResult = vi.fn();
+    const mode = vi.fn(() => 'ssr' as const);
     const requestEvent = event('cookie-visitor');
     const run = createServerOperation(
-      options({ request: { mode: 'ssr', authorizeExperience: () => true, onResult } })
+      options({ request: { mode, authorizeExperience: () => true, onResult } })
     );
     const result = await run(
       requestEvent,
@@ -126,6 +127,62 @@ describe('Kit owned server operation', () => {
     expect(requestEvent.cookies.set).not.toHaveBeenCalled();
     expect(requestEvent.cookies.delete).not.toHaveBeenCalled();
     expect(onResult).not.toHaveBeenCalled();
+    expect(mode).not.toHaveBeenCalled();
+  });
+
+  it('selects SSR or hybrid per authorized document and reports each result', async () => {
+    const mode = vi.fn<Exclude<ServerBindingOptions['request']['mode'], string>>(
+      async (_, { url }) => (url.searchParams.has('ssr') ? 'ssr' : 'hybrid')
+    );
+    const onResult = vi.fn();
+    const run = createServerOperation(
+      options({ request: { mode, authorizeExperience: () => true, onResult } })
+    );
+    const ssr = event('server-visitor');
+    const hybrid = event('hybrid-visitor');
+    const ssrInput = { ...input, routeKey: '/home?ssr' };
+    const committed = await run(ssr, ssrInput, { document: true });
+    const prepared = await run(hybrid, input, { document: true });
+
+    expect(mode).toHaveBeenCalledTimes(2);
+    expect(mode).toHaveBeenCalledWith(
+      ssr,
+      expect.objectContaining({ routeKey: ssrInput.routeKey, experience: input.experience })
+    );
+    expect(committed).toMatchObject({ initialPageOwner: 'server', plan });
+    expect(committed.handoff?.profileId).toBe('server-visitor');
+    expect(ssr.cookies.set).toHaveBeenCalledWith(
+      'ctfl-opt-aid',
+      'server-visitor',
+      expect.anything()
+    );
+    expect(prepared).toMatchObject({ plan, handoff: { cache: { scope: 'private-request' } } });
+    expect(prepared).not.toHaveProperty('initialPageOwner');
+    expect(hybrid.cookies.set).not.toHaveBeenCalled();
+    expect(hybrid.cookies.delete).not.toHaveBeenCalled();
+    expect(onResult.mock.calls).toEqual([
+      [ssr, committed],
+      [hybrid, prepared],
+    ]);
+  });
+
+  it('rejects invalid modes before reading visitor state or acquiring content', async () => {
+    const requestEvent = event('visitor');
+    const consent = vi.fn(() => true);
+    const config = options({ consent: { server: consent } });
+    expect(() =>
+      createServerOperation({ ...config, request: { ...config.request, mode: 'invalid' as never } })
+    ).toThrow('request.mode must be ssr or hybrid.');
+    const run = createServerOperation({
+      ...config,
+      request: { ...config.request, mode: async () => 'invalid' as never },
+    });
+    await expect(run(requestEvent, input, { document: true })).rejects.toThrow(
+      'request.mode must be ssr or hybrid.'
+    );
+    expect(consent).not.toHaveBeenCalled();
+    expect(requestEvent.cookies.get).not.toHaveBeenCalled();
+    expect(doubles.facades).toHaveLength(0);
   });
 
   it.each([{ events: [] }, { events: [{ type: 'track', event: 'Action', properties: {} }] }])(
@@ -150,7 +207,7 @@ describe('Kit owned server operation', () => {
     const run = createServerOperation(
       options({
         request: {
-          mode: 'hybrid',
+          mode: hook,
           authorizeExperience: () => true,
           initialEvents: hook,
           pagePayload: hook,
@@ -178,7 +235,13 @@ describe('Kit owned server operation', () => {
 
   it('activates preview from candidate URL and excludes visitor transfer and cookie mutation', async () => {
     const requestEvent = event('visitor');
-    const run = createServerOperation(options({ preview: { accessToken: 'preview-private' } }));
+    const mode = vi.fn(() => 'ssr' as const);
+    const run = createServerOperation(
+      options({
+        preview: { accessToken: 'preview-private' },
+        request: { mode, authorizeExperience: () => true },
+      })
+    );
     const result = await run(
       requestEvent,
       { ...input, routeKey: '/home?preview_session_id=session' },
@@ -190,6 +253,7 @@ describe('Kit owned server operation', () => {
     expect(requestEvent.url.pathname).toBe('/document');
     expect(requestEvent.cookies.set).not.toHaveBeenCalled();
     expect(requestEvent.cookies.delete).not.toHaveBeenCalled();
+    expect(mode).not.toHaveBeenCalled();
   });
 
   it('cleans up application and projection failures while allowing application errors to propagate', async () => {
@@ -246,8 +310,9 @@ describe('Kit owned server operation', () => {
   });
 
   it('refuses prerender, invalid selectors and unauthorized content before source work', async () => {
+    const mode = vi.fn(() => 'ssr' as const);
     const run = createServerOperation(
-      options({ request: { mode: 'ssr', authorizeExperience: () => false } })
+      options({ request: { mode, authorizeExperience: () => false } })
     );
     await expect(run(event(), input, { document: true, prerender: true })).rejects.toThrow(
       'prerender'
@@ -255,7 +320,8 @@ describe('Kit owned server operation', () => {
     await expect(
       run(event(), { ...input, experience: { experienceId: '' } }, { document: true })
     ).rejects.toThrow();
-    expect((await run(event(), input, { document: false })).contentErrorKind).toBe('authorization');
+    expect((await run(event(), input, { document: true })).contentErrorKind).toBe('authorization');
+    expect(mode).not.toHaveBeenCalled();
     expect(doubles.facades).toHaveLength(0);
   });
 

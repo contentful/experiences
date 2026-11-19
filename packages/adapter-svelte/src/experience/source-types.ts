@@ -13,6 +13,11 @@ export type ManagedExperienceOptions = FetchExperienceOptions & {
   initialError?: Error;
 };
 
+/** Personalization for one new browser acquisition of the selected Experience. */
+export interface ManagedExperienceAcquireOptions {
+  readonly personalization?: FetchExperienceOptions['personalization'];
+}
+
 /** Complete local operation outcome; retained presentation never changes this envelope. */
 export interface ManagedExperienceOperationResult {
   readonly id: object;

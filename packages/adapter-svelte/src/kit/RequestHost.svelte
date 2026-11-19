@@ -9,7 +9,7 @@
   import { createRuntimeOwner, type OwnerTarget, type OwnedOwnerTarget } from '../runtime/owner-controller.svelte.js';
   import type { ExperiencesSnapshot } from '@contentful/experiences-web';
   import type { KitClientBinding, KitExperiencesRootProps } from './client-binding.js';
-  let { binding, target, source, snapshot, routeKey, children }: KitExperiencesRootProps & {
+  let { binding, target, source, snapshot, routeKey, buildPagePayload, children }: KitExperiencesRootProps & {
     binding: KitClientBinding;
     target: OwnerTarget;
   } = $props();
@@ -33,7 +33,7 @@
   {@render children?.()}
 {/snippet}
 {#if 'config' in target}
-  <OwnedActivationBoundary presentation={controller.presentation} {selectOwner} target={target} {snapshot} routeKey={native.routeKey} children={content} />
+  <OwnedActivationBoundary presentation={controller.presentation} {selectOwner} target={target} {snapshot} routeKey={native.routeKey} {buildPagePayload} children={content} />
 {:else if owner}
-  <RuntimeRoot presentation={controller.presentation} {owner} routeKey={native.routeKey} children={content} />
+  <RuntimeRoot presentation={controller.presentation} {owner} routeKey={native.routeKey} {buildPagePayload} children={content} />
 {/if}

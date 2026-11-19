@@ -7,7 +7,9 @@
   lives in the nested `CardCta.svelte`.
 -->
 <script lang="ts" module>
-  export interface CardProps {
+  import type { HTMLAttributes } from 'svelte/elements';
+
+  export interface CardProps extends Omit<HTMLAttributes<HTMLElement>, 'children'> {
     title?: string;
     teaser?: string;
     ctaLabel?: string;
@@ -22,7 +24,17 @@
 <script lang="ts">
   import CardCta from './CardCta.svelte';
 
-  let { title, teaser, ctaLabel, ctaUrl, image, backgroundColor, color }: CardProps = $props();
+  let {
+    title,
+    teaser,
+    ctaLabel,
+    ctaUrl,
+    image,
+    backgroundColor,
+    color,
+    style: callerStyle,
+    ...rootProps
+  }: CardProps = $props();
 
   const style = $derived(
     [
@@ -33,13 +45,14 @@
       'box-shadow: 0 1px 3px rgba(0,0,0,0.08)',
       backgroundColor && `background: ${backgroundColor}`,
       color && `color: ${color}`,
+      callerStyle,
     ]
       .filter(Boolean)
       .join('; ')
   );
 </script>
 
-<article {style}>
+<article {...rootProps} {style}>
   {#if image}
     <img src={image} alt="" style="width: 100%; height: 180px; object-fit: cover;" />
   {/if}

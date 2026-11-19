@@ -2,6 +2,7 @@ import type {
   FetchExperienceOptions,
   FetchResolveOptions,
   PageViewBuilderArgs,
+  PersonalizationOptions,
 } from '@contentful/experiences-runtime';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import type {
@@ -37,6 +38,7 @@ export interface PageSequence {
   readonly routeKey: string;
   isCurrent(): boolean;
   update(options: PageSequenceOptions): void;
+  updateSelection(routeKey: string, selection: string): void;
   adoptRequest(input: PreparedPageInput, alreadyAdopted?: boolean): Promise<void>;
   reset(): void;
   abandonPresentation(): void;
@@ -45,7 +47,8 @@ export interface PageSequence {
     request: FetchExperienceOptions,
     resolve: FetchResolveOptions,
     isRefresh: boolean,
-    isSourceCurrent?: () => boolean
+    isSourceCurrent?: () => boolean,
+    isIntentCurrent?: () => boolean
   ): Promise<PortableRenderPlan | DestinationRedirectResult>;
   dispose(): void;
 }
@@ -57,6 +60,7 @@ type PageIntent = {
   | {
       readonly kind: 'ordinary';
       readonly sourceCurrent?: () => boolean;
+      readonly explicitPayload?: PageViewBuilderArgs;
     }
   | { readonly kind: 'handoff'; readonly handoff: ExperiencesHandoff }
   | { readonly kind: 'request'; readonly input: PreparedPageInput }
@@ -68,6 +72,22 @@ interface Visit {
   readonly selection?: string;
   started: boolean;
   intent?: PageIntent;
+}
+
+type FetchPageEvent = Extract<
+  NonNullable<PersonalizationOptions['events']>[number],
+  { type: 'page' }
+>;
+
+function getPageRetryPayload(event: FetchPageEvent): PageViewBuilderArgs {
+  // Use Runtime's built-message distinction. Web creates a new message on retry.
+  if ('context' in event) {
+    const { campaign, locale, location, page, userAgent } = event.context ?? {};
+    return { properties: event.properties, campaign, locale, location, page, userAgent };
+  }
+  if ('messageId' in event) return { properties: event.properties };
+  const { type: _type, ...payload } = event;
+  return payload;
 }
 
 export function createPageSequence(
@@ -140,14 +160,14 @@ export function createPageSequence(
       void sdk
         .trackCurrentPage({
           routeKey: candidate.key,
-          buildPayload,
+          buildPayload: (metadata) => intent.explicitPayload ?? buildPayload(metadata),
           isCurrent,
         })
         .catch(() => undefined);
     }
   }
 
-  return {
+  const sequence: PageSequence = {
     get revision() {
       return visit;
     },
@@ -192,6 +212,9 @@ export function createPageSequence(
         if (visit.intent?.kind === 'handoff') attemptPage(visit);
       }
     },
+    updateSelection(routeKey, selection) {
+      sequence.update({ ...options, routeKey, selection });
+    },
     async adoptRequest(input, alreadyAdopted = false) {
       // Reads leave the committed visit's page intent intact; redirects still end it.
       if ((input.eventFree || alreadyAdopted) && !input.redirect) {
@@ -221,7 +244,14 @@ export function createPageSequence(
       // Redirect ends this operation's page/replay intent, not the committed host route.
       visit.intent = undefined;
     },
-    fetchExperience(sdk, request, resolve, isRefresh, isSourceCurrent) {
+    fetchExperience(
+      sdk,
+      request,
+      resolve,
+      isRefresh,
+      isSourceCurrent,
+      isIntentCurrent = isSourceCurrent
+    ) {
       const candidate = visit;
       const lifetime = sdk.captureLifetime();
       if (
@@ -263,22 +293,24 @@ export function createPageSequence(
               },
             };
         }
-        const hasPage = fetchOptions.personalization?.events?.some(
-          (event) => event.type === 'page'
-        );
+        const page = fetchOptions.personalization?.events?.find((event) => event.type === 'page');
         if (
           candidate.intent === intent &&
           (intent?.kind !== 'handoff' || (explicitEvents !== undefined && !intent.lifetime()))
         ) {
           // Explicit new work can establish intent after reset; refresh never can.
           if (intent?.kind === 'handoff') resetHandoff = intent.handoff;
-          intent = candidate.intent = {
-            kind: hasPage ? 'ordinary' : 'none',
-            lifetime: hasPage ? lifetime : (intent?.lifetime ?? (() => false)),
-            ...(hasPage ? { sourceCurrent: isSourceCurrent } : {}),
-          };
+          intent = candidate.intent = page
+            ? {
+                kind: 'ordinary',
+                lifetime,
+                sourceCurrent: isIntentCurrent,
+                explicitPayload:
+                  explicitEvents === undefined ? undefined : getPageRetryPayload(page),
+              }
+            : { kind: 'none', lifetime: intent?.lifetime ?? (() => false) };
         }
-        if (hasPage) initialEmission = false;
+        if (page) initialEmission = false;
       }
       return sdk.fetchExperience(fetchOptions, resolve, {
         routeKey: candidate.key,
@@ -296,4 +328,5 @@ export function createPageSequence(
       subscription = undefined;
     },
   };
+  return sequence;
 }

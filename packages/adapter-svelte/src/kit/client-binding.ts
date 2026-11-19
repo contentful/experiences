@@ -16,18 +16,23 @@ import {
 import KitRoot from './KitRoot.svelte';
 import KitProvider from './KitProvider.svelte';
 import ExperiencePresentation from '../experience/ExperiencePresentation.svelte';
-import { getRuntimePresentation } from '../runtime/context.svelte.js';
+import { getRuntimePresentation, getRuntimeScope } from '../runtime/context.svelte.js';
 import {
   usePresentation,
   type PresentationNotifications,
 } from '../experience/presentation.svelte.js';
 import type { RequestResult } from './request-result.js';
 import type { PresentationProps } from '../experience/presentation-types.js';
+import type { RuntimePresentationProps } from '../runtime/types.js';
 type RequestExperienceProps = Omit<PresentationProps<RequestResult>, 'config'> &
   PresentationNotifications<RequestResult>;
 function useManagedRequestExperience(getOptions?: () => PresentationNotifications<RequestResult>) {
-  return usePresentation(getRuntimePresentation<RequestResult>(), getOptions, (result) =>
-    result && 'requestId' in result ? result : undefined
+  const { route } = getRuntimeScope();
+  return usePresentation(
+    getRuntimePresentation<RequestResult>(),
+    getOptions,
+    (result) => (result && 'requestId' in result ? result : undefined),
+    route.isCurrent
   );
 }
 import { createClientLoader } from './client-loader.js';
@@ -40,7 +45,10 @@ export type SvelteKitClientExperiencesOptions = (WebConfig | { sdk: ContentfulEx
   onStatesReady?: OnStatesReady;
 };
 
-export interface KitExperiencesRootProps {
+export interface KitExperiencesRootProps extends Pick<
+  RuntimePresentationProps,
+  'buildPagePayload'
+> {
   source?: ManagedRequestSource;
   snapshot?: ExperiencesSnapshot;
   routeKey?: string;
@@ -80,7 +88,7 @@ export function bindSvelteKitClientExperiences(options: SvelteKitClientExperienc
       : undefined;
   const binding: KitClientBinding = {
     createController(redirect) {
-      const next = createRequestController(redirect);
+      const next = createRequestController(redirect, _config);
       if (typeof window !== 'undefined') controller = next;
       return next;
     },

@@ -1,7 +1,9 @@
 <script lang="ts" module>
+  import type { HTMLAttributes } from 'svelte/elements';
+
   export type HeadingTag = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
 
-  export interface HeadingProps {
+  export interface HeadingProps extends Omit<HTMLAttributes<HTMLElement>, 'children'> {
     text?: string;
     // Design properties, auto-filled as props and token-resolved by the
     // time they arrive.
@@ -19,7 +21,15 @@
   string. `align` is this design system's shorthand for `text-align`.
 -->
 <script lang="ts">
-  let { text, as: tag = 'h2', align, fontSize, fontWeight }: HeadingProps = $props();
+  let {
+    text,
+    as: tag = 'h2',
+    align,
+    fontSize,
+    fontWeight,
+    style: callerStyle,
+    ...rootProps
+  }: HeadingProps = $props();
 
   const style = $derived(
     [
@@ -28,10 +38,11 @@
       align && `text-align: ${align}`,
       fontSize && `font-size: ${fontSize}`,
       fontWeight && `font-weight: ${fontWeight}`,
+      callerStyle,
     ]
       .filter(Boolean)
       .join('; ')
   );
 </script>
 
-<svelte:element this={tag} {style}>{text ?? ''}</svelte:element>
+<svelte:element this={tag} {...rootProps} {style}>{text ?? ''}</svelte:element>

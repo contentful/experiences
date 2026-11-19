@@ -29,6 +29,7 @@ export type {
 } from './experience/presentation-types.js';
 export type {
   ManagedExperience,
+  ManagedExperienceAcquireOptions,
   ManagedExperienceOptions,
   ManagedExperienceSnapshot,
   ManagedExperienceOperationResult,

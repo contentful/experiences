@@ -71,7 +71,8 @@ export function useBoundManagedExperience(
         onExperienceError: selected?.onExperienceError ?? defaults.onExperienceError,
       };
     },
-    (result) => (result && 'request' in result ? result : undefined)
+    (result) => (result && 'request' in result ? result : undefined),
+    scope.route.isCurrent
   );
 }
 

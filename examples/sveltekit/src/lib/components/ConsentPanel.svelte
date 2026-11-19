@@ -1,21 +1,15 @@
 <script lang="ts">
-  import { ContentfulExperiences, type BlockedEvent } from '@contentful/experiences-web';
-  import { onMount } from 'svelte';
+  import { getExperiencesActions, getExperiencesState } from '@contentful/experiences-svelte';
+  import type { BlockedEvent } from '@contentful/experiences-web';
+  import { untrack } from 'svelte';
 
-  interface Props {
-    spaceId: string;
-    environmentId: string;
-    /** Reaches the browser, so use a read-only delivery token. */
-    accessToken: string;
-    /** Explicitly browser-visible Preview API token. */
-    previewToken?: string;
-  }
-
-  let { spaceId, environmentId, accessToken, previewToken }: Props = $props();
-
-  let runtime: ContentfulExperiences | undefined;
-  let consent = $state<{ events?: boolean; persistence?: boolean }>({});
-  let profileId = $state<string | undefined>();
+  const runtime = getExperiencesActions();
+  const runtimeState = getExperiencesState();
+  const consent = $derived({
+    events: runtimeState.consent,
+    persistence: runtimeState.persistenceConsent,
+  });
+  const profileId = $derived(runtimeState.profile?.id);
   let stored = $state('(none)');
   let blocked = $state<BlockedEvent[]>([]);
   let lastResult = $state('');
@@ -44,106 +38,98 @@
   }
 
   function setChoice(next: boolean | { events?: boolean; persistence?: boolean }) {
-    runtime?.consent(next);
+    runtime.consent(next);
   }
 
-  // The Web runtime is browser-only, so it is created on mount, never during SSR.
-  onMount(() => {
-    const instance = new ContentfulExperiences({
-      spaceId,
-      environmentId,
-      delivery: { accessToken },
-      preview: previewToken?.trim() ? { accessToken: previewToken } : undefined,
-    });
-    runtime = instance;
-    const refreshStored = () => {
-      stored = window.localStorage.getItem('__ctfl_opt_profile__') ?? '(none)';
-    };
-    const subscriptions = [
-      instance.states.consent.subscribe((events) => {
-        consent = { ...consent, events };
-        refreshStored();
-      }),
-      instance.states.persistenceConsent.subscribe((persistence) => {
-        consent = { ...consent, persistence };
-        refreshStored();
-      }),
-      instance.states.profile.subscribe((profile) => {
-        profileId = profile?.id;
-        refreshStored();
-      }),
-      instance.states.blockedEventStream.subscribe((event) => {
-        if (event !== undefined) blocked = [event, ...blocked].slice(0, 5);
-      }),
-    ];
+  // Effects observe the root's SDK; this panel never constructs or destroys one.
+  $effect(() => {
+    const events = runtimeState.consent;
+    const persistence = runtimeState.persistenceConsent;
+    // Profile changes also update the LocalStorage readout.
+    runtimeState.profile;
+    if (!runtimeState.ready) return;
+    // These application cookies give SSR the same explicit CMP decision.
+    // The SDK owns its separate identity cookie and LocalStorage policy.
+    for (const [name, value] of [
+      ['site-events-consent', events],
+      ['site-persistence-consent', persistence],
+    ] as const) {
+      if (value !== undefined) {
+        document.cookie = `${name}=${value ? 'accepted' : 'denied'}; Path=/; SameSite=Lax; Max-Age=31536000${location.protocol === 'https:' ? '; Secure' : ''}`;
+      }
+    }
+    stored = window.localStorage.getItem('__ctfl_opt_profile__') ?? '(none)';
+  });
 
-    // The constructor discovers rendered attribution; views, hovers, and clicks on
-    // rendered nodes go through the same consent gate.
-    return () => {
-      subscriptions.forEach((subscription) => subscription.unsubscribe());
-      // Only one Web SDK may be live at a time; release it so a remount can construct another.
-      instance.destroy();
-      runtime = undefined;
-    };
+  $effect(() => {
+    const event = runtimeState.blockedEventStream;
+    if (event !== undefined) {
+      untrack(() => { blocked = [event, ...blocked].slice(0, 5); });
+    }
   });
 </script>
 
 <aside class="panel" aria-label="Consent demo">
   <strong>Consent demo</strong>
-  <p>
-    Events: <b>{describe(consent.events)}</b> · Persistence: <b>{describe(consent.persistence)}</b>
-  </p>
-
-  <div class="row">
-    <button onclick={() => setChoice(true)}>Accept all</button>
-    <button onclick={() => setChoice(false)}>Reject all</button>
-    <button onclick={() => setChoice({ events: true, persistence: false })}>Events only</button>
-  </div>
-
-  <p class="label">Personalization events:</p>
-  <div class="row">
-    <button onclick={() => fire('page', () => runtime!.page())}>page (allowed)</button>
-    <button onclick={() => fire('track', () => runtime!.track({ event: 'demo_clicked' }))}>
-      track (gated)
-    </button>
-  </div>
-
-  <p class="label">Analytics events (need a profile: send page first):</p>
-  <div class="row">
-    <button
-      onclick={() =>
-        fire('trackView', () =>
-          runtime!.trackView({ ...demoEntity, viewId: 'demo-view', viewDurationMs: 1000 })
-        )}
-    >
-      view
-    </button>
-    <button onclick={() => fire('trackClick', () => runtime!.trackClick(demoEntity))}>click</button>
-    <button
-      onclick={() =>
-        fire('trackHover', () =>
-          runtime!.trackHover({ ...demoEntity, hoverId: 'demo-hover', hoverDurationMs: 1000 })
-        )}
-    >
-      hover
-    </button>
-    <button onclick={() => fire('trackFlagView', () => runtime!.trackFlagView({ componentId: 'demo-flag' }))}>
-      flag view
-    </button>
-  </div>
-
-  <p class="label">Profile in memory: <code>{profileId ?? '(none)'}</code></p>
-  <p>Profile in LocalStorage: <code>{stored}</code></p>
-  {#if lastResult !== ''}
-    <p class="wrap">Last call: <code>{lastResult}</code></p>
+  {#if runtimeState.error}
+    <p role="status">Browser runtime unavailable. Check the PUBLIC_* configuration.</p>
   {/if}
+  <fieldset disabled={!runtimeState.ready}>
+    <p>
+      Events: <b>{describe(consent.events)}</b> · Persistence: <b>{describe(consent.persistence)}</b>
+    </p>
 
-  <p class="label">Blocked events ({blocked.length}):</p>
-  <ul>
-    {#each blocked as event}
-      <li><code>{event.method}</code> ({event.reason})</li>
-    {/each}
-  </ul>
+    <div class="row">
+      <button onclick={() => setChoice(true)}>Accept all</button>
+      <button onclick={() => setChoice(false)}>Reject all</button>
+      <button onclick={() => setChoice({ events: true, persistence: false })}>Events only</button>
+    </div>
+
+    <p class="label">Personalization events:</p>
+    <div class="row">
+      <button onclick={() => fire('page', () => runtime.page())}>page (allowed)</button>
+      <button onclick={() => fire('track', () => runtime.track({ event: 'demo_clicked' }))}>
+        track (gated)
+      </button>
+    </div>
+
+    <p class="label">Analytics events (need a profile: send page first):</p>
+    <div class="row">
+      <button
+        onclick={() =>
+          fire('trackView', () =>
+            runtime.trackView({ ...demoEntity, viewId: 'demo-view', viewDurationMs: 1000 })
+          )}
+      >
+        view
+      </button>
+      <button onclick={() => fire('trackClick', () => runtime.trackClick(demoEntity))}>click</button>
+      <button
+        onclick={() =>
+          fire('trackHover', () =>
+            runtime.trackHover({ ...demoEntity, hoverId: 'demo-hover', hoverDurationMs: 1000 })
+          )}
+      >
+        hover
+      </button>
+      <button onclick={() => fire('trackFlagView', () => runtime.trackFlagView({ componentId: 'demo-flag' }))}>
+        flag view
+      </button>
+    </div>
+
+    <p class="label">Profile in memory: <code>{profileId ?? '(none)'}</code></p>
+    <p>Profile in LocalStorage: <code>{stored}</code></p>
+    {#if lastResult !== ''}
+      <p class="wrap">Last call: <code>{lastResult}</code></p>
+    {/if}
+
+    <p class="label">Blocked events ({blocked.length}):</p>
+    <ul>
+      {#each blocked as event}
+        <li><code>{event.method}</code> ({event.reason})</li>
+      {/each}
+    </ul>
+  </fieldset>
 </aside>
 
 <style>
@@ -159,6 +145,11 @@
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
     font-size: 13px;
     color: #111827;
+  }
+  fieldset {
+    border: 0;
+    padding: 0;
+    margin: 0;
   }
   .row {
     display: flex;

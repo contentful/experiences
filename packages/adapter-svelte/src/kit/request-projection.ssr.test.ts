@@ -1,7 +1,11 @@
-import { describe, expect, expectTypeOf, it } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { EventBuilder } from '@contentful/experiences-runtime';
 import type { PortableRenderPlan } from '@contentful/experiences-sdk-core';
 import { projectRequestResult, type RawRequestResult } from './request-projection.js';
+import { serializePlan } from './server.js';
+
+vi.mock('$app/server', () => ({}));
+vi.mock('$app/env', () => ({ building: false }));
 
 const scope = { spaceId: 'space', environmentId: 'master' };
 const base = {
@@ -33,6 +37,12 @@ const plan = (): PortableRenderPlan => ({
   attribution,
 });
 const project = (raw: RawRequestResult) => projectRequestResult(raw, scope);
+const leaf = {
+  registration: { kind: 'component' as const, id: 'leaf' },
+  props: { content: { text: 'Nested' }, design: {}, designRaw: {} },
+  slots: {},
+};
+const nodeAttribution = { scopes: [attribution.scopes.root], roots: [attribution.scopes.root] };
 
 describe('Kit complete result projection', () => {
   it('retains content and request provenance while removing private state, raw diagnostics and metadata', () => {
@@ -55,7 +65,8 @@ describe('Kit complete result projection', () => {
               designRaw: {},
               resolved: undefined,
             },
-            slots: {},
+            slots: { children: [leaf] },
+            attribution: nodeAttribution,
           },
         ],
         metadata: { public: { heading: 'Hello' }, secret: 'credential' },
@@ -72,6 +83,7 @@ describe('Kit complete result projection', () => {
       } as RawRequestResult['preview'],
     };
     const output = projectRequestResult(input, { ...scope, metadataKeys: ['public'] });
+    const standalone = serializePlan(input.plan, { metadataKeys: ['public'] });
     expectTypeOf(output.experience).toMatchTypeOf<{ readonly experienceId: string }>();
     expect(output).toMatchObject({
       requestId: base.requestId,
@@ -85,19 +97,24 @@ describe('Kit complete result projection', () => {
       initialPagePayload: input.initialPagePayload,
       preview: { sessionHost: 'https://preview.example' },
     });
-    expect(output.plan).toEqual({
+    expect(standalone).toEqual({
       ...plan(),
       nodes: [
         {
           registration: { kind: 'component', id: 'card' },
           props: { content: { title: 'Hello' }, design: { color: 'red' }, designRaw: {} },
-          slots: {},
+          slots: { children: [leaf] },
+          attribution: nodeAttribution,
         },
       ],
       metadata: { public: { heading: 'Hello' } },
     });
+    expect(output.plan).toEqual(standalone);
+    expect(serializePlan(input.plan).metadata).toEqual({});
     expect(JSON.stringify(output)).not.toContain('secret');
-    expect(output.plan).not.toBe(input.plan);
+    standalone.nodes[0]!.slots.children![0]!.props.content.text = 'Changed';
+    expect(leaf.props.content.text).toBe('Nested');
+    expect(output.plan?.nodes[0]?.slots.children?.[0]?.props.content.text).toBe('Nested');
   });
 
   it('keeps event-free reads distinct from an explicit no-page event list', () => {
@@ -192,19 +209,15 @@ describe('Kit complete result projection', () => {
     new Array(1),
   ])('rejects unsupported application JSON rather than silently corrupting it (%#)', (value) => {
     expect(() =>
-      project({
-        ...base,
-        plan: {
-          ...plan(),
-          metadata: {},
-          nodes: [
-            {
-              registration: { kind: 'component', id: 'card' },
-              props: { content: { value }, design: {}, designRaw: {} },
-              slots: {},
-            },
-          ],
-        },
+      serializePlan({
+        ...plan(),
+        nodes: [
+          {
+            registration: { kind: 'component', id: 'card' },
+            props: { content: { value }, design: {}, designRaw: {} },
+            slots: {},
+          },
+        ],
       })
     ).toThrow(TypeError);
   });

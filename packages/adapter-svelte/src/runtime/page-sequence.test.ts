@@ -84,6 +84,7 @@ describe('committed route page sequencing', () => {
       properties: { title: 'Latest' },
     }));
     route.update({ routeKey: '/first', buildPagePayload: build });
+    route.updateSelection('/first', 'first');
     expect(build).not.toHaveBeenCalled();
     await route.fetchExperience(sdk, { experienceId: 'first' }, resolve, false);
     expect(fetch.mock.calls[0]?.[0].personalization?.events).toEqual([
@@ -97,7 +98,7 @@ describe('committed route page sequencing', () => {
     // An ordinary fragment uses the unchanged host key. Hash routers commit another key.
     route.update({ routeKey: '/first', buildPagePayload: build });
     expect(pending?.()).toBe(true);
-    route.update({ routeKey: '/#/second', buildPagePayload: build });
+    route.updateSelection('/#/second', 'second');
     expect(pending?.()).toBe(false);
     await route.fetchExperience(sdk, { experienceId: 'second' }, resolve, false);
     expect(content.mock.calls[1]?.[2]?.routeKey).toBe('/#/second');
@@ -105,6 +106,9 @@ describe('committed route page sequencing', () => {
       [{ isInitialEmission: true }],
       [{ isInitialEmission: false }],
     ]);
+    route.update({ routeKey: '/third' });
+    await route.fetchExperience(sdk, { experienceId: 'third' }, resolve, false);
+    expect(fetch.mock.calls[2]?.[0].personalization?.events).toBeUndefined();
   });
 
   it.each([false, true])(
@@ -112,7 +116,7 @@ describe('committed route page sequencing', () => {
     async (consent) => {
       const { sdk, route, fetch, send } = setup();
       sdk.consent({ events: true });
-      const build = vi.fn(() => ({}));
+      const build = vi.fn(() => ({ properties: { title: 'Root payload' } }));
       route.update({ routeKey: '/first', buildPagePayload: build });
       const request: FetchExperienceOptions = {
         experienceId: 'first',
@@ -152,7 +156,10 @@ describe('committed route page sequencing', () => {
       sdk.consent({ events: true });
       await sdk.flush();
       expect(send).toHaveBeenCalledTimes(consent ? 0 : 1);
-      expect(build).toHaveBeenCalledTimes(consent ? 0 : 1);
+      expect(
+        send.mock.calls.flatMap(([request]) => request.events).map((event) => event.type)
+      ).toEqual(consent ? [] : ['page']);
+      expect(build).not.toHaveBeenCalled();
       sdk.reset();
       send.mockClear();
       build.mockClear();
@@ -176,23 +183,46 @@ describe('committed route page sequencing', () => {
     async (consentCase) => {
       const { sdk, route, fetch, send } = setup();
       const reset = consentCase === 'reset';
+      const page = {
+        path: '/explicit',
+        query: { source: 'explicit' },
+        referrer: '',
+        search: '?source=explicit',
+        title: 'Explicit page',
+        url: 'https://example.com/explicit?source=explicit',
+      };
+      const payload = {
+        properties: page,
+        page,
+        campaign: { source: 'explicit' },
+        locale: 'fr-FR',
+        location: { countryCode: 'FR' },
+        userAgent: 'explicit',
+      };
+      const built = {
+        ...sdk.eventBuilder.buildPageView(payload),
+        timestamp: '2025-01-01T00:00:00.000Z',
+        anonymousId: 'original-visitor',
+      };
+      const request: FetchExperienceOptions = {
+        experienceId: 'first',
+        personalization: {
+          events: [
+            { type: 'track', event: 'blocked' },
+            consentCase === 'refresh' ? built : { type: 'page', ...payload },
+          ],
+        },
+      };
       const attempts: string[] = [];
       const subscription = sdk.states.eventStream.subscribe((event) => {
         if (event) attempts.push(event.type);
       });
       cleanups.push(() => subscription.unsubscribe());
-      await route.fetchExperience(
-        sdk,
-        {
-          experienceId: 'first',
-          personalization: { events: [{ type: 'track', event: 'blocked' }, { type: 'page' }] },
-        },
-        resolve,
-        false
-      );
+      await route.fetchExperience(sdk, request, resolve, false);
       expect(attempts).toEqual([]);
+      expect(fetch.mock.calls[0]?.[0].personalization?.events).toEqual([]);
       if (consentCase === 'refresh') {
-        await route.fetchExperience(sdk, { experienceId: 'first' }, resolve, true);
+        await route.fetchExperience(sdk, request, resolve, true);
         expect(fetch.mock.calls[1]?.[0].personalization?.events).toBeUndefined();
       }
       if (reset) {
@@ -215,6 +245,24 @@ describe('committed route page sequencing', () => {
       await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
       expect(attempts).toEqual(['page']);
       expect(fetch).toHaveBeenCalledTimes(consentCase === 'refresh' ? 2 : 1);
+      const [retried] = send.mock.calls.flatMap(([request]) => request.events);
+      expect(retried).toMatchObject({
+        type: 'page',
+        properties: page,
+        context: {
+          campaign: payload.campaign,
+          locale: payload.locale,
+          location: payload.location,
+          page,
+          userAgent: payload.userAgent,
+          gdpr: { isConsentGiven: true },
+        },
+      });
+      if (consentCase === 'refresh') {
+        expect(retried?.messageId).not.toBe(built.messageId);
+        expect(retried?.timestamp).not.toBe(built.timestamp);
+        expect(retried?.anonymousId).not.toBe(built.anonymousId);
+      }
     }
   );
 

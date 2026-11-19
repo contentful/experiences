@@ -13,6 +13,7 @@ import type {
 import type { PageSequence } from '../runtime/page-sequence.svelte.js';
 import type {
   ManagedExperienceOperationResult,
+  ManagedExperienceAcquireOptions,
   ManagedExperienceSnapshot,
   SourceOptions,
 } from './source-types.js';
@@ -73,11 +74,30 @@ interface Selection {
   locale?: string;
   revision: object;
   routeKey: string;
+  host?: {
+    current(): boolean;
+    redirect(
+      result: ManagedExperienceOperationResult,
+      isCurrent: () => boolean,
+      baseline: ManagedExperienceSnapshot['data']
+    ): Promise<void>;
+  };
 }
+type Acquire = (
+  options: ManagedExperienceAcquireOptions
+) => Promise<ManagedExperienceOperationResult | undefined>;
+type BrowserSelection = {
+  acquire: Acquire;
+  retry(): Promise<void>;
+};
 export interface PrimarySource {
   readonly current: ManagedExperienceSnapshot;
   refresh(): Promise<void>;
   retry(): Promise<void>;
+  fromCommittedRequest(
+    options: SourceOptions,
+    host: NonNullable<Selection['host']>
+  ): BrowserSelection;
   attach(getOptions: () => SourceOptions | undefined): { update(): void; release(): void };
   reset(): void;
   dispose(): void;
@@ -88,6 +108,7 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
   const { route } = environment;
   const registrations = new Set<() => SourceOptions | undefined>();
   let selection: Selection | undefined;
+  let currentActions: BrowserSelection | undefined;
   const { presentation } = environment;
   let operation: object | undefined;
   let disposed = false;
@@ -96,8 +117,7 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
 
   const selected = (value: Selection) =>
     !disposed &&
-    selection === value &&
-    presentation.isSelected(value) &&
+    (value.host?.current() ?? (selection === value && presentation.isSelected(value))) &&
     route.revision === value.revision &&
     environment.getSdk() === value.sdk &&
     (value.options.request.locale ?? environment.getLocale()) === value.locale;
@@ -107,15 +127,16 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
       selected(value) && lifetime();
   type Outcome = Omit<ManagedExperienceOperationResult, 'id' | 'routeKey' | 'request'>;
   function complete(
+    value: Selection,
+    request: FetchExperienceOptions,
     outcome: Outcome | undefined,
-    isCurrent = authority(selection!),
+    isCurrent = authority(value),
     invalidatesData = false,
     settled = true
   ) {
-    const result = outcome
-      ? { id: {}, routeKey: selection!.routeKey, request: selection!.request, ...outcome }
-      : undefined;
+    const result = outcome ? { id: {}, routeKey: value.routeKey, request, ...outcome } : undefined;
     presentation.complete(result, { ...outcome, invalidatesData }, isCurrent, settled);
+    return result;
   }
   function stopBindings() {
     binding?.unsubscribe();
@@ -125,6 +146,7 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
   function detach() {
     const ownsPresentation = selection && presentation.isSelected(selection);
     selection = undefined;
+    currentActions = undefined;
     operation = undefined;
     stopBindings();
     if (ownsPresentation) presentation.clear();
@@ -146,6 +168,8 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
       // Live content supersedes pending HTTP; an error-only update leaves it pending.
       if (update.data) operation = undefined;
       complete(
+        value,
+        value.request,
         { plan: update.data, error: update.error },
         authority(value),
         false,
@@ -153,28 +177,29 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
       );
     });
   }
-  async function fetch(isRefresh: boolean) {
-    const value = selection;
-    const sdk = value?.sdk;
-    if (!value || !sdk || !selected(value) || presentation.current.redirect) return;
+  async function fetch(value: Selection, request: FetchExperienceOptions, refresh: boolean) {
+    const sdk = value.sdk;
+    if (!sdk || !selected(value) || presentation.current.redirect) return;
     const attempt = {};
     operation = attempt;
     const lifetime = sdk.captureLifetime();
+    const baseline = presentation.current.data;
     const rollback = presentation.begin(authority(value, lifetime));
     const sourceCurrent = () =>
       selected(value) &&
       route.isCurrent() &&
       (value.options.request.locale !== undefined || sdk.locale === value.locale);
     const current = () => sourceCurrent() && operation === attempt;
-    bindPreview(value);
+    if (!value.host) bindPreview(value);
     let outcome: Outcome;
     let failure: ReturnType<typeof authoritativeFailure>;
     try {
       const response = await route.fetchExperience(
         sdk,
-        value.request,
+        request,
         value.options.resolve,
-        isRefresh,
+        refresh,
+        current,
         sourceCurrent
       );
       outcome = 'redirect' in response ? response : { plan: response };
@@ -194,9 +219,53 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
       boundExperience = undefined;
       route.abandonPresentation();
     }
-    complete(outcome, authority(value, lifetime), invalidatesData);
-
-    bindPreview(value);
+    const isCurrent = () => current() && lifetime();
+    const result = complete(value, request, outcome, isCurrent, invalidatesData);
+    if (result?.redirect && value.host) await value.host.redirect(result, isCurrent, baseline);
+    if (!value.host) bindPreview(value);
+    return result;
+  }
+  function actions(value: Selection): BrowserSelection {
+    let acquired = false;
+    return {
+      acquire(options) {
+        if (!value.sdk || value.sdk.isPreview || !selected(value) || presentation.current.redirect)
+          return Promise.resolve(undefined);
+        acquired = true;
+        return fetch(value, { ...value.request, personalization: options.personalization }, false);
+      },
+      async retry() {
+        const { personalization, ...selector } = value.request;
+        const { events: _events, ...continuity } = personalization ?? {};
+        // One-off action personalization must not outlive the operation or a visitor reset.
+        await fetch(
+          value,
+          !acquired && personalization ? { ...selector, personalization: continuity } : selector,
+          true
+        );
+      },
+    };
+  }
+  function createSelection(options: SourceOptions, host?: Selection['host']): Selection {
+    const sdk = environment.getSdk();
+    const raw = options.request;
+    const locale = raw.locale ?? environment.getLocale();
+    const request = {
+      ...raw,
+      locale: raw.locale ?? (sdk?.isPreview ? undefined : locale),
+      ...(raw.experienceId !== undefined && !sdk?.isPreview
+        ? { extensions: { ...raw.extensions, sourceMap: raw.extensions?.sourceMap ?? {} } }
+        : {}),
+    } as FetchExperienceOptions;
+    return {
+      options,
+      sdk,
+      locale,
+      request,
+      revision: route.revision,
+      routeKey: route.routeKey,
+      host,
+    };
   }
   function apply(options: SourceOptions) {
     // Validate raw selectors before seeds, normalization, Preview or route intent.
@@ -226,15 +295,8 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
         previous.routeKey === routeKey;
       stopBindings();
       operation = undefined;
-      const raw = options.request;
-      const request = {
-        ...raw,
-        locale: raw.locale ?? (sdk?.isPreview ? undefined : locale),
-        ...(raw.experienceId !== undefined && !sdk?.isPreview
-          ? { extensions: { ...raw.extensions, sourceMap: raw.extensions?.sourceMap ?? {} } }
-          : {}),
-      } as FetchExperienceOptions;
-      const value = (selection = { options, sdk, locale, request, revision, routeKey });
+      const value = (selection = createSelection(options));
+      const actionsForSelection = (currentActions = actions(value));
       const error = newSeed
         ? options.initialError
         : activatingSeed
@@ -247,15 +309,17 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
           ? presentation.current.data
           : undefined;
       const data = sdk?.isPreview || failure === undefined ? candidate : undefined;
-      presentation.select(value, refresh);
+      presentation.select(value, actionsForSelection.retry, actionsForSelection.acquire);
       complete(
+        value,
+        value.request,
         data || error
           ? { plan: data, error, ...(failure === 404 ? { notFound: true } : {}) }
           : undefined,
         authority(value)
       );
 
-      if (sdk && presentation.current.status === 'idle') void fetch(false);
+      if (sdk && presentation.current.status === 'idle') void fetch(value, value.request, false);
       else bindPreview(value);
     });
   }
@@ -272,13 +336,17 @@ export function createPrimarySource(environment: SourceEnvironment): PrimarySour
     apply(options);
     return options;
   }
-  const refresh = () => fetch(true);
+  const refresh = () => currentActions?.retry() ?? Promise.resolve();
   return {
     get current() {
       return presentation.current;
     },
     refresh,
     retry: refresh,
+    fromCommittedRequest(options, host) {
+      assertExperienceSelector(options.request);
+      return actions(createSelection(options, host));
+    },
     attach(getOptions) {
       if (disposed) throw new Error('Cannot attach to a disposed Experiences root.');
       const initial = getOptions();

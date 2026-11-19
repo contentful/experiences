@@ -11,7 +11,7 @@
     const candidate = source;
     const key = routeKey;
     untrack(() => {
-      controller.attach(owner.status === 'ready' ? owner.sdk as ContentfulExperiences : undefined, scope.route, scope.owner.sessionId);
+      controller.attach(owner.status === 'ready' ? owner.sdk as ContentfulExperiences : undefined, scope.route, scope.owner.sessionId, () => scope.source);
       void controller.update(candidate, key);
     });
   });

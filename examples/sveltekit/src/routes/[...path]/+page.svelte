@@ -1,14 +1,5 @@
 <script lang="ts">
-  import { ServerExperienceRenderer } from '@contentful/experiences-svelte';
-
-  import { experienceConfig } from '$lib/experience-config.js';
-
-  let { data } = $props();
+  import ManagedExperience from '$lib/components/ManagedExperience.svelte';
 </script>
 
-<ServerExperienceRenderer
-  experience={data.experience}
-  config={experienceConfig}
-  metadata={{ renderer: 'server' }}
-  debug={data.debug}
-/>
+<ManagedExperience />

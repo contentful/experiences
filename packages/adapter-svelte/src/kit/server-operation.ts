@@ -37,10 +37,16 @@ function consentRecord(value: ConsentInput) {
   return typeof value === 'boolean' ? { events: value, persistence: value } : value;
 }
 
+function validateRequestMode(mode: unknown): 'ssr' | 'hybrid' {
+  if (mode !== 'ssr' && mode !== 'hybrid')
+    throw new TypeError('request.mode must be ssr or hybrid.');
+  return mode;
+}
+
 /** One owned primary operation. Application composition shares its live request facade. */
 export function createServerOperation(options: ServerBindingOptions) {
-  if (options.request.mode !== 'ssr' && options.request.mode !== 'hybrid')
-    throw new TypeError('request.mode must be ssr or hybrid.');
+  const { mode } = options.request;
+  if (typeof mode !== 'function') validateRequestMode(mode);
   if (typeof options.request.authorizeExperience !== 'function')
     throw new TypeError('request.authorizeExperience is required.');
   if (options.consent?.server === undefined) throw new TypeError('consent.server is required.');
@@ -84,6 +90,13 @@ export function createServerOperation(options: ServerBindingOptions) {
         options.request.onResult?.(event, globalThis.structuredClone(result));
       return result;
     }
+    const sessionId = options.preview ? resolvePreviewSessionId(url.searchParams) : undefined;
+    const ssr =
+      trusted.document &&
+      !eventFree &&
+      sessionId === undefined &&
+      (typeof mode === 'function' ? validateRequestMode(await mode(event, context)) : mode) ===
+        'ssr';
     const serverConsent = consentRecord(await resolveValue(options.consent.server, event, context));
     const incoming = input.consent === undefined ? undefined : consentRecord(input.consent);
     const consent = {
@@ -95,7 +108,6 @@ export function createServerOperation(options: ServerBindingOptions) {
         ? (event.cookies.get(ANONYMOUS_ID_COOKIE) ?? event.cookies.get(ANONYMOUS_ID_COOKIE_LEGACY))
         : undefined
       : input.profileId;
-    const sessionId = options.preview ? resolvePreviewSessionId(url.searchParams) : undefined;
     const request = sdk.forRequest({
       ...(!trusted.document || eventFree ? { preflight: true } : {}),
       consent,
@@ -151,7 +163,6 @@ export function createServerOperation(options: ServerBindingOptions) {
           },
         };
       }
-      const ssr = trusted.document && !eventFree && options.request.mode === 'ssr';
       let output: Pick<RawRequestResult, 'plan' | 'redirect' | 'error' | 'handoff'>;
       try {
         output =

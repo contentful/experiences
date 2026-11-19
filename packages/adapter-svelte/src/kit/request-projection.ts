@@ -134,7 +134,7 @@ function jsonData(
 }
 
 /** Project browser data deliberately; server errors and metadata remain server-local by default. */
-function projectPlan(
+export function serializePlan(
   plan: PortableRenderPlan,
   options: { readonly metadataKeys?: readonly string[] } = {}
 ): PortableRenderPlan {
@@ -314,7 +314,7 @@ export function projectRequestResult<E extends FetchExperienceOptions>(
     requestId: raw.requestId,
     routeKey: raw.routeKey,
     experience: selector,
-    ...(raw.plan === undefined ? {} : { plan: projectPlan(raw.plan, options) }),
+    ...(raw.plan === undefined ? {} : { plan: serializePlan(raw.plan, options) }),
     ...(raw.redirect === undefined ? {} : { redirect: { path: field(raw.redirect, 'path') } }),
     ...(kind === undefined ? {} : { contentError: errorMessages[kind], contentErrorKind: kind }),
     ...(kind === 'not-found' ? { notFound: true } : {}),

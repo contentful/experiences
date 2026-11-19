@@ -5,8 +5,9 @@ SDK operations in the public runtime and justify every departure from that examp
 
 Standalone apps: [Node](./node-sdk/README.md), [Web](./web-sdk/README.md), and
 [Node + Web](./node-sdk+web-sdk/README.md), plus the
-[React reference](./react-sdk/README.md) and
-[Next.js App/Pages reference](./nextjs-sdk/README.md). Root `npm run implementation:install`
+[React reference](./react-sdk/README.md),
+[Next.js App/Pages reference](./nextjs-sdk/README.md), and
+[SvelteKit reference](./svelte-sdk/README.md). Root `npm run implementation:install`
 prepares all registered implementations through their existing Nx setup targets; stop running apps with
 their scoped lifecycle targets before refreshing dependencies.
 
@@ -74,6 +75,22 @@ facade after every actual server primary fetch, including RSC and Pages data, be
 Do not add multi-prefetch/result lists, identity reconciliation or new
 controllers/cache/barriers.
 
+The [SvelteKit reference](./svelte-sdk/README.md) consumes packed Svelte/Node/Web
+SDKs with an app-local Kit 3 toolchain. Its universal loader passes the exact
+managed source to one stable request root for SSR/hybrid adoption; direct Web CSR
+and explicit browser actions reuse that browser owner. Native Kit navigation and
+loader reruns remain framework-owned; same-selection reads and Retry stay
+event-free. Keep request history across owned Preview activations and release
+the old activation before acquiring its replacement. Browser Delivery/Preview
+configuration stays separate from private server credentials. Kit 3's synchronous
+`handleError` returns a sanitized public error for native SSR boundary recovery;
+follow the [host recovery requirements](../packages/adapter-svelte/README.md#component-errors-and-rendering-recovery)
+when changing compiler mode or porting to Kit 2. Exercise the packed reference
+through its scoped setup/build and native lifecycle. Local Preview session and
+Destination wiring checks remain part of validation. Live Preview snapshots and
+updates, and live Destinations walkthroughs and attribution, are deferred. See
+the [release boundary](../packages/adapter-svelte/README.md#service-verification).
+
 Official support is one Experience fetch per page. The SDK does not enforce this
 limit in code. Reference implementations fetch multiple IDs only to compare
 rendering scenarios; their ordering, identity and result handling are application-owned
@@ -119,7 +136,7 @@ convenience value for copying into the URL, never a default or browser projectio
 Activate preview only when the flag is exactly `true` and the URL contains a
 nonempty trimmed `preview_session_id`. Missing/empty URL session or a falsy flag
 keeps ordinary event handling, even with a nonempty session parameter. Omit `preview`
-configuration entirely for disabled deployments. Web and Next infer
+configuration entirely for disabled deployments. Web, Next and Kit infer
 the URL session; bare Node supplies it in request-local `preview`. SDK-owned
 `isPreview` derives from configured capability and a nonempty session, with no
 application mode override. Sidebar attempts remain subject to normal consent and

@@ -3,6 +3,7 @@ import { building } from '$app/env';
 import { createSvelteKitServerBinding } from './server-binding.js';
 import type { ServerBindingOptions } from './server-types.js';
 
+export { serializePlan } from './request-projection.js';
 export type { ServerBindingOptions, SvelteKitServerExperiencesOptions } from './server-types.js';
 export type { RequestResult } from './request-result.js';
 

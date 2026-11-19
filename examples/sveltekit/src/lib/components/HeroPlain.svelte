@@ -4,7 +4,9 @@
   component just lays them out and reads its two design properties by name.
 -->
 <script lang="ts" module>
-  export interface HeroPlainProps {
+  import type { HTMLAttributes } from 'svelte/elements';
+
+  export interface HeroPlainProps extends Omit<HTMLAttributes<HTMLElement>, 'children'> {
     title?: string;
     body?: unknown;
     ctaLabel?: string;
@@ -17,7 +19,17 @@
 </script>
 
 <script lang="ts">
-  let { title, ctaLabel, ctaUrl, image, backgroundColor, color }: HeroPlainProps = $props();
+  let {
+    title,
+    body: _body,
+    ctaLabel,
+    ctaUrl,
+    image,
+    backgroundColor,
+    color,
+    style: callerStyle,
+    ...rootProps
+  }: HeroPlainProps = $props();
 
   const style = $derived(
     [
@@ -28,13 +40,14 @@
       'padding: 4rem 2rem',
       backgroundColor && `background: ${backgroundColor}`,
       color && `color: ${color}`,
+      callerStyle,
     ]
       .filter(Boolean)
       .join('; ')
   );
 </script>
 
-<section {style}>
+<section {...rootProps} {style}>
   <div>
     {#if title}
       <h1 style="margin: 0; font-size: 2.5rem;">{title}</h1>
