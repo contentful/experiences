@@ -1,3 +1,11 @@
+## 0.9.2 (2026-11-20)
+
+### 🧱 Updated Dependencies
+
+- Updated runtime to 0.4.2
+- Updated client to 0.11.1
+- Updated core to 0.13.16
+
 ## 0.9.1 (2026-11-12)
 
 ### 🩹 Fixes

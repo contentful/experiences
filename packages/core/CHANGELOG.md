@@ -1,3 +1,9 @@
+## 0.13.16 (2026-11-20)
+
+### 🩹 Fixes
+
+- **core:** resolve nonadjacent source-map defining layers [EXA-2809] ([#338](https://github.com/contentful/experiences/pull/338))
+
 ## 0.13.15 (2026-11-12)
 
 This was a version bump only for core to align it with other projects, there were no code changes.
