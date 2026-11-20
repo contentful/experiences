@@ -102,6 +102,22 @@ interface ChainScope {
   entityKindId: string | undefined;
 }
 
+function findDefiningLayerId(
+  ctx: Context,
+  outerFirst: number[],
+  position: number,
+  kind: EntityKind
+): string | undefined {
+  for (let i = position + 1; i < outerFirst.length; i++) {
+    const layer = ctx.layers[outerFirst[i]!];
+    if (layer === undefined) continue;
+    // A nested entity owns the defining layers below it.
+    if (scopeKind(layer) !== undefined || layer.kind === 'InlineExperienceFragment') break;
+    if (layer.kind === DEFINING_LAYER_KIND[kind]) return layer.id;
+  }
+  return undefined;
+}
+
 function reportableScopes(ctx: Context, chain: number[]): ChainScope[] {
   const outerFirst = [...chain].reverse();
   const scopes: ChainScope[] = [];
@@ -112,16 +128,12 @@ function reportableScopes(ctx: Context, chain: number[]): ChainScope[] {
     if (layer?.id === undefined || kind === undefined) continue;
     if (scopes.some((scope) => scope.row === row)) continue;
 
-    const innerRow = outerFirst[position + 1];
-    const innerLayer = innerRow === undefined ? undefined : ctx.layers[innerRow];
-    const definesThisScope = innerLayer?.kind === DEFINING_LAYER_KIND[kind];
-
     scopes.push({
       row,
       layer,
       entityId: layer.id,
       kind,
-      entityKindId: definesThisScope ? innerLayer?.id : undefined,
+      entityKindId: findDefiningLayerId(ctx, outerFirst, position, kind),
     });
   }
   return scopes;

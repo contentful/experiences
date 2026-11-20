@@ -368,6 +368,39 @@ describe('scope attribution', () => {
     });
   });
 
+  it('finds nonadjacent defining layers and preserves scope attribution', async () => {
+    const mapping = FRAGMENT_SOURCE_MAP.nodes['node2-1']!;
+    const sourceMap = {
+      ...FRAGMENT_SOURCE_MAP,
+      nodes: {
+        'node2-1': { ...mapping, layers: [4, 2, 3, 2, 1, 2, 0] },
+      },
+    };
+
+    const adjacent = await resolve([node('node2-1')], FRAGMENT_SOURCE_MAP);
+    const nonadjacent = await resolve([node('node2-1')], sourceMap);
+
+    expect(nonadjacent.nodes[0]!.attribution).toEqual(adjacent.nodes[0]!.attribution);
+  });
+
+  it.each(['ExperienceFragment', 'InlineExperienceFragment'])(
+    'does not take a Component from a nested %s',
+    async (kind) => {
+      const mapping = FRAGMENT_SOURCE_MAP.nodes['node2-1']!;
+      const sourceMap = {
+        ...FRAGMENT_SOURCE_MAP,
+        layers: [...FRAGMENT_SOURCE_MAP.layers, { kind, id: 'nested' }],
+        nodes: {
+          'node2-1': { ...mapping, layers: [4, 5, 3, 2, 1, 0] },
+        },
+      };
+
+      const plan = await resolve([node('node2-1')], sourceMap);
+
+      expect(plan.nodes[0]!.attribution!.scopes[1]).not.toHaveProperty('entityKindId');
+    }
+  );
+
   it('ignores a defining layer of the wrong kind', async () => {
     const sourceMap = {
       ...FRAGMENT_SOURCE_MAP,
