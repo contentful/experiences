@@ -103,27 +103,27 @@ interface ChainScope {
 }
 
 function findDefiningLayerId(
-  ctx: Context,
-  outerFirst: number[],
-  position: number,
+  innerLayers: readonly (Layer | undefined)[],
   kind: EntityKind
 ): string | undefined {
-  for (let i = position + 1; i < outerFirst.length; i++) {
-    const layer = ctx.layers[outerFirst[i]!];
+  const definingKind = DEFINING_LAYER_KIND[kind];
+
+  for (const layer of innerLayers) {
     if (layer === undefined) continue;
-    // A nested reportable entity owns the defining layers below it.
-    if (scopeKind(layer) !== undefined) break;
-    if (layer.kind === DEFINING_LAYER_KIND[kind]) return layer.id;
+    if (scopeKind(layer) !== undefined) return undefined;
+    if (layer.kind === definingKind) return layer.id;
   }
+
   return undefined;
 }
 
 function reportableScopes(ctx: Context, chain: number[]): ChainScope[] {
   const outerFirst = [...chain].reverse();
+  const orderedLayers = outerFirst.map((row) => ctx.layers[row]);
   const scopes: ChainScope[] = [];
 
   for (const [position, row] of outerFirst.entries()) {
-    const layer = ctx.layers[row];
+    const layer = orderedLayers[position];
     const kind = layer === undefined ? undefined : scopeKind(layer);
     if (layer?.id === undefined || kind === undefined) continue;
     if (scopes.some((scope) => scope.row === row)) continue;
@@ -133,7 +133,7 @@ function reportableScopes(ctx: Context, chain: number[]): ChainScope[] {
       layer,
       entityId: layer.id,
       kind,
-      entityKindId: findDefiningLayerId(ctx, outerFirst, position, kind),
+      entityKindId: findDefiningLayerId(orderedLayers.slice(position + 1), kind),
     });
   }
   return scopes;
