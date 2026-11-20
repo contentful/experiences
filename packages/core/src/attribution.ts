@@ -102,26 +102,38 @@ interface ChainScope {
   entityKindId: string | undefined;
 }
 
+function findDefiningLayerId(
+  innerLayers: readonly (Layer | undefined)[],
+  kind: EntityKind
+): string | undefined {
+  const definingKind = DEFINING_LAYER_KIND[kind];
+
+  for (const layer of innerLayers) {
+    if (layer === undefined) continue;
+    if (scopeKind(layer) !== undefined) return undefined;
+    if (layer.kind === definingKind) return layer.id;
+  }
+
+  return undefined;
+}
+
 function reportableScopes(ctx: Context, chain: number[]): ChainScope[] {
   const outerFirst = [...chain].reverse();
+  const orderedLayers = outerFirst.map((row) => ctx.layers[row]);
   const scopes: ChainScope[] = [];
 
   for (const [position, row] of outerFirst.entries()) {
-    const layer = ctx.layers[row];
+    const layer = orderedLayers[position];
     const kind = layer === undefined ? undefined : scopeKind(layer);
     if (layer?.id === undefined || kind === undefined) continue;
     if (scopes.some((scope) => scope.row === row)) continue;
-
-    const innerRow = outerFirst[position + 1];
-    const innerLayer = innerRow === undefined ? undefined : ctx.layers[innerRow];
-    const definesThisScope = innerLayer?.kind === DEFINING_LAYER_KIND[kind];
 
     scopes.push({
       row,
       layer,
       entityId: layer.id,
       kind,
-      entityKindId: definesThisScope ? innerLayer?.id : undefined,
+      entityKindId: findDefiningLayerId(orderedLayers.slice(position + 1), kind),
     });
   }
   return scopes;
