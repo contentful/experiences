@@ -111,8 +111,8 @@ function findDefiningLayerId(
   for (let i = position + 1; i < outerFirst.length; i++) {
     const layer = ctx.layers[outerFirst[i]!];
     if (layer === undefined) continue;
-    // A nested entity owns the defining layers below it.
-    if (scopeKind(layer) !== undefined || layer.kind === 'InlineExperienceFragment') break;
+    // A nested reportable entity owns the defining layers below it.
+    if (scopeKind(layer) !== undefined) break;
     if (layer.kind === DEFINING_LAYER_KIND[kind]) return layer.id;
   }
   return undefined;

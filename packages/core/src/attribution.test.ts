@@ -383,23 +383,23 @@ describe('scope attribution', () => {
     expect(nonadjacent.nodes[0]!.attribution).toEqual(adjacent.nodes[0]!.attribution);
   });
 
-  it.each(['ExperienceFragment', 'InlineExperienceFragment'])(
-    'does not take a Component from a nested %s',
-    async (kind) => {
-      const mapping = FRAGMENT_SOURCE_MAP.nodes['node2-1']!;
-      const sourceMap = {
-        ...FRAGMENT_SOURCE_MAP,
-        layers: [...FRAGMENT_SOURCE_MAP.layers, { kind, id: 'nested' }],
-        nodes: {
-          'node2-1': { ...mapping, layers: [4, 5, 3, 2, 1, 0] },
-        },
-      };
+  it.each([
+    ['InlineExperienceFragment', 'demo-hero'],
+    ['ExperienceFragment', undefined],
+  ])('resolves the outer Component across %s', async (kind, expectedId) => {
+    const mapping = FRAGMENT_SOURCE_MAP.nodes['node2-1']!;
+    const sourceMap = {
+      ...FRAGMENT_SOURCE_MAP,
+      layers: [...FRAGMENT_SOURCE_MAP.layers, { kind, id: 'nested' }],
+      nodes: {
+        'node2-1': { ...mapping, layers: [4, 5, 3, 2, 1, 0] },
+      },
+    };
 
-      const plan = await resolve([node('node2-1')], sourceMap);
+    const plan = await resolve([node('node2-1')], sourceMap);
 
-      expect(plan.nodes[0]!.attribution!.scopes[1]).not.toHaveProperty('entityKindId');
-    }
-  );
+    expect(plan.nodes[0]!.attribution!.scopes[1]!.entityKindId).toBe(expectedId);
+  });
 
   it('ignores a defining layer of the wrong kind', async () => {
     const sourceMap = {
