@@ -101,7 +101,11 @@ function RawLivePreviewProbe({
 
 function LivePreviewProbe({ options }: { options: UseLivePreviewOptions }): ReactElement {
   const { data } = useLivePreview(options);
-  return <output>{(data?.nodes[0]?.props.content.title as string) ?? ''}</output>;
+  return (
+    <output data-cf-node-id={data?.nodes[0]?.nodeId}>
+      {(data?.nodes[0]?.props.content.title as string) ?? ''}
+    </output>
+  );
 }
 
 function renderRoot(): { container: HTMLElement; root: Root } {
@@ -144,6 +148,261 @@ describe('useLivePreview', () => {
     });
 
     expect(container.textContent).toBe('initial');
+  });
+
+  it.each([
+    { inspector: undefined, sourceMap: undefined, requested: false },
+    { inspector: false, sourceMap: undefined, requested: false },
+    { inspector: true, sourceMap: false, requested: true },
+    { inspector: undefined, sourceMap: true, requested: true },
+    { inspector: false, sourceMap: true, requested: true },
+  ])(
+    'requests source maps with inspector=$inspector and sourceMap=$sourceMap',
+    async ({ inspector, sourceMap, requested }) => {
+      ({ container, root } = renderRoot());
+      await act(async () => {
+        root!.render(
+          <LivePreviewProbe
+            options={{
+              previewSessionOptions: { ...previewSessionOptions, sourceMap },
+              inspector,
+              resolveOptions: { config: { components: {} } },
+            }}
+          />
+        );
+      });
+      expect(new URL(FakeWebSocket.instances[0]!.url).searchParams.has('source_map')).toBe(
+        requested
+      );
+    }
+  );
+
+  it.each([undefined, false])(
+    'does not report geometry when inspector is %s',
+    async (inspector) => {
+      vi.useFakeTimers();
+      vi.stubGlobal('requestAnimationFrame', (callback: (time: number) => void) =>
+        window.setTimeout(() => callback(0), 16)
+      );
+      vi.stubGlobal('cancelAnimationFrame', (id: number) => window.clearTimeout(id));
+      const postMessage = vi
+        .spyOn(window.parent, 'postMessage')
+        .mockImplementation(() => undefined);
+      ({ container, root } = renderRoot());
+      await act(async () => {
+        root!.render(
+          <LivePreviewProbe
+            options={{ initialPlan, inspector, resolveOptions: { config: { components: {} } } }}
+          />
+        );
+      });
+      window.dispatchEvent(new Event('resize'));
+      vi.advanceTimersByTime(32);
+      expect(
+        postMessage.mock.calls.filter(([message]) => message.eventType === 'canvasGeometryUpdated')
+      ).toEqual([]);
+    }
+  );
+
+  it('reports measured initial-plan geometry and its unchanged map to the parent like Studio', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('requestAnimationFrame', (callback: (time: number) => void) =>
+      window.setTimeout(() => callback(0), 16)
+    );
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => window.clearTimeout(id));
+    const postMessage = vi.spyOn(window.parent, 'postMessage').mockImplementation(() => undefined);
+    const sourceMap = {
+      version: 1,
+      variants: [],
+      spaces: [],
+      environments: [],
+      locales: [],
+      entries: [],
+      assets: [],
+      layers: [{ kind: 'Experience', id: 'page' }],
+      sources: [{ layer: 0, id: 'hero' }],
+      dataAssemblies: [],
+      nodes: {
+        initial: {
+          path: [0],
+        },
+      },
+    };
+    ({ container, root } = renderRoot());
+    await act(async () => {
+      root!.render(
+        <LivePreviewProbe
+          options={{
+            initialPlan: { ...initialPlan, sourceMap },
+            inspector: true,
+            resolveOptions: { config: { components: {} } },
+          }}
+        />
+      );
+    });
+    vi.spyOn(container.querySelector('output')!, 'getBoundingClientRect').mockReturnValue(
+      new globalThis.DOMRect(20, 30, 200, 48)
+    );
+    const bodyRect = vi
+      .spyOn(document.body, 'getBoundingClientRect')
+      .mockReturnValue(new globalThis.DOMRect(0, 0, 800, 600));
+    vi.spyOn(document.documentElement, 'getBoundingClientRect').mockReturnValue(
+      new globalThis.DOMRect(0, 0, 800, 2000)
+    );
+    vi.advanceTimersByTime(16);
+
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        source: 'customer-app',
+        eventType: 'canvasGeometryUpdated',
+        payload: {
+          size: { width: 800, height: 600 },
+          nodes: { initial: { coordinates: { x: 20, y: 30, width: 200, height: 48 } } },
+          sourceMap,
+        },
+      },
+      '*'
+    );
+
+    const duplicate = document.createElement('div');
+    duplicate.setAttribute('data-cf-node-id', 'initial');
+    await act(async () => container!.append(duplicate));
+    vi.advanceTimersByTime(16);
+    expect(postMessage.mock.lastCall?.[0].payload.nodes).toEqual({});
+    await act(async () => duplicate.remove());
+    vi.advanceTimersByTime(16);
+    expect(postMessage.mock.lastCall?.[0].payload.nodes).toEqual({
+      initial: { coordinates: { x: 20, y: 30, width: 200, height: 48 } },
+    });
+
+    bodyRect.mockReturnValue(new globalThis.DOMRect(0, 0, 800, 120));
+    window.dispatchEvent(new Event('resize'));
+    vi.advanceTimersByTime(16);
+    expect(postMessage.mock.lastCall?.[0].payload.size).toEqual({ width: 800, height: 120 });
+
+    vi.spyOn(container!, 'getBoundingClientRect').mockReturnValue(
+      new globalThis.DOMRect(20, 30, 200, 48)
+    );
+    await act(async () => {
+      container!.querySelector('output')!.style.marginBottom = '80px';
+    });
+    vi.advanceTimersByTime(16);
+    expect(postMessage.mock.lastCall?.[0].payload.size).toEqual({ width: 800, height: 158 });
+  });
+
+  it('reports the accepted streamed plan and clears targets for missing or malformed maps', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('requestAnimationFrame', (callback: (time: number) => void) =>
+      window.setTimeout(() => callback(0), 16)
+    );
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => window.clearTimeout(id));
+    const postMessage = vi.spyOn(window.parent, 'postMessage').mockImplementation(() => undefined);
+    const map = {
+      version: 1,
+      variants: [],
+      spaces: [],
+      environments: [],
+      locales: [],
+      entries: [],
+      assets: [],
+      layers: [],
+      dataAssemblies: [],
+      nodes: { streamed: { path: [] } },
+    };
+    const resolveOptions = {
+      config: {
+        components: {
+          hero: {
+            resolveData: ({ content }: { content: Record<string, unknown> }) => {
+              if (content.title === 'rejected') throw new Error('rejected update');
+              return {};
+            },
+          },
+        },
+      },
+    };
+    ({ container, root } = renderRoot());
+    await act(async () => {
+      root!.render(
+        <LivePreviewProbe
+          options={{
+            initialPlan,
+            previewSessionOptions,
+            resolveOptions,
+            inspector: true,
+          }}
+        />
+      );
+    });
+    const output = container.querySelector('output')!;
+    vi.spyOn(output, 'getBoundingClientRect').mockReturnValue(
+      new globalThis.DOMRect(10, 50, 180, 40)
+    );
+    const socket = FakeWebSocket.instances[0]!;
+    expect(new URL(socket.url).searchParams.get('source_map')).toBe('true');
+    const update = (title: string, withMap = true): ExperiencePayload => ({
+      ...payload(title),
+      nodes: [{ ...payload(title).nodes[0]!, id: 'streamed' }],
+      ...(withMap ? { extensions: { sourceMap: map } } : {}),
+    });
+    const snapshots = () =>
+      postMessage.mock.calls
+        .map(([message]) => message)
+        .filter((message) => message.eventType === 'canvasGeometryUpdated');
+
+    await act(async () =>
+      socket.emitMessage(JSON.stringify({ type: 'next', data: update('accepted') }))
+    );
+    vi.advanceTimersByTime(16);
+    expect(output.textContent).toBe('accepted');
+    expect(snapshots().at(-1)?.payload).toMatchObject({
+      nodes: { streamed: { coordinates: { x: 10, y: 50, width: 180, height: 40 } } },
+      sourceMap: map,
+    });
+
+    postMessage.mockClear();
+    await act(async () =>
+      socket.emitMessage(JSON.stringify({ type: 'next', data: update('rejected') }))
+    );
+    window.dispatchEvent(new Event('resize'));
+    vi.advanceTimersByTime(16);
+    expect(output.textContent).toBe('accepted');
+    expect(snapshots().at(-1)?.payload.sourceMap).toEqual(map);
+
+    vi.spyOn(document.body, 'getBoundingClientRect').mockReturnValue(
+      new globalThis.DOMRect(0, 0, 300, 100)
+    );
+    for (const sourceMap of [{}, { nodes: null }, { nodes: 42 }, { nodes: [] }]) {
+      await act(async () =>
+        socket.emitMessage(
+          JSON.stringify({
+            type: 'next',
+            data: { ...update('malformed'), extensions: { sourceMap } },
+          })
+        )
+      );
+      vi.advanceTimersByTime(16);
+      expect(output.textContent).toBe('malformed');
+      expect(snapshots().at(-1)?.payload).toEqual({
+        size: { width: 300, height: 100 },
+        nodes: {},
+        sourceMap: null,
+      });
+    }
+
+    await act(async () =>
+      socket.emitMessage(JSON.stringify({ type: 'next', data: update('mapless', false) }))
+    );
+    vi.advanceTimersByTime(16);
+    expect(output.textContent).toBe('mapless');
+    expect(snapshots().at(-1)?.payload).toMatchObject({ nodes: {}, sourceMap: null });
+
+    postMessage.mockClear();
+    act(() => root!.unmount());
+    root = undefined;
+    window.dispatchEvent(new Event('resize'));
+    vi.advanceTimersByTime(32);
+    expect(snapshots()).toEqual([]);
   });
 
   it('sends static status when a session credential is missing', async () => {

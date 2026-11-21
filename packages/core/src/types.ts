@@ -146,6 +146,7 @@ export interface ExperienceSourceMap {
   entries: unknown[];
   assets: unknown[];
   layers: unknown[];
+  sources?: unknown[];
   dataAssemblies: unknown[];
   nodes: Record<string, unknown>;
 }

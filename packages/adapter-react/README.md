@@ -281,3 +281,31 @@ numbers; Record leaves have one level. Order is one signed `fields.<apiName>` or
 Exports include `ExperienceParameters`, `ExperienceParameterValue`,
 `ExperienceParameterRecord`, and `ExperienceParameterOrder`.
 See the [collection/refetch example](../../README.md#runtime-experience-parameters).
+
+### Inspector geometry
+
+Enable canvas inspection with `useLivePreview({ ..., inspector: true })`.
+It is disabled by default. Inspection requests source maps on the Preview
+Session socket and measures only the last successfully resolved, committed plan.
+A rejected update keeps the previous plan and its matching geometry.
+An explicit `previewSessionOptions.sourceMap: true` still requests maps when
+inspection is disabled, without starting geometry observation.
+Add `data-cf-node-id` to the root element of each registered component, using
+its node ID from `useContentfulComponent`:
+
+```tsx
+const component = useContentfulComponent();
+return <div data-cf-node-id={component?.nodeId}>{children}</div>;
+```
+
+Each rendered component needs its own marked root. Use the node ID rather than
+the component definition ID. Duplicate marked roots for one ID are excluded.
+The editor uses the backend source map to group rendered nodes and select the
+authored component placement; the SDK only reports measurements.
+
+Inspection sends geometry and the full source map to the embedding parent with
+`window.parent.postMessage(..., "*")`, matching preview-status messaging. Enable
+it only in preview pages embedded by a parent that should receive that data.
+See [message shape and layout limits](../live-preview/README.md#inspector-geometry).
+Automatic inspector integration is currently available in React; other browser
+integrations can use the live-preview package's `observePreviewGeometry` helper.

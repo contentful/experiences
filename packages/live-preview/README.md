@@ -9,8 +9,8 @@ Direct by-ID `fetchExperience` accepts per-call `parameters`; see the
 Preview Sessions retain their existing unprefixed `context.parameters` map
 (for example `{ productId: 'foo123' }`), with values supported by the Session
 contract. The Contentful editor owns Session context changes. `fetchPreviewSession`
-loads the current hydrated snapshot; `createLivePreviewClient` consumes subsequent
-WebSocket snapshots. Replace the rendered plan from each update as usual.
+optionally loads a hydrated snapshot for server rendering; `createLivePreviewClient`
+receives the current snapshot on connection and subsequent WebSocket updates. Replace the rendered plan from each update as usual.
 These APIs do not mutate Session parameters or encode `parameter.*` query keys.
 
 ## API
@@ -22,6 +22,7 @@ type PreviewSessionOptions = {
   previewToken?: string;
   sessionId?: string;
   resourceResolution?: string;
+  sourceMap?: boolean;
   sessionHost?: string;
   debug?: boolean;
 };
@@ -74,10 +75,13 @@ createLivePreviewClient(
 sendPreviewStatus(status: LivePreviewStatus): void;
 ```
 
-Use `fetchPreviewSession` for the initial render when the Contentful app
-provides a `preview_session_id`. It fetches the current Preview Session
-snapshot and resolves it into a `PortableRenderPlan`. Use `createLivePreviewClient`
-to receive subsequent WebSocket updates.
+The WebSocket subscription delivers the current hydrated Experience as its first
+`next` message, then sends later updates. Browser-only preview can use
+`createLivePreviewClient` or the adapter hook without a separate HTTP fetch.
+
+Optionally use `fetchPreviewSession` to render an initial snapshot on the server.
+It resolves the response into a `PortableRenderPlan`; it is not required for
+client-side live preview or inspection.
 
 ```ts
 import { fetchPreviewSession } from '@contentful/experiences-live-preview';
@@ -143,3 +147,58 @@ transport interruptions. Unknown message types are ignored. The `next` payload
 contains an `Experience`. Adapters can build on this source and reuse its socket
 and message handling. Other frameworks can use the same framework-neutral
 client.
+
+## Inspector geometry
+
+React applications enable inspection with `useLivePreview({ ..., inspector: true })`.
+See the [component integration instructions](../adapter-react/README.md#inspector-geometry).
+Inspection is disabled by default.
+
+For other browser integrations, set `sourceMap: true` in `PreviewSessionOptions`
+and call `observePreviewGeometry(plan)` after the accepted plan has rendered.
+Call its returned cleanup function before replacing that plan or removing the preview.
+Importing the package is safe on the server; geometry observation requires a browser
+and a rendered document.
+
+```ts
+const stopObserving = observePreviewGeometry(plan);
+// Before replacing the rendered plan or removing the preview:
+stopObserving();
+```
+
+`sourceMap: true` adds `source_map=true` to the WebSocket subscription. The
+backend must support this opt-in and return its public map on the first and
+subsequent `next` responses. The SDK forwards the map unchanged, including
+`sources` and node `path` indexes; the editor interprets those paths. No extra
+HTTP fetch is required. An optional server-rendered plan can display before
+source maps arrive over the socket.
+
+The observer posts complete snapshots to `window.parent` with target origin
+`"*"`, matching preview-status messaging. Enable inspection only in a preview
+page whose embedding parent should receive its geometry and full source map.
+The message shape is:
+
+```ts
+{
+  source: 'customer-app',
+  eventType: 'canvasGeometryUpdated',
+  payload: {
+    size: { width, height },
+    nodes: { [nodeId]: { coordinates: { x, y, width, height } } },
+    sourceMap,
+  },
+}
+```
+
+Coordinates and size use document CSS pixels. Each runtime node ID must mark
+one existing component root with `data-cf-node-id`. Duplicate IDs and unmarked
+nodes have no geometry entry. A missing or unusable map produces `sourceMap: null`
+and an empty node table so the editor can clear its targets.
+
+Measurements are coalesced to animation frames after layout changes, including
+DOM mutations, resize, media load, and font readiness. Cleanup disconnects the
+observers and cancels pending measurements. The editor owns preview sizing and
+scrolling. This initial integration covers ordinary document flow at scale one;
+viewport-relative minimum heights, fixed or sticky positioning, independently
+scrolling containers, multiple roots
+per runtime ID, and slot targets are not supported inspection contracts.
