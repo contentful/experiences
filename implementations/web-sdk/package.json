@@ -37,7 +37,7 @@
     "@typescript-eslint/parser": "8.72.1",
     "@typescript-eslint/eslint-plugin": "8.72.1",
     "jiti": "2.6.1",
-    "@types/node": "22.20.1"
+    "@types/node": "22.20.5"
   },
   "overrides": {
     "@contentful/experiences-web": "$@contentful/experiences-web",
