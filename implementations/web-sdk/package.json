@@ -36,7 +36,7 @@
     "@eslint/js": "10.0.1",
     "@typescript-eslint/parser": "8.72.1",
     "@typescript-eslint/eslint-plugin": "8.72.1",
-    "jiti": "2.6.1",
+    "jiti": "2.7.0",
     "@types/node": "22.20.1"
   },
   "overrides": {
