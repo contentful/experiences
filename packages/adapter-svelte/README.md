@@ -1,6 +1,6 @@
 # @contentful/experiences-svelte
 
-> ⚠️ **Alpha.** Published to npm. APIs are unstable and will change.
+> ⚠️ **Beta Preview.** Experience Orchestration is in Beta Preview. The SDK stays on `0.x` until general availability, so minor versions can include breaking changes. See [Versioning and stability](../../README.md#versioning-and-stability).
 
 The Svelte adapter for the Contentful Experiences SDK. You bring your own Svelte 5 components; it renders Experience payloads from the Experience Delivery API (XDA) with them.
 

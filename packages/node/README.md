@@ -1,5 +1,7 @@
 # @contentful/experiences-node
 
+> ⚠️ **Beta Preview.** Experience Orchestration is in Beta Preview. The SDK stays on `0.x` until general availability, so minor versions can include breaking changes. See [Versioning and stability](../../README.md#versioning-and-stability).
+
 The Node.js SDK for fetching and resolving [Contentful Experiences](https://www.contentful.com/developers/docs/concepts/experiences/). It is the server-facing package for request handlers, server-rendered applications, and other Node processes. It produces `PortableRenderPlan` values; render them with the framework adapter your application uses.
 
 ## Install
