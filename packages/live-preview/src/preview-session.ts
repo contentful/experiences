@@ -3,6 +3,8 @@ import { isErrorPayload, isExperiencePayload, isRecord } from './experience-payl
 import { createWebSocketConnection, type WebSocketCloseEvent } from './websocket.js';
 import { previewSessionSubscribeUrl } from './preview-session-url.js';
 import { LivePreviewConnectionError } from './errors.js';
+import { capture } from './inspector-poc/capture.js';
+import { overrideInspectorResponse } from './inspector-poc/override-response.js';
 
 const RETRY_DELAYS_MS: readonly number[] = [100, 500, 1000];
 
@@ -110,7 +112,7 @@ export function subscribeToPreviewSession(
       return;
     }
 
-    onUpdate(message.payload);
+    onUpdate(overrideInspectorResponse(message.payload, options, capture));
   });
 
   return () => {
