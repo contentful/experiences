@@ -20,7 +20,11 @@
 </script>
 
 <script lang="ts">
+  import { getContentfulComponent } from '@contentful/experiences-svelte';
+
   import CardCta from './CardCta.svelte';
+
+  const contentful = getContentfulComponent();
 
   let { title, teaser, ctaLabel, ctaUrl, image, backgroundColor, color }: CardProps = $props();
 
@@ -39,7 +43,7 @@
   );
 </script>
 
-<article {style}>
+<article data-cf-node-id={contentful?.nodeId} {style}>
   {#if image}
     <img src={image} alt="" style="width: 100%; height: 180px; object-fit: cover;" />
   {/if}

@@ -8,9 +8,9 @@ Direct by-ID `fetchExperience` accepts per-call `parameters`; see the
 [runtime parameters guide](../../README.md#runtime-experience-parameters).
 Preview Sessions retain their existing unprefixed `context.parameters` map
 (for example `{ productId: 'foo123' }`), with values supported by the Session
-contract. The Contentful editor owns Session context changes. `fetchPreviewSession`
-loads the current hydrated snapshot; `createLivePreviewClient` consumes subsequent
-WebSocket snapshots. Replace the rendered plan from each update as usual.
+contract. The Contentful editor owns Session context changes. Use
+`fetchPreviewSession` for an initial Experience snapshot, such as server rendering.
+`createLivePreviewClient` receives the current Experience and later updates.
 These APIs do not mutate Session parameters or encode `parameter.*` query keys.
 
 ## API
@@ -22,6 +22,7 @@ type PreviewSessionOptions = {
   previewToken?: string;
   sessionId?: string;
   resourceResolution?: string;
+  sourceMap?: boolean;
   sessionHost?: string;
   debug?: boolean;
 };
@@ -74,10 +75,9 @@ createLivePreviewClient(
 sendPreviewStatus(status: LivePreviewStatus): void;
 ```
 
-Use `fetchPreviewSession` for the initial render when the Contentful app
-provides a `preview_session_id`. It fetches the current Preview Session
-snapshot and resolves it into a `PortableRenderPlan`. Use `createLivePreviewClient`
-to receive subsequent WebSocket updates.
+For browser-only preview, use `createLivePreviewClient`.
+Use `fetchPreviewSession` when you need an initial server-rendered snapshot. It
+returns a `PortableRenderPlan`:
 
 ```ts
 import { fetchPreviewSession } from '@contentful/experiences-live-preview';
@@ -133,13 +133,61 @@ const unsubscribe = client.subscribe(() => {
 ```
 
 This tells the Contentful app how to coordinate updates with the SDK. The
-subscription is required for this integration. Framework adapters set it up for
-you. Keep both unsubscribe functions and call them when the preview no longer
-uses the client.
+subscription is required for this integration. Keep both unsubscribe functions
+and call them when the preview no longer uses the client.
 
 A valid `next` message replaces the current data atomically. The client keeps
 the last valid data when it receives malformed messages, server errors, or
 transport interruptions. Unknown message types are ignored. The `next` payload
-contains an `Experience`. Adapters can build on this source and reuse its socket
-and message handling. Other frameworks can use the same framework-neutral
-client.
+contains an `Experience`.
+
+## Inspection geometry
+
+To include source maps in Preview Session updates, set `sourceMap: true` when
+creating the client. Source maps are not requested by default:
+
+```ts
+const client = createLivePreviewClient({ ...previewSessionOptions, sourceMap: true });
+```
+
+After rendering an Experience, pass its matching source map to
+`observePreviewGeometry` to send component bounds to the embedding editor:
+
+```ts
+import { observePreviewGeometry } from '@contentful/experiences-live-preview';
+
+const stopObserving = observePreviewGeometry({ sourceMap });
+```
+
+Supply the map matching the rendered DOM. Call `stopObserving()` before replacing
+the DOM or its map, or when removing the preview. Start observation again after
+rendering the new content.
+
+Mark one existing root per rendered component with `data-cf-node-id`. Use the
+node's runtime ID, matching its key in `sourceMap.nodes`, rather than the
+component definition ID. Duplicate marked roots for the same runtime ID cannot
+be inspected.
+
+The embedding editor receives `canvasGeometryUpdated` messages containing the
+full source map unchanged:
+
+```ts
+{
+  source: 'customer-app',
+  eventType: 'canvasGeometryUpdated',
+  payload: {
+    size: { width, height },
+    nodes: { [runtimeNodeId]: { coordinates: { x, y, width, height } } },
+    sourceMap,
+  },
+}
+```
+
+Coordinates and document size use document CSS pixels. A missing or unusable map
+produces `nodes: {}` and `sourceMap: null`, clearing the editor's targets.
+
+Continuous animation and scrolling do not refresh bounds. Inspection does not
+support independent scroll containers or slot targets. Viewport-based minimum
+heights can prevent the document from shrinking.
+
+Calling `stopObserving()` stops updates without sending a final empty snapshot.

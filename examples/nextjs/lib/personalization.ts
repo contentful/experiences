@@ -52,7 +52,7 @@ export function buildPagePersonalization(options: {
   // deliberately narrower page-event schema: consent is not accepted here,
   // and context.page excludes title (properties.title remains supported).
   const { gdpr: _gdpr, page: contextPage, ...context } = event.context;
-  const { title: _title, ...xdaContextPage } = contextPage;
+  const { title: _title, ...xdaContextPage } = contextPage ?? page;
 
   return {
     events: [

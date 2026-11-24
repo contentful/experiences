@@ -75,6 +75,50 @@ describe('fetchPreviewSession attribution', () => {
     expect(plan.diagnostics).toEqual([]);
   });
 
+  it('preserves Experience and Fragment attribution with Option C source-node layers', async () => {
+    const map = {
+      ...sourceMap('exp-a'),
+      variants: [
+        { type: 'personalization', id: 'default' },
+        {
+          type: 'personalization',
+          optimizationId: 'optimization-a',
+          variantId: 'variant-a',
+          variantIndex: 1,
+        },
+      ],
+      layers: [
+        { kind: 'Experience', id: 'exp-a', variants: [0] },
+        { kind: 'ExperienceTemplate', id: 'page' },
+        { kind: 'Slot', id: 'content', sourceEntity: 1 },
+        { kind: 'ExperienceFragment', id: 'fragment-a', variants: [1] },
+        { kind: 'Component', id: 'hero' },
+        { kind: 'SourceNode', sourceEntity: 0, id: 'hero-placement' },
+        { kind: 'SourceNode', sourceEntity: 3, id: 'fragment-content' },
+      ],
+      nodes: { n: { layers: [6, 4, 3, 5, 2, 1, 0], scope: 3, contentProperties: [] } },
+    };
+    mockClient.fetch.mockResolvedValue(respond(payload(map)));
+
+    const plan = await fetchPlan();
+
+    expect(plan.nodes[0]!.attribution!.scopes).toMatchObject([
+      { entityId: 'exp-a', entityKind: 'Experience', entityKindId: 'page' },
+      {
+        entityId: 'fragment-a',
+        entityKind: 'ExperienceFragment',
+        entityKindId: 'hero',
+        variantId: 'variant-a',
+        variantIndex: 1,
+        optimizationId: 'optimization-a',
+        parentExperienceId: 'exp-a',
+        parentVariantId: 'default',
+      },
+    ]);
+    expect(plan.nodes[0]!.attribution!.roots).toHaveLength(2);
+    expect(plan.diagnostics).toEqual([]);
+  });
+
   it('replaces attribution on the next update, even with a reused node id', async () => {
     mockClient.fetch.mockResolvedValueOnce(respond(payload(sourceMap('exp-a'))));
     mockClient.fetch.mockResolvedValueOnce(respond(payload(sourceMap('exp-b'))));

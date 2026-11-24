@@ -20,7 +20,7 @@ export function useLivePreviewExperience(
   getOptions: () => UseLivePreviewExperienceOptions
 ): UseLivePreviewExperienceResult {
   const initialPayload = getOptions().initialPayload;
-  let result = $state<LivePreviewResult>({
+  let result = $state.raw<LivePreviewResult>({
     data: initialPayload,
     error: undefined,
   });

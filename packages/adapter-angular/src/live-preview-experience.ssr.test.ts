@@ -4,6 +4,8 @@ import { provideServerRendering, renderApplication } from '@angular/platform-ser
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ExperiencePayload, PortableRenderPlan } from '@contentful/experiences-sdk-core';
+import { injectLivePreview, injectLivePreviewInspection } from './index.js';
+import { minimalSourceMap } from './test-fixtures/source-map.js';
 
 import {
   injectLivePreviewExperience,
@@ -45,7 +47,7 @@ const initialPlan: PortableRenderPlan = {
 };
 
 const DOCUMENT =
-  '<!doctype html><html><head></head><body><cf-raw-root></cf-raw-root><cf-resolved-root></cf-resolved-root></body></html>';
+  '<!doctype html><html><head></head><body><cf-raw-root></cf-raw-root><cf-resolved-root></cf-resolved-root><cf-inspected-root></cf-inspected-root></body></html>';
 
 @Component({
   selector: 'cf-raw-root',
@@ -78,6 +80,29 @@ class ResolvedRoot {
     resolveOptions: { config: { components: {} } },
   };
   readonly plan = injectExperiencePlan(() => this.options);
+}
+
+@Component({
+  selector: 'cf-inspected-root',
+  template: `<output>{{
+    livePreview.data()?.nodes?.[0]?.props?.content?.['title'] ?? ''
+  }}</output>`,
+})
+class InspectedRoot {
+  readonly livePreview = injectLivePreview(() => ({
+    initialPlan: { ...initialPlan, sourceMap: minimalSourceMap() },
+    previewSessionOptions: {
+      spaceId: 'space',
+      environmentId: 'environment',
+      previewToken: 'token',
+      sessionId: 'session',
+    },
+    resolveOptions: { config: { components: {} } },
+    inspection: true,
+  }));
+  constructor() {
+    injectLivePreviewInspection(() => ({ sourceMap: minimalSourceMap(), enabled: true }));
+  }
 }
 
 async function render<T>(component: new (...args: never[]) => T): Promise<string> {
@@ -116,6 +141,10 @@ describe('live-preview Angular helpers during SSR', () => {
   it('renders the initial experience plan without running the resolver', async () => {
     const html = await render(ResolvedRoot);
 
+    expect(html).toContain('server initial');
+  });
+  it('imports and renders integrated and standalone inspection without browser observation', async () => {
+    const html = await render(InspectedRoot);
     expect(html).toContain('server initial');
   });
 });

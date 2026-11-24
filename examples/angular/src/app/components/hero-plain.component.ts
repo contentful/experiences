@@ -1,5 +1,6 @@
 import { NgStyle } from '@angular/common';
 import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
+import { injectContentfulComponent } from '@contentful/experiences-angular';
 
 /**
  * Composed hero: title + CTA + hero image. All content properties come from a
@@ -11,7 +12,7 @@ import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@an
   imports: [NgStyle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section [ngStyle]="style()">
+    <section [attr.data-cf-node-id]="contentfulComponent()?.nodeId" [ngStyle]="style()">
       <div>
         @if (titleValue()) {
           <h1 style="margin: 0; font-size: 2.5rem;">{{ titleValue() }}</h1>
@@ -36,6 +37,7 @@ import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@an
   `,
 })
 export class HeroPlainComponent {
+  protected readonly contentfulComponent = injectContentfulComponent();
   protected readonly titleValue = signal<string | undefined>(undefined);
   protected readonly ctaLabelValue = signal<string | undefined>(undefined);
   protected readonly ctaUrlValue = signal<string | undefined>(undefined);

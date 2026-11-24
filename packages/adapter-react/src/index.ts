@@ -39,6 +39,8 @@ export type {
   UseLivePreviewExperienceOptions,
   UseLivePreviewExperienceResult,
 } from './use-live-preview-experience.js';
+export { useLivePreviewInspection } from './use-live-preview-inspection.js';
+export type { UseLivePreviewInspectionOptions } from './use-live-preview-inspection.js';
 export { useLivePreview } from './use-live-preview.js';
 export type { UseLivePreviewOptions, UseLivePreviewResult } from './use-live-preview.js';
 

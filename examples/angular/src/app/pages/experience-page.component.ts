@@ -67,6 +67,7 @@ export class ExperiencePageComponent {
   protected readonly renderMetadata = { ...this.data?.metadata, renderer: 'server' };
   protected readonly livePreview = injectLivePreview(() => ({
     previewSessionOptions: this.livePreviewEnabled ? this.previewSessionOptions : undefined,
+    inspection: this.livePreviewEnabled,
     initialPlan: this.experience ?? undefined,
     resolveOptions: {
       config: experienceConfig,

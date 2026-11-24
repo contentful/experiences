@@ -2,6 +2,8 @@
 
 import type { CSSProperties } from 'react';
 
+import { useContentfulComponent } from '@contentful/experiences-react';
+
 export interface ImageProps {
   src?: string;
   alt?: string | null;
@@ -10,6 +12,7 @@ export interface ImageProps {
 }
 
 export function Image({ src, alt, radius }: ImageProps) {
+  const component = useContentfulComponent();
   if (!src) return null;
 
   const style: CSSProperties = {
@@ -20,5 +23,5 @@ export function Image({ src, alt, radius }: ImageProps) {
     borderRadius: radius,
   };
 
-  return <img src={src} alt={alt ?? ''} style={style} />;
+  return <img data-cf-node-id={component?.nodeId} src={src} alt={alt ?? ''} style={style} />;
 }

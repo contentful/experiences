@@ -25,6 +25,7 @@ export function LivePreviewExperience({
   const livePreview = useLivePreview({
     previewSessionOptions,
     initialPlan,
+    inspection: true,
     resolveOptions: {
       config: experienceConfig,
       metadata,

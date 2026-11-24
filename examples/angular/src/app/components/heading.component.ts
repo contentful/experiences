@@ -1,5 +1,6 @@
 import { NgStyle } from '@angular/common';
 import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
+import { injectContentfulComponent } from '@contentful/experiences-angular';
 
 const HEADING_TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as const;
 type HeadingTag = (typeof HEADING_TAGS)[number];
@@ -24,27 +25,40 @@ type HeadingTag = (typeof HEADING_TAGS)[number];
   template: `
     @switch (tag()) {
       @case ('h1') {
-        <h1 [ngStyle]="style()">{{ textValue() }}</h1>
+        <h1 [attr.data-cf-node-id]="contentfulComponent()?.nodeId" [ngStyle]="style()">
+          {{ textValue() }}
+        </h1>
       }
       @case ('h3') {
-        <h3 [ngStyle]="style()">{{ textValue() }}</h3>
+        <h3 [attr.data-cf-node-id]="contentfulComponent()?.nodeId" [ngStyle]="style()">
+          {{ textValue() }}
+        </h3>
       }
       @case ('h4') {
-        <h4 [ngStyle]="style()">{{ textValue() }}</h4>
+        <h4 [attr.data-cf-node-id]="contentfulComponent()?.nodeId" [ngStyle]="style()">
+          {{ textValue() }}
+        </h4>
       }
       @case ('h5') {
-        <h5 [ngStyle]="style()">{{ textValue() }}</h5>
+        <h5 [attr.data-cf-node-id]="contentfulComponent()?.nodeId" [ngStyle]="style()">
+          {{ textValue() }}
+        </h5>
       }
       @case ('h6') {
-        <h6 [ngStyle]="style()">{{ textValue() }}</h6>
+        <h6 [attr.data-cf-node-id]="contentfulComponent()?.nodeId" [ngStyle]="style()">
+          {{ textValue() }}
+        </h6>
       }
       @default {
-        <h2 [ngStyle]="style()">{{ textValue() }}</h2>
+        <h2 [attr.data-cf-node-id]="contentfulComponent()?.nodeId" [ngStyle]="style()">
+          {{ textValue() }}
+        </h2>
       }
     }
   `,
 })
 export class HeadingComponent {
+  protected readonly contentfulComponent = injectContentfulComponent();
   protected readonly textValue = signal('');
   protected readonly asValue = signal<string | undefined>(undefined);
   protected readonly alignValue = signal<string | undefined>(undefined);

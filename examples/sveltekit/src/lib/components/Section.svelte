@@ -20,6 +20,10 @@
 </script>
 
 <script lang="ts">
+  import { getContentfulComponent } from '@contentful/experiences-svelte';
+
+  const contentful = getContentfulComponent();
+
   let {
     children,
     direction = 'column',
@@ -52,7 +56,7 @@
   });
 </script>
 
-<div {style}>
+<div data-cf-node-id={contentful?.nodeId} {style}>
   {#each children ?? [] as child}
     {@render child()}
   {/each}

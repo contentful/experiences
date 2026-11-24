@@ -1,5 +1,6 @@
 import { NgStyle } from '@angular/common';
 import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
+import { injectContentfulComponent } from '@contentful/experiences-angular';
 
 // Minimal rich-text renderer — matches the Next.js and SvelteKit examples'
 // coverage: paragraphs + bold/italic marks. The document shape follows
@@ -42,7 +43,7 @@ function extractDoc(input: unknown): RichDoc | null {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (doc(); as document) {
-      <div [ngStyle]="style()">
+      <div [attr.data-cf-node-id]="contentfulComponent()?.nodeId" [ngStyle]="style()">
         @for (paragraph of document.content; track $index) {
           <p style="margin: 0 0 0.75em; line-height: 1.5;">
             @for (span of paragraph.content; track $index) {
@@ -61,6 +62,7 @@ function extractDoc(input: unknown): RichDoc | null {
   `,
 })
 export class RichTextComponent {
+  protected readonly contentfulComponent = injectContentfulComponent();
   private readonly documentValue = signal<unknown>(undefined);
   protected readonly alignValue = signal<string | undefined>(undefined);
   protected readonly fontSizeValue = signal<string | undefined>(undefined);

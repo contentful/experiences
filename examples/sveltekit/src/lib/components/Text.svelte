@@ -8,6 +8,10 @@
 </script>
 
 <script lang="ts">
+  import { getContentfulComponent } from '@contentful/experiences-svelte';
+
+  const contentful = getContentfulComponent();
+
   let { text, align, fontSize = '16px' }: TextProps = $props();
 
   const style = $derived(
@@ -23,4 +27,4 @@
   );
 </script>
 
-<p {style}>{text ?? ''}</p>
+<p data-cf-node-id={contentful?.nodeId} {style}>{text ?? ''}</p>

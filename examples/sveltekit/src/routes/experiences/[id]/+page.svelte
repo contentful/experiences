@@ -12,6 +12,7 @@
   const livePreview = useLivePreview(() => ({
     previewSessionOptions: data.livePreview ? data.previewSessionOptions : undefined,
     initialPlan: data.experience,
+    inspection: data.livePreview,
     resolveOptions: {
       config: experienceConfig,
       metadata: data.metadata,

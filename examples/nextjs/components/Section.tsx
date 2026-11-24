@@ -2,6 +2,8 @@
 
 import type { CSSProperties, ReactNode } from 'react';
 
+import { useContentfulComponent } from '@contentful/experiences-react';
+
 type Align = 'start' | 'center' | 'end' | 'stretch';
 
 const ALIGN: Record<Align, CSSProperties['alignItems']> = {
@@ -41,6 +43,7 @@ export interface SectionProps {
  * true of unrecognized content props too; naming what you use avoids both.
  */
 export function Section(props: SectionProps) {
+  const component = useContentfulComponent();
   const {
     children,
     direction = 'column',
@@ -83,5 +86,9 @@ export function Section(props: SectionProps) {
     delete style.alignItems;
   }
 
-  return <div style={style}>{children}</div>;
+  return (
+    <div data-cf-node-id={component?.nodeId} style={style}>
+      {children}
+    </div>
+  );
 }

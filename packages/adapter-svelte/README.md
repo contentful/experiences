@@ -123,6 +123,55 @@ experience while an update is being resolved.
 The live-preview results also expose `error` when the Preview Session connection
 fails. The last valid `data` remains available.
 
+#### Inspection geometry
+
+Inspection is disabled by default. Add `inspection: true` to `useLivePreview`
+to request the full source map and send rendered component bounds to the
+embedding editor. The getter can change `inspection` and
+`previewSessionOptions.sourceMap` while mounted. Set
+`previewSessionOptions.sourceMap: true` to request maps without inspection.
+
+```svelte
+<script lang="ts">
+  import { useLivePreview } from '@contentful/experiences-svelte';
+
+  const livePreview = useLivePreview(() => ({
+    previewSessionOptions,
+    initialPlan,
+    inspection: true,
+    resolveOptions: { config: experienceConfig },
+  }));
+</script>
+
+<ClientExperienceRenderer experience={livePreview.data} config={experienceConfig} />
+```
+
+Mark one root element per component occurrence with the runtime node ID from
+`getContentfulComponent`. Duplicate marked roots for the same runtime ID cannot be
+inspected.
+
+```svelte
+<script lang="ts">
+  import { getContentfulComponent } from '@contentful/experiences-svelte';
+
+  const contentful = getContentfulComponent();
+</script>
+
+<section data-cf-node-id={contentful?.nodeId}>...</section>
+```
+
+For an app that already loads and renders its data, use the standalone helper:
+
+```ts
+import { useLivePreviewInspection } from '@contentful/experiences-svelte';
+
+useLivePreviewInspection(() => ({ sourceMap: plan.sourceMap, enabled: true }));
+```
+
+Supply the map matching the rendered content. The helper only observes the
+supplied map. Observation stops automatically when disabled or the component is
+destroyed.
+
 ### Renderers
 
 ```ts

@@ -6,11 +6,13 @@ import {
   type ExperiencePlanResolveOptions,
 } from './use-experience-plan.svelte.js';
 import { useLivePreviewExperience } from './use-live-preview-experience.svelte.js';
+import { useLivePreviewInspection } from './use-live-preview-inspection.svelte.js';
 
 export interface UseLivePreviewOptions {
   previewSessionOptions?: PreviewSessionOptions;
   initialPayload?: ExperiencePayload;
   initialPlan?: PortableRenderPlan;
+  inspection?: boolean;
   resolveOptions: ExperiencePlanResolveOptions;
 }
 
@@ -20,15 +22,23 @@ export interface UseLivePreviewResult {
 }
 
 export function useLivePreview(getOptions: () => UseLivePreviewOptions): UseLivePreviewResult {
-  const livePreview = useLivePreviewExperience(() => {
-    const { previewSessionOptions, initialPayload } = getOptions();
-    return { previewSessionOptions, initialPayload };
-  });
+  const initialPayload = getOptions().initialPayload;
+  const previewSessionOptions = $derived(getOptions().previewSessionOptions);
+  const sourceMap = $derived(getOptions().inspection || previewSessionOptions?.sourceMap);
+  const livePreview = useLivePreviewExperience(() => ({
+    previewSessionOptions: previewSessionOptions && { ...previewSessionOptions, sourceMap },
+    initialPayload,
+  }));
 
   const plan = useExperiencePlan(() => {
     const { initialPlan, resolveOptions } = getOptions();
     return { payload: livePreview.data, initialPlan, resolveOptions };
   });
+
+  useLivePreviewInspection(() => ({
+    sourceMap: plan.data?.sourceMap,
+    enabled: getOptions().inspection,
+  }));
 
   return {
     get data() {

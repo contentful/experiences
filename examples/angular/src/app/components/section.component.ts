@@ -1,6 +1,10 @@
 import { NgStyle } from '@angular/common';
 import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
-import { NodesRenderer, type PortableRenderNode } from '@contentful/experiences-angular';
+import {
+  NodesRenderer,
+  injectContentfulComponent,
+  type PortableRenderNode,
+} from '@contentful/experiences-angular';
 
 /**
  * Structural container. The payload's `children` slot lands on a `children`
@@ -20,12 +24,13 @@ import { NodesRenderer, type PortableRenderNode } from '@contentful/experiences-
   imports: [NgStyle, NodesRenderer],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div [ngStyle]="style()">
+    <div [attr.data-cf-node-id]="contentfulComponent()?.nodeId" [ngStyle]="style()">
       <ng-container *cfNodes="childrenValue()"></ng-container>
     </div>
   `,
 })
 export class SectionComponent {
+  protected readonly contentfulComponent = injectContentfulComponent();
   protected readonly childrenValue = signal<PortableRenderNode[]>([]);
   protected readonly directionValue = signal<'row' | 'column' | undefined>(undefined);
   protected readonly columnsValue = signal<string | undefined>(undefined);
