@@ -32,13 +32,49 @@ npm run bootstrap                      # seeds the content, a Destination, and i
 
 ```sh
 cd ../sveltekit
-cp .env.example .env                   # fill in server and PUBLIC_* configuration below
+cp .env.example .env                   # fill in the variables described below
 npm run dev
 ```
 
-`DESTINATION_ID` is server-generated. The bootstrap prints it at the end; paste it into `.env` and `PUBLIC_DESTINATION_ID`. Set `PUBLIC_SPACE_ID` and `PUBLIC_ENVIRONMENT_ID` to the same scope as `SPACE_ID` and `ENVIRONMENT_ID`. Choose an explicitly browser-approved `PUBLIC_CDA_TOKEN` separately from private `CDA_TOKEN`.
+#### Environment variables: private vs `PUBLIC_*`
 
-For an existing `.env`, retain its private values and add the `PUBLIC_*` fields from `.env.example`; no automatic token migration occurs. `CPA_TOKEN` now stays server-only. To enable Preview, configure both `LIVE_PREVIEW_ENABLED=true` and `PUBLIC_LIVE_PREVIEW_ENABLED=true`, private `CPA_TOKEN` and separately browser-approved `PUBLIC_CPA_TOKEN`. Leave both gates false until the deployment's Preview API is ready. Existing environment files are not overwritten by this migration.
+SvelteKit splits environment variables by prefix:
+
+| Prefix    | Imported from          | Visible to                                                                         |
+| --------- | ---------------------- | ---------------------------------------------------------------------------------- |
+| none      | `$env/dynamic/private` | Server only. Importing it from a browser module fails the build.                   |
+| `PUBLIC_` | `$env/dynamic/public`  | Server **and** browser. The value ships to the client and is readable in devtools. |
+
+The example runs the SDK in two places, so it needs both sets:
+
+- **Server binding** (`src/lib/server/experiences.ts`) reads the private variables. It renders the first page during SSR, so if these are empty, every page shows "The requested experience is currently unavailable."
+- **Browser SDK** (`src/lib/experiences.ts`) reads the `PUBLIC_*` variables. After hydration it handles client-side navigation, consent, events and live-preview updates, calling Contentful directly from the browser.
+
+SvelteKit never exposes an unprefixed variable to the browser, so the IDs appear twice. Fill in both halves:
+
+```sh
+# Server (private)
+SPACE_ID=<your space id>
+ENVIRONMENT_ID=master
+DESTINATION_ID=<printed at the end of npm run bootstrap>
+CDA_TOKEN=<Content Delivery API token>
+CPA_TOKEN=
+LIVE_PREVIEW_ENABLED=false
+
+# Browser (PUBLIC_)
+PUBLIC_SPACE_ID=<same as SPACE_ID>
+PUBLIC_ENVIRONMENT_ID=<same as ENVIRONMENT_ID>
+PUBLIC_DESTINATION_ID=<same as DESTINATION_ID>
+PUBLIC_CDA_TOKEN=<Content Delivery API token>
+PUBLIC_CPA_TOKEN=
+PUBLIC_LIVE_PREVIEW_ENABLED=false
+```
+
+- **IDs** are not secret; use the same values in both halves.
+- **Delivery tokens** (`CDA_TOKEN`, `PUBLIC_CDA_TOKEN`) can only read published content. For local development the same token works for both. In production, use a separate API key for the browser so it can be revoked on its own, or route browser traffic through an authenticated proxy (see below) and leave `PUBLIC_CDA_TOKEN` empty.
+- **Preview tokens** (`CPA_TOKEN`, `PUBLIC_CPA_TOKEN`) can read draft content. They are only needed for live preview, which also requires `LIVE_PREVIEW_ENABLED=true` (server) and `PUBLIC_LIVE_PREVIEW_ENABLED=true` (browser). Leave both gates `false` and both tokens empty until your Preview API is ready.
+
+Restart `npm run dev` after editing `.env`; a running server does not pick up changes.
 
 A trusted authenticated proxy can replace browser credentials by configuring the existing Web `delivery.host`, Preview host options, `personalizationBaseUrl` and `analyticsBaseUrl` in `src/lib/experiences.ts`. Configure each required service explicitly: changing `delivery.host` alone does not reroute events. The proxy must support Delivery (including Destinations), Preview and Optimization requests and their CORS/authentication policies. `/_exo/primary` only prepares/reads the primary server result; it is not a general Delivery or event proxy. Never put private `$env` imports, server tokens or a server binding into a browser module.
 
