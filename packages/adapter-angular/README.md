@@ -150,6 +150,59 @@ plan. The current plan stays in place until the new plan is ready.
 The live-preview results also expose an `error` signal when the Preview Session
 connection fails. The last valid `data` remains available.
 
+### Inspection geometry
+
+Set `inspection: true` on `injectLivePreview` to send rendered component bounds
+and the full source map to the embedding editor. Inspection is disabled by default.
+The option and `previewSessionOptions.sourceMap` react to signal changes while
+mounted. Set `previewSessionOptions.sourceMap: true` to request maps without
+inspection.
+
+```ts
+readonly livePreview = injectLivePreview(() => ({
+  previewSessionOptions: this.previewSessionOptions(),
+  initialPlan: this.initialPlan,
+  resolveOptions: { config: experienceConfig },
+  inspection: this.inspectionEnabled(),
+}));
+```
+
+Mark one existing root element per rendered component with the runtime node ID
+from `injectContentfulComponent()`. The helper returns a signal. Do not use the
+component registration ID. Duplicate marked roots for the same runtime ID cannot
+be inspected.
+
+```ts
+import { Component } from '@angular/core';
+import { injectContentfulComponent } from '@contentful/experiences-angular';
+
+@Component({
+  selector: 'app-heading',
+  template: `<h2 [attr.data-cf-node-id]="component()?.nodeId">
+    {{ component()?.content?.['title'] }}
+  </h2>`,
+})
+export class HeadingComponent {
+  readonly component = injectContentfulComponent();
+}
+```
+
+For a render managed outside `injectLivePreview`, use the public standalone
+helper in an injection context:
+
+```ts
+constructor() {
+  injectLivePreviewInspection(() => ({
+    sourceMap: this.renderedPlan()?.sourceMap,
+    enabled: this.inspectionEnabled(),
+  }));
+}
+```
+
+Supply the map matching the rendered content. The helper only observes the
+supplied map. Observation stops automatically when disabled or the component is
+destroyed.
+
 ### Renderers
 
 Every renderer is standalone; add it to your own component's `imports`.

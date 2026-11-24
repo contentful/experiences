@@ -15,3 +15,5 @@ export type {
   PreviewSessionResolveOptions,
 } from './fetch-preview-session.js';
 export { NotFoundError } from '@contentful/experiences-client';
+export { observePreviewGeometry } from './preview-geometry.js';
+export type { PreviewGeometryOptions, CanvasGeometryMessage } from './preview-geometry.js';

@@ -99,6 +99,7 @@ export default [
       globals: {
         $state: 'readonly',
         $effect: 'readonly',
+        $derived: 'readonly',
       },
     },
   },

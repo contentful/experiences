@@ -32,6 +32,8 @@ export type {
 } from './use-live-preview-experience.svelte.js';
 export { useLivePreview } from './use-live-preview.svelte.js';
 export type { UseLivePreviewOptions, UseLivePreviewResult } from './use-live-preview.svelte.js';
+export { useLivePreviewInspection } from './use-live-preview-inspection.svelte.js';
+export type { UseLivePreviewInspectionOptions } from './use-live-preview-inspection.svelte.js';
 
 export { useExperiencePlan } from './use-experience-plan.svelte.js';
 export type {

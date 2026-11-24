@@ -23,7 +23,7 @@ export interface UseExperiencePlanResult {
 export function useExperiencePlan(
   getOptions: () => UseExperiencePlanOptions
 ): UseExperiencePlanResult {
-  let plan = $state<PortableRenderPlan | undefined>(getOptions().initialPlan);
+  let plan = $state.raw<PortableRenderPlan | undefined>(getOptions().initialPlan);
 
   $effect(() => {
     const { payload, resolveOptions } = getOptions();

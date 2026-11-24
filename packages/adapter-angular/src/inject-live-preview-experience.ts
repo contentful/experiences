@@ -29,6 +29,7 @@ function areConnectionOptionsEqual(first: ConnectionOptions, second: ConnectionO
     first?.previewToken === second.previewToken &&
     first?.sessionId === second.sessionId &&
     first?.resourceResolution === second.resourceResolution &&
+    first?.sourceMap === second.sourceMap &&
     first?.sessionHost === second.sessionHost &&
     first?.debug === second.debug
   );

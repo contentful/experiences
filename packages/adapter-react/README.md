@@ -281,3 +281,35 @@ numbers; Record leaves have one level. Order is one signed `fields.<apiName>` or
 Exports include `ExperienceParameters`, `ExperienceParameterValue`,
 `ExperienceParameterRecord`, and `ExperienceParameterOrder`.
 See the [collection/refetch example](../../README.md#runtime-experience-parameters).
+
+### Inspection geometry
+
+Enable inspection with `useLivePreview({ ..., inspection: true })` to send
+rendered component bounds and the full source map to the embedding editor.
+Inspection is off by default. You can change `inspection` and
+`previewSessionOptions.sourceMap` while mounted. Set
+`previewSessionOptions.sourceMap: true` to request maps without inspection.
+
+Mark one root per rendered component using the runtime ID from
+`useContentfulComponent`, rather than its definition ID:
+
+```tsx
+const component = useContentfulComponent();
+return <div data-cf-node-id={component?.nodeId}>{children}</div>;
+```
+
+Duplicate marked roots for the same runtime ID cannot be inspected.
+
+For an app that already loads and renders its data, use the standalone hook:
+
+```tsx
+import { useLivePreviewInspection } from '@contentful/experiences-react';
+
+function Preview({ plan, enabled }) {
+  useLivePreviewInspection({ sourceMap: plan.sourceMap, enabled });
+  return <ClientExperienceRenderer experience={plan} config={experienceConfig} />;
+}
+```
+
+Supply the map matching the rendered content. The hook only observes the supplied
+map. Observation stops automatically when disabled or unmounted.

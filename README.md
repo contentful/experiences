@@ -1360,7 +1360,16 @@ When a plan carries a usable source map, the SDK resolves which reportable scope
 
 Only nodes with an `id` get attribution; the SDK never generates ids. A map it cannot use (an unsupported `version`, or a malformed one) yields no attribution and never adds a diagnostic, so Live Preview keeps rendering. Each resolve rebuilds attribution from scratch, so a payload without a map clears it.
 
-Live Preview plans carry attribution only if the preview-session endpoints return a source map, which the SDK does not request today.
+Live Preview can send rendered component bounds and the full source map to the
+embedding editor. Enable it with `inspection: true` on React or Svelte's
+`useLivePreview`, or Angular's `injectLivePreview`. Inspection is off by default.
+Set `previewSessionOptions.sourceMap: true` to request maps without inspection.
+
+See the [React](./packages/adapter-react/README.md#inspection-geometry),
+[Angular](./packages/adapter-angular/README.md#inspection-geometry), and
+[Svelte](./packages/adapter-svelte/README.md#inspection-geometry) guides for root
+marking and standalone inspection helpers. For a framework-neutral integration,
+use [`observePreviewGeometry`](./packages/live-preview/README.md#inspection-geometry).
 
 #### Which map wins
 
