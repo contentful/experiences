@@ -2,6 +2,8 @@
 
 import type { CSSProperties } from 'react';
 
+import { useContentfulComponent } from '@contentful/experiences-react';
+
 export interface HeroPlainProps {
   title?: string;
   body?: unknown;
@@ -26,6 +28,7 @@ export function HeroPlain({
   backgroundColor,
   color,
 }: HeroPlainProps) {
+  const component = useContentfulComponent();
   const style: CSSProperties = {
     display: 'grid',
     gridTemplateColumns: image ? '1fr 1fr' : '1fr',
@@ -37,7 +40,7 @@ export function HeroPlain({
   };
 
   return (
-    <section style={style}>
+    <section data-cf-node-id={component?.nodeId} style={style}>
       <div>
         {title && <h1 style={{ margin: 0, fontSize: '2.5rem' }}>{title}</h1>}
         {ctaLabel && ctaUrl && (

@@ -1,13 +1,17 @@
 import { NgStyle } from '@angular/common';
 import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
+import { injectContentfulComponent } from '@contentful/experiences-angular';
 
 @Component({
   selector: 'app-text',
   imports: [NgStyle],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `<p [ngStyle]="style()">{{ textValue() }}</p>`,
+  template: `<p [attr.data-cf-node-id]="contentfulComponent()?.nodeId" [ngStyle]="style()">
+    {{ textValue() }}
+  </p>`,
 })
 export class TextComponent {
+  protected readonly contentfulComponent = injectContentfulComponent();
   protected readonly textValue = signal('');
   protected readonly alignValue = signal<string | undefined>(undefined);
   protected readonly fontSizeValue = signal<string | undefined>(undefined);

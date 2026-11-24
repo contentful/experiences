@@ -2,6 +2,8 @@
 
 import type { CSSProperties, ReactNode } from 'react';
 
+import { useContentfulComponent } from '@contentful/experiences-react';
+
 export interface TextProps {
   text?: string | null;
   children?: ReactNode;
@@ -11,6 +13,7 @@ export interface TextProps {
 }
 
 export function Text({ text, children, align, fontSize = '16px' }: TextProps) {
+  const component = useContentfulComponent();
   if (!text && !children) return null;
 
   const style: CSSProperties = {
@@ -22,7 +25,7 @@ export function Text({ text, children, align, fontSize = '16px' }: TextProps) {
   };
 
   return (
-    <p style={style}>
+    <p data-cf-node-id={component?.nodeId} style={style}>
       {text}
       {children}
     </p>

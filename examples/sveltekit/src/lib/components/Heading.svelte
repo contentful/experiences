@@ -19,6 +19,10 @@
   string. `align` is this design system's shorthand for `text-align`.
 -->
 <script lang="ts">
+  import { getContentfulComponent } from '@contentful/experiences-svelte';
+
+  const contentful = getContentfulComponent();
+
   let { text, as: tag = 'h2', align, fontSize, fontWeight }: HeadingProps = $props();
 
   const style = $derived(
@@ -34,4 +38,4 @@
   );
 </script>
 
-<svelte:element this={tag} {style}>{text ?? ''}</svelte:element>
+<svelte:element this={tag} data-cf-node-id={contentful?.nodeId} {style}>{text ?? ''}</svelte:element>

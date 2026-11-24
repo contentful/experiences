@@ -127,6 +127,11 @@ Set `CPA_TOKEN`, then open `/experiences/landing?preview_session_id=<session-id>
 
 The Contentful app supplies `preview_session_id`. When it and `CPA_TOKEN` are both available, the route uses `fetchPreviewSession` for the initial plan and starts the browser subscription. `?preview=true` remains an explicit way to use the Preview API without a live session.
 
+The route enables inspection with `inspection: data.livePreview` in `useLivePreview`.
+Each registered component marks one root element with
+`data-cf-node-id={contentful?.nodeId}`, where
+`const contentful = getContentfulComponent()` reads its runtime node ID.
+
 ### Tokens summary
 
 | Token       | API                | Used by                                      | Required?             |
@@ -170,7 +175,7 @@ examples/sveltekit/
 
 Identical to the Next.js example:
 
-1. **Design-system components** stay portable, with no `@contentful/*` imports.
+1. **Design-system components** style themselves from props and use `getContentfulComponent()` to mark their inspection roots.
 2. **`experience-config.ts`** is the wiring layer that maps Contentful component-type IDs to your design-system components.
 3. **Routes** call `fetchExperience(experienceOptions, clientOptions, resolveOptions)` and pass the result to `<ServerExperienceRenderer>`, wrapped in a try/catch that routes `NotFoundError` to SvelteKit's `error(404, ...)`.
 

@@ -2,6 +2,8 @@
 
 import type { CSSProperties, ReactNode } from 'react';
 
+import { useContentfulComponent } from '@contentful/experiences-react';
+
 export type HeadingTag = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
 
 export interface HeadingProps {
@@ -25,6 +27,7 @@ export interface HeadingProps {
  * property name doesn't have to match a CSS property name, you map it.
  */
 export function Heading({ text, children, as = 'h2', align, fontSize, fontWeight }: HeadingProps) {
+  const component = useContentfulComponent();
   const Tag = as;
 
   const style: CSSProperties = {
@@ -36,7 +39,7 @@ export function Heading({ text, children, as = 'h2', align, fontSize, fontWeight
   };
 
   return (
-    <Tag style={style}>
+    <Tag data-cf-node-id={component?.nodeId} style={style}>
       {text}
       {children}
     </Tag>

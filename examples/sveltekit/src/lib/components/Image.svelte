@@ -6,9 +6,18 @@
 </script>
 
 <script lang="ts">
+  import { getContentfulComponent } from '@contentful/experiences-svelte';
+
+  const contentful = getContentfulComponent();
+
   let { src, alt = '' }: ImageProps = $props();
 </script>
 
 {#if src}
-  <img {src} {alt} style="max-width: 100%; height: auto; display: block;" />
+  <img
+    data-cf-node-id={contentful?.nodeId}
+    {src}
+    {alt}
+    style="max-width: 100%; height: auto; display: block;"
+  />
 {/if}

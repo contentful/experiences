@@ -157,6 +157,10 @@ The route wires this through `fetchExperience`'s client options — both tokens 
 
 Set `CPA_TOKEN`, then open `/experiences/landing?preview_session_id=<session-id>`. The route reads the session ID from the URL and passes it, together with `spaceId`, `environmentId`, and `CPA_TOKEN` as `previewToken`, to `useLivePreview`. The server-fetched plan is rendered first; later complete Experience updates replace it in the client renderer.
 
+This example enables inspection with `inspection: true`. Registered components
+mark one root with `data-cf-node-id`, using the runtime node ID from
+`useContentfulComponent`, so the embedding editor can identify them.
+
 The Contentful app supplies `preview_session_id`. When it and `CPA_TOKEN` are both available, the route uses `fetchPreviewSession` for the initial plan and starts the browser subscription. `?preview=true` remains an explicit way to use the Preview API without a live session.
 
 ### Tokens summary
@@ -235,10 +239,10 @@ examples/nextjs/
 
 The example separates **two layers**:
 
-1. **Design-system components** (`components/Section.tsx`, `components/Heading.tsx`, …) receive their **content** props (`text`, `label`, `src`) plus their **resolved design** props (`backgroundColor`, `gap`, `align`, …) together, and style themselves from those props. Each one names the design keys it consumes in its own props interface. Since they import nothing SDK-shaped and are just functions of their props, they're easy to unit-test and render in isolation.
+1. **Design-system components** (`components/Section.tsx`, `components/Heading.tsx`, …) receive their **content** props (`text`, `label`, `src`) plus their **resolved design** props (`backgroundColor`, `gap`, `align`, …) together, and style themselves from those props. Each one names the design keys it consumes in its own props interface. Each registered component uses `useContentfulComponent()` to mark its inspection root.
 2. **The experience config** (`lib/experience-config.tsx`) is the integration layer: it maps each `componentId` to a component (bare, or `defineComponent({...})` for `defaults` / `resolveData`), maps `experienceTemplateId`s under `experienceTemplates`, and wires `resolveToken`. It composes into the single `experienceConfig` object the renderer takes.
 
-Why split this way: SDK-shaped concerns (registration, defaults, async resolvers, token resolution) all live in one file you can scan to understand the whole integration surface.
+The config keeps registration, defaults, async resolvers, and token resolution together.
 
 ```tsx
 // components/Heading.tsx: content prop + design keys declared as props
@@ -251,7 +255,6 @@ export function Heading({ text, as = 'h2', fontSize, fontWeight }: HeadingProps)
 ```
 
 ```tsx
-// components/Section.tsx: design keys declared as props, no SDK import at all
 'use client';
 
 export function Section({ direction = 'column', gap, backgroundColor, children }: SectionProps) {

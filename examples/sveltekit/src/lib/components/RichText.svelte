@@ -27,6 +27,10 @@
 </script>
 
 <script lang="ts">
+  import { getContentfulComponent } from '@contentful/experiences-svelte';
+
+  const contentful = getContentfulComponent();
+
   let { document, align, fontSize }: RichTextProps = $props();
   const doc = $derived(extractDoc(document));
 
@@ -38,7 +42,7 @@
 </script>
 
 {#if doc}
-  <div {style}>
+  <div data-cf-node-id={contentful?.nodeId} {style}>
     {#each doc.content as p}
       <p style="margin: 0 0 0.75em; line-height: 1.5;">
         {#each p.content as span}

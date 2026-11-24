@@ -2,6 +2,8 @@
 
 import type { CSSProperties } from 'react';
 
+import { useContentfulComponent } from '@contentful/experiences-react';
+
 export interface ButtonProps {
   label?: string;
   url?: string | null;
@@ -19,6 +21,7 @@ export function Button({
   backgroundColor = '#4f39f6',
   color = '#ffffff',
 }: ButtonProps) {
+  const component = useContentfulComponent();
   const style: CSSProperties = {
     display: 'inline-flex',
     alignItems: 'center',
@@ -38,6 +41,7 @@ export function Button({
   if (url) {
     return (
       <a
+        data-cf-node-id={component?.nodeId}
         href={url}
         target={target}
         style={style}
@@ -48,7 +52,7 @@ export function Button({
     );
   }
   return (
-    <button type="button" style={style}>
+    <button data-cf-node-id={component?.nodeId} type="button" style={style}>
       {content}
     </button>
   );

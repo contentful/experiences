@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from 'react';
 
-import { useDesignValues } from '@contentful/experiences-react';
+import { useContentfulComponent, useDesignValues } from '@contentful/experiences-react';
 
 export interface CardProps {
   title?: string;
@@ -32,6 +32,7 @@ export function Card({
   backgroundColor,
   color,
 }: CardProps) {
+  const component = useContentfulComponent();
   const style: CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
@@ -43,7 +44,7 @@ export function Card({
   };
 
   return (
-    <article style={style}>
+    <article data-cf-node-id={component?.nodeId} style={style}>
       {image && (
         <img src={image} alt="" style={{ width: '100%', height: '180px', objectFit: 'cover' }} />
       )}

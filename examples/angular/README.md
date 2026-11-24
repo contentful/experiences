@@ -126,6 +126,8 @@ Set `CPA_TOKEN`, then open `/experiences/landing?preview_session_id=<session-id>
 
 The Contentful app supplies `preview_session_id`. When it and `CPA_TOKEN` are both available, the route uses `fetchPreviewSession` for the initial plan and starts the browser subscription. `?preview=true` remains an explicit way to use the Preview API without a live session.
 
+The route enables inspection with `inspection: this.livePreviewEnabled`. Each registered component marks its existing DOM root with `data-cf-node-id`, using the runtime `nodeId` from `injectContentfulComponent()`.
+
 ### Tokens summary
 
 | Token       | API                | Used by                                      | Required?             |

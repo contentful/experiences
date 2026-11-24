@@ -11,6 +11,10 @@
 </script>
 
 <script lang="ts">
+  import { getContentfulComponent } from '@contentful/experiences-svelte';
+
+  const contentful = getContentfulComponent();
+
   let {
     label = 'Button',
     url,
@@ -36,7 +40,7 @@
 </script>
 
 {#if url}
-  <a href={url} {style} {target} rel="noopener noreferrer">{label}</a>
+  <a data-cf-node-id={contentful?.nodeId} href={url} {style} {target} rel="noopener noreferrer">{label}</a>
 {:else}
-  <button type="button" {style}>{label}</button>
+  <button data-cf-node-id={contentful?.nodeId} type="button" {style}>{label}</button>
 {/if}

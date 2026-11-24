@@ -1,12 +1,13 @@
 import { ChangeDetectionStrategy, Component, Input, signal } from '@angular/core';
+import { injectContentfulComponent } from '@contentful/experiences-angular';
 
-/** No SDK imports — a plain presentational component still registers fine. */
 @Component({
   selector: 'app-image',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (srcValue()) {
       <img
+        [attr.data-cf-node-id]="contentfulComponent()?.nodeId"
         [src]="srcValue()"
         [alt]="altValue()"
         style="max-width: 100%; height: auto; display: block;"
@@ -15,6 +16,7 @@ import { ChangeDetectionStrategy, Component, Input, signal } from '@angular/core
   `,
 })
 export class ImageComponent {
+  protected readonly contentfulComponent = injectContentfulComponent();
   protected readonly srcValue = signal<string | undefined>(undefined);
   protected readonly altValue = signal('');
 

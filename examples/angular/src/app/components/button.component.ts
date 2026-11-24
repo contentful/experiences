@@ -1,5 +1,6 @@
 import { NgStyle } from '@angular/common';
 import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
+import { injectContentfulComponent } from '@contentful/experiences-angular';
 
 const BASE_STYLE: Record<string, string> = {
   display: 'inline-flex',
@@ -19,6 +20,7 @@ const BASE_STYLE: Record<string, string> = {
   template: `
     @if (urlValue()) {
       <a
+        [attr.data-cf-node-id]="contentfulComponent()?.nodeId"
         [href]="urlValue()"
         [ngStyle]="style()"
         [attr.target]="targetValue() ?? '_self'"
@@ -26,11 +28,18 @@ const BASE_STYLE: Record<string, string> = {
         >{{ labelValue() }}</a
       >
     } @else {
-      <button type="button" [ngStyle]="style()">{{ labelValue() }}</button>
+      <button
+        type="button"
+        [attr.data-cf-node-id]="contentfulComponent()?.nodeId"
+        [ngStyle]="style()"
+      >
+        {{ labelValue() }}
+      </button>
     }
   `,
 })
 export class ButtonComponent {
+  protected readonly contentfulComponent = injectContentfulComponent();
   protected readonly labelValue = signal('Button');
   protected readonly urlValue = signal<string | undefined>(undefined);
   protected readonly targetValue = signal<string | undefined>(undefined);

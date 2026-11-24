@@ -1,5 +1,6 @@
 import { NgStyle } from '@angular/common';
 import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
+import { injectContentfulComponent } from '@contentful/experiences-angular';
 
 import { CardCtaComponent } from './card-cta.component.js';
 
@@ -37,7 +38,7 @@ const BASE_STYLE: Record<string, string> = {
   imports: [NgStyle, CardCtaComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <article [ngStyle]="style()">
+    <article [attr.data-cf-node-id]="contentfulComponent()?.nodeId" [ngStyle]="style()">
       @if (imageValue()) {
         <img [src]="imageValue()" alt="" style="width: 100%; height: 180px; object-fit: cover;" />
       }
@@ -58,6 +59,7 @@ const BASE_STYLE: Record<string, string> = {
   `,
 })
 export class CardComponent {
+  protected readonly contentfulComponent = injectContentfulComponent();
   protected readonly titleValue = signal<string | undefined>(undefined);
   protected readonly teaserValue = signal<string | undefined>(undefined);
   protected readonly ctaLabelValue = signal<string | undefined>(undefined);

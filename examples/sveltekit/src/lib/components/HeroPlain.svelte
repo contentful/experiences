@@ -17,6 +17,10 @@
 </script>
 
 <script lang="ts">
+  import { getContentfulComponent } from '@contentful/experiences-svelte';
+
+  const contentful = getContentfulComponent();
+
   let { title, ctaLabel, ctaUrl, image, backgroundColor, color }: HeroPlainProps = $props();
 
   const style = $derived(
@@ -34,7 +38,7 @@
   );
 </script>
 
-<section {style}>
+<section data-cf-node-id={contentful?.nodeId} {style}>
   <div>
     {#if title}
       <h1 style="margin: 0; font-size: 2.5rem;">{title}</h1>
